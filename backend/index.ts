@@ -1,14 +1,6 @@
-import { cors } from "@elysiajs/cors";
-import { Elysia } from "elysia";
+import { app } from "./src/app";
+import { env } from "./src/config/env";
 
-const app = new Elysia()
-    .use(
-        cors({
-            origin: "http://localhost:3500"
-        })
-    )
-    .get("/health", () => ({ ok: true }))
-    .get("/api/hello", () => ({ message: "Hello from Elysia" }))
-    .listen(1234);
+app.listen(env.port);
 
 console.log(`API running at ${app.server?.hostname}:${app.server?.port}`);

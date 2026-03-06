@@ -82,6 +82,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
                         )}
                     </button>
                 }
+                placeholder={props.placeholder || "Enter your password"}
                 {...props}
             />
         );

@@ -12,7 +12,7 @@ export interface ApiRequestOptions extends Omit<
     RequestInit,
     "body" | "credentials" | "headers" | "method"
 > {
-    body?: BodyInit | Record<string, unknown> | unknown[] | null;
+    body?: BodyInit | object | unknown[] | null;
     headers?: HeadersInit;
     query?: ApiQueryParams;
 }

@@ -11,7 +11,7 @@ export interface ButtonProps extends BaseButtonProps {
 }
 
 const variantClasses = {
-    primary: "bg-primary-50 hover:bg-primary-300 text-dark-900",
+    primary: "bg-primary-50 hover:bg-primary-400 text-dark-900",
     default: "bg-dark-700 hover:bg-dark-600 text-white"
 };
 
