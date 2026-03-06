@@ -4,7 +4,7 @@ import { Elysia } from "elysia";
 const app = new Elysia()
     .use(
         cors({
-            origin: "http://localhost:3000"
+            origin: "http://localhost:3500"
         })
     )
     .get("/health", () => ({ ok: true }))
