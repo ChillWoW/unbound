@@ -1,5 +1,6 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap");
 @import "tailwindcss";
+@import "tw-animate-css";
 
 @theme {
     --color-dark-50: #c9c9c9;
@@ -25,6 +26,18 @@
     --color-primary-900: #1f2937;
 }
 
+@layer base {
+    button:not(:disabled),
+    [role="button"]:not([aria-disabled="true"]) {
+        cursor: pointer;
+    }
+
+    button:disabled,
+    [role="button"][aria-disabled="true"] {
+        cursor: not-allowed;
+    }
+}
+
 body {
     margin: 0;
     font-family: "Inter", sans-serif;
@@ -33,4 +46,40 @@ body {
 
 #root {
     height: 100%;
+}
+
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--color-dark-600);
+    border-radius: 99px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--color-dark-500);
+}
+
+::selection {
+    background-color: color-mix(
+        in srgb,
+        var(--color-primary-100) 60%,
+        transparent
+    );
+    color: var(--color-dark-600);
+}
+
+::-moz-selection {
+    background-color: color-mix(
+        in srgb,
+        var(--color-primary-100) 60%,
+        transparent
+    );
+    color: var(--color-dark-600);
 }
