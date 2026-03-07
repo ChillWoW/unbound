@@ -282,18 +282,12 @@ export function ChatProvider({ children }: PropsWithChildren) {
     }, [isAuthenticated]);
 
     const loadModels = useCallback(async () => {
-        if (!isAuthenticated || !user) {
-            setAvailableModels([]);
-            setSelectedModelIdState(null);
-            return;
-        }
-
         setIsLoadingModels(true);
         setModelsError(null);
 
         try {
             const response = await chatApi.listModels();
-            const storedModelId = readStoredSelectedModelId(user.id);
+            const storedModelId = user ? readStoredSelectedModelId(user.id) : null;
             const currentSelectedModelId = selectedModelIdRef.current;
             const nextSelectedModelId =
                 currentSelectedModelId &&
@@ -308,7 +302,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
 
             setAvailableModels(response.models);
             setSelectedModelIdState(nextSelectedModelId);
-            writeStoredSelectedModelId(user.id, nextSelectedModelId);
+            if (user) writeStoredSelectedModelId(user.id, nextSelectedModelId);
         } catch (error) {
             setAvailableModels([]);
             setSelectedModelIdState(null);
@@ -317,7 +311,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
         } finally {
             setIsLoadingModels(false);
         }
-    }, [isAuthenticated, user]);
+    }, [user]);
 
     useEffect(() => {
         if (isLoading) {
@@ -330,11 +324,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
             setConversationErrors({});
             setConversationLoadingState({});
             setConversationSendingState({});
-            setAvailableModels([]);
             setConversationsError(null);
-            setIsLoadingModels(false);
-            setModelsError(null);
-            setSelectedModelIdState(null);
             return;
         }
 
@@ -342,12 +332,12 @@ export function ChatProvider({ children }: PropsWithChildren) {
     }, [isAuthenticated, isLoading, loadConversations]);
 
     useEffect(() => {
-        if (isLoading || !isAuthenticated) {
+        if (isLoading) {
             return;
         }
 
         void loadModels().catch(() => undefined);
-    }, [isAuthenticated, isLoading, loadModels]);
+    }, [isLoading, loadModels]);
 
     const stopGeneration = useCallback((conversationId: string) => {
         const controller = activeGenerationsRef.current.get(conversationId);

@@ -73,7 +73,7 @@ function HomePage() {
                 {error && <p className="text-sm text-red-500">{error}</p>}
 
                 <ChatInput
-                    disabled={isLoading || isCreatingConversation}
+                    disabled={isLoading || isCreatingConversation || !isAuthenticated}
                     isSubmitting={isCreatingConversation}
                     isModelsLoading={isLoadingModels}
                     models={availableModels}
@@ -83,7 +83,7 @@ function HomePage() {
                     value={draft}
                     onChange={setDraft}
                     onSubmit={handleSubmit}
-                    placeholder="Message Unbound..."
+                    placeholder={isAuthenticated ? "Message Unbound..." : "Sign in to start chatting..."}
                 />
             </div>
         </main>

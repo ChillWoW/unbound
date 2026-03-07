@@ -1,5 +1,4 @@
 import { Elysia } from "elysia";
-import { UnauthorizedError } from "../../middleware/require-auth";
 import { ModelsError } from "./models.types";
 import { modelsService } from "./models.service";
 
@@ -7,11 +6,6 @@ function handleModelsError(
     error: unknown,
     set: { status?: number | string }
 ) {
-    if (error instanceof UnauthorizedError) {
-        set.status = error.status;
-        return { message: error.message };
-    }
-
     if (error instanceof ModelsError) {
         set.status = error.status;
         return { message: error.message };

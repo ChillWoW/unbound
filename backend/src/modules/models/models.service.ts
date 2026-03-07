@@ -1,4 +1,4 @@
-import { requireAuth } from "../../middleware/require-auth";
+import { authService } from "../auth/auth.service";
 import { settingsService } from "../settings/settings.service";
 import { selectSupportedModels } from "./supported-models";
 import { ModelsError, normalizeModelsResponse } from "./models.types";
@@ -7,24 +7,24 @@ const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
 
 export const modelsService = {
     async listModels(request: Request) {
-        const user = await requireAuth(request);
-        const apiKey = await settingsService.getDecryptedOpenRouterApiKeyForUser(
-            user.id
-        );
+        const user = await authService.getCurrentUser(request);
 
-        if (!apiKey) {
-            throw new ModelsError(400, "Add your OpenRouter API key in settings to load models.");
+        let apiKey: string | null = null;
+
+        if (user) {
+            apiKey = await settingsService.getDecryptedOpenRouterApiKeyForUser(user.id);
+        }
+
+        const headers: Record<string, string> = { Accept: "application/json" };
+
+        if (apiKey) {
+            headers.Authorization = `Bearer ${apiKey}`;
         }
 
         let response: Response;
 
         try {
-            response = await fetch(OPENROUTER_MODELS_URL, {
-                headers: {
-                    Authorization: `Bearer ${apiKey}`,
-                    Accept: "application/json"
-                }
-            });
+            response = await fetch(OPENROUTER_MODELS_URL, { headers });
         } catch {
             throw new ModelsError(
                 502,
