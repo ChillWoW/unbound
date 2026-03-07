@@ -49,6 +49,10 @@ function getModelDisplayName(
 function ReasoningDisplay({ part, isStreaming }: { part: ReasoningMessagePart; isStreaming: boolean }) {
     const [expanded, setExpanded] = useState(true);
 
+    useEffect(() => {
+        if (!isStreaming) setExpanded(false);
+    }, [isStreaming]);
+
     return (
         <div className="my-2">
             <button
