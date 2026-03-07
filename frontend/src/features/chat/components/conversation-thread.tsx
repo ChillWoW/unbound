@@ -49,7 +49,13 @@ function getModelDisplayName(
 }
 
 function ReasoningDisplay({ part, isStreaming }: { part: ReasoningMessagePart; isStreaming: boolean }) {
-    const [expanded, setExpanded] = useState(false);
+    const [expanded, setExpanded] = useState(isStreaming);
+
+    useEffect(() => {
+        if (isStreaming) {
+            setExpanded(true);
+        }
+    }, [isStreaming]);
 
     return (
         <div className="my-2 rounded-lg border border-dark-600 bg-dark-800/60">

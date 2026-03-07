@@ -346,6 +346,16 @@ function startBackgroundGeneration(
 
 function mapChunkToEvent(chunk: unknown): SSEEvent | null {
     const c = chunk as Record<string, unknown>;
+
+    const reasoningText =
+        (typeof c.text === "string" && c.text) ||
+        (typeof c.textDelta === "string" && c.textDelta) ||
+        (typeof c.delta === "string" && c.delta) ||
+        (typeof c.reasoning === "string" && c.reasoning) ||
+        (typeof c.reasoningText === "string" && c.reasoningText) ||
+        (typeof c.reasoningDelta === "string" && c.reasoningDelta) ||
+        null;
+
     switch (c.type) {
         case "text-delta":
             return { type: "text-delta", text: c.text as string };
@@ -367,7 +377,8 @@ function mapChunkToEvent(chunk: unknown): SSEEvent | null {
             };
 
         case "reasoning":
-            return { type: "reasoning", text: (c.text ?? c.textDelta) as string };
+        case "reasoning-delta":
+            return reasoningText ? { type: "reasoning", text: reasoningText } : null;
 
         case "error":
             return { type: "error", error: String(c.error) };

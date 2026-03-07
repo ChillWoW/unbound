@@ -81,6 +81,7 @@ export async function parseAIStream(
                         break;
 
                     case "reasoning":
+                    case "reasoning-delta":
                         callbacks.onReasoning?.(event.text as string);
                         break;
 
