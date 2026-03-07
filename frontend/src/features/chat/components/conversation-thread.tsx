@@ -53,7 +53,10 @@ function ToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
                 onClick={() => setExpanded(!expanded)}
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs"
             >
-                <WrenchIcon className="size-3.5 text-primary-400" weight="bold" />
+                <WrenchIcon
+                    className="size-3.5 text-primary-400"
+                    weight="bold"
+                />
                 <span className="font-medium text-dark-100">
                     {part.toolName}
                 </span>
@@ -184,7 +187,10 @@ function AssistantMessage({
         (p): p is ToolInvocationPart => p.type === "tool-invocation"
     );
     const isStreaming = message.status === "pending" && text.length > 0;
-    const isWaiting = message.status === "pending" && text.length === 0 && toolParts.length === 0;
+    const isWaiting =
+        message.status === "pending" &&
+        text.length === 0 &&
+        toolParts.length === 0;
 
     return (
         <div className="group w-full">
@@ -206,9 +212,7 @@ function AssistantMessage({
             )}
 
             {message.status === "failed" && (
-                <p className="mt-1 text-xs text-red-400">
-                    Generation failed.
-                </p>
+                <p className="mt-1 text-xs text-red-400">Generation failed.</p>
             )}
 
             <div className="mt-1.5 flex items-center gap-2">
@@ -269,10 +273,10 @@ export function ConversationThread({
     });
 
     return (
-        <section className="flex h-full flex-col">
+        <section className="relative h-full">
             <div
                 ref={scrollRef}
-                className="flex-1 overflow-y-auto px-4 py-6"
+                className="h-full overflow-y-auto px-4 pt-6 pb-48"
             >
                 <div className="mx-auto max-w-3xl space-y-5">
                     {conversation.messages.map((message) => {
@@ -304,7 +308,7 @@ export function ConversationThread({
                 </div>
             </div>
 
-            <div className="border-t border-dark-700 px-4 py-3">
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-dark-900 via-dark-900/90 to-transparent px-4 pb-4">
                 <div className="mx-auto max-w-3xl">
                     {error ? (
                         <div className="mb-3 rounded-xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">

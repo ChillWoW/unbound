@@ -37,7 +37,7 @@ export function ChatShell({ children }: PropsWithChildren) {
     }, [isMobileSidebarOpen]);
 
     return (
-        <div className="flex min-h-screen bg-dark-900 text-white">
+        <div className="flex h-screen overflow-hidden bg-dark-900 text-white">
             <div
                 className={cn(
                     "hidden shrink-0 transition-[width] duration-200 ease-out lg:block",
