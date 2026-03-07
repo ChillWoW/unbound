@@ -358,9 +358,14 @@ export function ChatSidebar({
                         </MenuTrigger>
 
                         <MenuContent align="end" side="top">
-                            <MenuItem onClick={handleNavigate}>
+                            <MenuItem
+                                onClick={() => {
+                                    navigate({ to: "/settings" });
+                                    handleNavigate();
+                                }}
+                            >
                                 <GearSixIcon className="size-4" />
-                                <Link to="/settings">Settings</Link>
+                                Settings
                             </MenuItem>
                             <MenuSeparator />
                             <MenuItem
