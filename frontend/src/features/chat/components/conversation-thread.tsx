@@ -46,7 +46,13 @@ function getModelDisplayName(
     return model?.name ?? modelId.split("/").pop() ?? modelId;
 }
 
-function ReasoningDisplay({ part, isStreaming }: { part: ReasoningMessagePart; isStreaming: boolean }) {
+function ReasoningDisplay({
+    part,
+    isStreaming
+}: {
+    part: ReasoningMessagePart;
+    isStreaming: boolean;
+}) {
     const [expanded, setExpanded] = useState(true);
 
     useEffect(() => {
@@ -60,19 +66,24 @@ function ReasoningDisplay({ part, isStreaming }: { part: ReasoningMessagePart; i
                 onClick={() => setExpanded(!expanded)}
                 className="flex items-center gap-1.5 text-xs"
             >
-                <span className={cn("font-medium", isStreaming ? "wave-text" : "text-dark-300")}>
+                <span
+                    className={cn(
+                        "font-medium",
+                        isStreaming ? "wave-text" : "text-dark-200"
+                    )}
+                >
                     Thinking
                 </span>
                 <CaretRightIcon
                     className={cn(
-                        "size-3 text-dark-300 transition-transform",
+                        "size-3 text-dark-200 transition-transform",
                         expanded && "rotate-90"
                     )}
                     weight="bold"
                 />
             </button>
             {expanded && (
-                <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-dark-300">
+                <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-dark-200">
                     {part.text}
                 </p>
             )}
@@ -92,7 +103,12 @@ function ToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
                 onClick={() => setExpanded(!expanded)}
                 className="flex items-center gap-1.5 text-xs"
             >
-                <span className={cn("font-medium", isPending ? "wave-text" : "text-dark-300")}>
+                <span
+                    className={cn(
+                        "font-medium",
+                        isPending ? "wave-text" : "text-dark-300"
+                    )}
+                >
                     {part.toolName}
                 </span>
                 <CaretRightIcon
@@ -178,7 +194,9 @@ function MessageMetadataDisplay({
 function StreamingIndicator() {
     return (
         <div className="py-1">
-            <span className="wave-text text-xs font-medium">Thinking</span>
+            <span className="wave-text text-xs font-medium">
+                Planning next moves
+            </span>
         </div>
     );
 }
@@ -199,7 +217,9 @@ function AssistantMessage({
     );
     const isStreaming = message.status === "pending" && text.length > 0;
     const isReasoningStreaming =
-        message.status === "pending" && reasoningParts.length > 0 && text.length === 0;
+        message.status === "pending" &&
+        reasoningParts.length > 0 &&
+        text.length === 0;
     const isWaiting =
         message.status === "pending" &&
         text.length === 0 &&
