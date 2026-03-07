@@ -1,10 +1,40 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState, useCallback } from "react";
 import TextareaAutosize from "react-textarea-autosize";
-import { ArrowUpIcon, PaperclipIcon } from "@phosphor-icons/react";
+import {
+    ArrowUpIcon,
+    PaperclipIcon,
+    XIcon,
+    FileTextIcon,
+    ImageIcon
+} from "@phosphor-icons/react";
 import { Button, Tooltip } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type { ChatModel } from "../types";
 import { ModelSelector } from "./model-selector";
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+export interface ChatAttachment {
+    id: string;
+    file: File;
+    preview: string | null; // object URL for images, null for PDFs
+    type: "image" | "pdf";
+}
+
+const ACCEPTED_TYPES: Record<string, "image" | "pdf"> = {
+    "image/png": "image",
+    "image/jpeg": "image",
+    "image/gif": "image",
+    "image/webp": "image",
+    "image/svg+xml": "image",
+    "application/pdf": "pdf"
+};
+
+const ACCEPT_STRING = Object.keys(ACCEPTED_TYPES).join(",");
+const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
+const MAX_ATTACHMENTS = 10;
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatContextWindow(value: number | null): string {
     if (!value || value < 1000) {
@@ -23,6 +53,18 @@ function formatContextWindow(value: number | null): string {
         ? `${thousands}K`
         : `${thousands.toFixed(1)}K`;
 }
+
+function formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function generateId(): string {
+    return Math.random().toString(36).slice(2, 10);
+}
+
+// ── Context Window Meter ─────────────────────────────────────────────────────
 
 function ContextWindowMeter({ model }: { model: ChatModel | null }) {
     const size = 24;
@@ -75,6 +117,75 @@ function ContextWindowMeter({ model }: { model: ChatModel | null }) {
     );
 }
 
+// ── Attachment Preview ───────────────────────────────────────────────────────
+
+function AttachmentChip({
+    attachment,
+    onRemove,
+    disabled
+}: {
+    attachment: ChatAttachment;
+    onRemove: () => void;
+    disabled: boolean;
+}) {
+    return (
+        <div
+            className={cn(
+                "group relative flex items-center gap-2 rounded-lg border border-dark-600 bg-dark-700/60 px-2 py-1.5",
+                "transition-colors hover:border-dark-500"
+            )}
+        >
+            {attachment.type === "image" && attachment.preview ? (
+                <img
+                    src={attachment.preview}
+                    alt={attachment.file.name}
+                    className="size-8 shrink-0 rounded object-cover"
+                />
+            ) : (
+                <div className="flex size-8 shrink-0 items-center justify-center rounded bg-dark-600">
+                    {attachment.type === "pdf" ? (
+                        <FileTextIcon
+                            className="size-4 text-red-400"
+                            weight="bold"
+                        />
+                    ) : (
+                        <ImageIcon
+                            className="size-4 text-blue-400"
+                            weight="bold"
+                        />
+                    )}
+                </div>
+            )}
+
+            <div className="flex min-w-0 flex-col">
+                <span className="truncate text-xs text-white max-w-[120px]">
+                    {attachment.file.name}
+                </span>
+                <span className="text-[10px] text-dark-300">
+                    {formatFileSize(attachment.file.size)}
+                </span>
+            </div>
+
+            {!disabled && (
+                <button
+                    type="button"
+                    onClick={onRemove}
+                    className={cn(
+                        "absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full",
+                        "bg-dark-600 text-dark-200 opacity-0 transition-opacity",
+                        "hover:bg-dark-500 hover:text-white group-hover:opacity-100"
+                    )}
+                    aria-label={`Remove ${attachment.file.name}`}
+                >
+                    <XIcon className="size-3" weight="bold" />
+                </button>
+            )}
+        </div>
+    );
+}
+
+// ── Chat Input ───────────────────────────────────────────────────────────────
+
 interface ChatInputProps {
     className?: string;
     disabled?: boolean;
@@ -86,7 +197,10 @@ interface ChatInputProps {
     showContextBadge?: boolean;
     value?: string;
     onChange?: (value: string) => void;
-    onSubmit?: (value: string) => void | Promise<void>;
+    onSubmit?: (
+        value: string,
+        attachments: ChatAttachment[]
+    ) => void | Promise<void>;
     placeholder?: string;
     selectedModelId?: string | null;
 }
@@ -107,10 +221,15 @@ export function ChatInput({
     selectedModelId = null
 }: ChatInputProps) {
     const [internalValue, setInternalValue] = useState("");
+    const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+    const [fileError, setFileError] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const isControlled = value !== undefined;
     const draft = isControlled ? value : internalValue;
     const trimmedDraft = useMemo(() => draft.trim(), [draft]);
+    const hasContent = trimmedDraft.length > 0 || attachments.length > 0;
+
     const selectedModel = useMemo(
         () => models.find((model) => model.id === selectedModelId) ?? null,
         [models, selectedModelId]
@@ -118,51 +237,174 @@ export function ChatInput({
     const isModelSelectDisabled =
         disabled || isSubmitting || isModelsLoading || models.length === 0;
     const modelMessage = useMemo(() => {
-        if (modelsError) {
-            return modelsError;
-        }
-
-        if (isModelsLoading) {
-            return "Loading models...";
-        }
-
-        if (models.length === 0) {
-            return "No models available.";
-        }
-
+        if (modelsError) return modelsError;
+        if (isModelsLoading) return "Loading models...";
+        if (models.length === 0) return "No models available.";
         return null;
     }, [isModelsLoading, models.length, modelsError]);
 
-    function updateValue(nextValue: string) {
-        if (!isControlled) {
-            setInternalValue(nextValue);
-        }
+    // ── Value helpers ────────────────────────────────────────────────────
 
+    function updateValue(nextValue: string) {
+        if (!isControlled) setInternalValue(nextValue);
         onChange?.(nextValue);
     }
+
+    // ── Attachment helpers ───────────────────────────────────────────────
+
+    const addFiles = useCallback(
+        (files: FileList | File[]) => {
+            setFileError(null);
+            const incoming = Array.from(files);
+            const remaining = MAX_ATTACHMENTS - attachments.length;
+
+            if (remaining <= 0) {
+                setFileError(
+                    `Maximum of ${MAX_ATTACHMENTS} attachments reached.`
+                );
+                return;
+            }
+
+            const toAdd: ChatAttachment[] = [];
+
+            for (const file of incoming.slice(0, remaining)) {
+                const kind = ACCEPTED_TYPES[file.type];
+
+                if (!kind) {
+                    setFileError(
+                        `"${file.name}" is not a supported file type. Use images or PDFs.`
+                    );
+                    continue;
+                }
+
+                if (file.size > MAX_FILE_SIZE) {
+                    setFileError(
+                        `"${file.name}" exceeds the 20 MB size limit.`
+                    );
+                    continue;
+                }
+
+                toAdd.push({
+                    id: generateId(),
+                    file,
+                    preview:
+                        kind === "image" ? URL.createObjectURL(file) : null,
+                    type: kind
+                });
+            }
+
+            if (toAdd.length > 0) {
+                setAttachments((prev) => [...prev, ...toAdd]);
+            }
+        },
+        [attachments.length]
+    );
+
+    const removeAttachment = useCallback((id: string) => {
+        setAttachments((prev) => {
+            const target = prev.find((a) => a.id === id);
+            if (target?.preview) URL.revokeObjectURL(target.preview);
+            return prev.filter((a) => a.id !== id);
+        });
+        setFileError(null);
+    }, []);
+
+    function clearAttachments() {
+        for (const a of attachments) {
+            if (a.preview) URL.revokeObjectURL(a.preview);
+        }
+        setAttachments([]);
+    }
+
+    // ── File input handler ───────────────────────────────────────────────
+
+    function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+        if (event.target.files && event.target.files.length > 0) {
+            addFiles(event.target.files);
+        }
+        // Reset so the same file can be re-selected
+        event.target.value = "";
+    }
+
+    // ── Drag & drop ─────────────────────────────────────────────────────
+
+    const [isDragOver, setIsDragOver] = useState(false);
+
+    function handleDragOver(event: React.DragEvent) {
+        event.preventDefault();
+        if (!disabled && !isSubmitting) setIsDragOver(true);
+    }
+
+    function handleDragLeave(event: React.DragEvent) {
+        event.preventDefault();
+        setIsDragOver(false);
+    }
+
+    function handleDrop(event: React.DragEvent) {
+        event.preventDefault();
+        setIsDragOver(false);
+        if (!disabled && !isSubmitting && event.dataTransfer.files.length > 0) {
+            addFiles(event.dataTransfer.files);
+        }
+    }
+
+    // ── Submit ───────────────────────────────────────────────────────────
 
     async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
 
-        if (disabled || isSubmitting || !trimmedDraft) {
-            return;
-        }
+        if (disabled || isSubmitting || !hasContent) return;
 
-        await onSubmit?.(trimmedDraft);
+        await onSubmit?.(trimmedDraft, attachments);
 
-        if (!isControlled) {
-            setInternalValue("");
+        if (!isControlled) setInternalValue("");
+        clearAttachments();
+    }
+
+    function handleKeySubmit() {
+        if (!disabled && !isSubmitting && hasContent) {
+            onSubmit?.(trimmedDraft, attachments);
+            if (!isControlled) setInternalValue("");
+            clearAttachments();
         }
     }
+
+    // ── Render ───────────────────────────────────────────────────────────
 
     return (
         <form
             className={cn(
-                "w-full rounded-md border border-dark-600 bg-dark-800/80 backdrop-blur-xl",
+                "w-full rounded-md border bg-dark-800/80 backdrop-blur-xl transition-colors",
+                isDragOver
+                    ? "border-primary-500 ring-1 ring-primary-500/30"
+                    : "border-dark-600",
                 className
             )}
             onSubmit={handleSubmit}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
         >
+            {/* Attachment previews */}
+            {attachments.length > 0 && (
+                <div className="flex flex-wrap gap-2 px-3 pt-3">
+                    {attachments.map((attachment) => (
+                        <AttachmentChip
+                            key={attachment.id}
+                            attachment={attachment}
+                            onRemove={() => removeAttachment(attachment.id)}
+                            disabled={disabled || isSubmitting}
+                        />
+                    ))}
+                </div>
+            )}
+
+            {/* File error */}
+            {fileError && (
+                <p className="px-3 pt-2 text-xs text-red-400">{fileError}</p>
+            )}
+
+            {/* Textarea */}
             <div className="px-3 pt-3">
                 <TextareaAutosize
                     className="w-full resize-none bg-transparent text-sm text-white outline-none placeholder:text-dark-200"
@@ -175,17 +417,29 @@ export function ChatInput({
                     onKeyDown={(event) => {
                         if (event.key === "Enter" && !event.shiftKey) {
                             event.preventDefault();
-                            if (!disabled && !isSubmitting && trimmedDraft) {
-                                onSubmit?.(trimmedDraft);
-                                if (!isControlled) {
-                                    setInternalValue("");
-                                }
+                            handleKeySubmit();
+                        }
+                    }}
+                    onPaste={(event) => {
+                        const items = event.clipboardData?.items;
+                        if (!items) return;
+
+                        const files: File[] = [];
+                        for (const item of Array.from(items)) {
+                            if (item.kind === "file") {
+                                const file = item.getAsFile();
+                                if (file) files.push(file);
                             }
+                        }
+
+                        if (files.length > 0) {
+                            addFiles(files);
                         }
                     }}
                 />
             </div>
 
+            {/* Toolbar */}
             <div className="flex items-center justify-between gap-4 px-2 pb-2 pt-1">
                 <div className="flex items-center gap-2">
                     <ModelSelector
@@ -209,10 +463,28 @@ export function ChatInput({
                         <ContextWindowMeter model={selectedModel} />
                     ) : null}
 
-                    <Tooltip content="Attach a file">
+                    {/* Hidden file input */}
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept={ACCEPT_STRING}
+                        multiple
+                        className="hidden"
+                        onChange={handleFileChange}
+                        disabled={disabled || isSubmitting}
+                    />
+
+                    <Tooltip content="Attach images or PDFs">
                         <Button
+                            type="button"
                             variant="ghost"
                             className="size-8 p-0 text-dark-100 hover:text-white"
+                            disabled={
+                                disabled ||
+                                isSubmitting ||
+                                attachments.length >= MAX_ATTACHMENTS
+                            }
+                            onClick={() => fileInputRef.current?.click()}
                         >
                             <PaperclipIcon className="size-4" weight="bold" />
                         </Button>
@@ -221,7 +493,7 @@ export function ChatInput({
                     <Button
                         type="submit"
                         variant="primary"
-                        disabled={disabled || isSubmitting || !trimmedDraft}
+                        disabled={disabled || isSubmitting || !hasContent}
                         className="size-8 p-0"
                     >
                         <ArrowUpIcon className="size-4" weight="bold" />
