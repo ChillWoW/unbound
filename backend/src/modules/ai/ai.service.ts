@@ -139,6 +139,25 @@ function toModelMessages(records: MessageRecord[]): ModelMessage[] {
     return result;
 }
 
+function buildSystemPrompt(now = new Date()): string {
+    const isoDateTime = now.toISOString();
+    const utcDate = new Intl.DateTimeFormat("en-US", {
+        timeZone: "UTC",
+        dateStyle: "full",
+        timeStyle: "long"
+    }).format(now);
+    const serverTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+    return [
+        "You are a helpful assistant named Unbound for this app.",
+        "You have access to multiple tools to help you answer questions and complete tasks.",
+        "Use these runtime facts as source of truth when answering time-sensitive questions:",
+        `- Current datetime (ISO UTC): ${isoDateTime}`,
+        `- Current datetime (UTC, human): ${utcDate}`,
+        `- Server timezone: ${serverTimezone}`
+    ].join("\n");
+}
+
 function encodeSSE(event: SSEEvent): Uint8Array {
     return new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`);
 }
@@ -217,7 +236,9 @@ function createSubscriberStream(
 
             if (
                 isReconnect &&
-                (generation.accumulatedText || generation.accumulatedReasoning || generation.toolParts.length > 0)
+                (generation.accumulatedText ||
+                    generation.accumulatedReasoning ||
+                    generation.toolParts.length > 0)
             ) {
                 controller.enqueue(
                     encodeSSE({
@@ -285,7 +306,8 @@ function startBackgroundGeneration(
             const finalParts: MessagePart[] = [];
 
             for (const step of steps) {
-                const stepReasoning = (step as Record<string, unknown>).reasoningText as string | undefined;
+                const stepReasoning = (step as Record<string, unknown>)
+                    .reasoningText as string | undefined;
                 const stepText = step.text;
                 const stepToolCalls = step.toolCalls ?? [];
                 const stepToolResults = step.toolResults ?? [];
@@ -309,8 +331,9 @@ function startBackgroundGeneration(
                     applyToolResult(finalParts, {
                         toolCallId: toolResult.toolCallId,
                         toolName: toolResult.toolName,
-                        output: (toolResult as unknown as Record<string, unknown>)
-                            .output
+                        output: (
+                            toolResult as unknown as Record<string, unknown>
+                        ).output
                     });
                 }
 
@@ -427,7 +450,9 @@ function mapChunkToEvent(chunk: unknown): SSEEvent | null {
 
         case "reasoning":
         case "reasoning-delta":
-            return reasoningText ? { type: "reasoning", text: reasoningText } : null;
+            return reasoningText
+                ? { type: "reasoning", text: reasoningText }
+                : null;
 
         case "error":
             return { type: "error", error: String(c.error) };
@@ -482,6 +507,10 @@ export const aiService = {
             );
 
         const modelMessages = toModelMessages(messageRecords);
+        const messagesWithSystemPrompt: ModelMessage[] = [
+            { role: "system", content: buildSystemPrompt() },
+            ...modelMessages
+        ];
         const assistantMessageId = createMessageId();
         const generationStartedAt = new Date().toISOString();
 
@@ -505,7 +534,7 @@ export const aiService = {
 
         startBackgroundGeneration(
             generation,
-            modelMessages,
+            messagesWithSystemPrompt,
             modelId,
             apiKey,
             generationStartedAt,
