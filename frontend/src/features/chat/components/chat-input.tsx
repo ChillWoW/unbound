@@ -423,7 +423,7 @@ export function ChatInput({
     return (
         <form
             className={cn(
-                "w-full rounded-md border bg-dark-800/80 backdrop-blur-xl transition-colors",
+                "w-full rounded-md border bg-dark-800 backdrop-blur-xl transition-colors",
                 isDragOver
                     ? "border-primary-500 ring-1 ring-primary-500/30"
                     : "border-dark-600",
@@ -528,11 +528,17 @@ export function ChatInput({
                         disabled={disabled || isSubmitting}
                     />
 
-                    <Tooltip content={supportsImages ? "Attach images or PDFs" : "This model doesn't support image attachments"}>
+                    <Tooltip
+                        content={
+                            supportsImages
+                                ? "Attach images or PDFs"
+                                : "This model doesn't support image attachments"
+                        }
+                    >
                         <Button
                             type="button"
                             variant="ghost"
-                            className="size-8 p-0 text-dark-100 hover:text-white"
+                            className="size-8 p-0 text-dark-200 hover:text-white"
                             disabled={
                                 disabled ||
                                 isSubmitting ||

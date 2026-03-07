@@ -21,6 +21,11 @@ const readBody = t.Object({
     assistantMessageId: t.String({ minLength: 1, maxLength: 64 })
 });
 
+const updateConversationBody = t.Object({
+    title: t.Optional(t.String({ maxLength: 120 })),
+    isFavorite: t.Optional(t.Boolean())
+});
+
 function handleConversationError(
     error: unknown,
     set: { status?: number | string }
@@ -124,6 +129,43 @@ export const conversationsRoutes = new Elysia({ prefix: "/api/conversations" })
         },
         {
             body: readBody,
+            params: conversationParams
+        }
+    )
+    .patch(
+        "/:conversationId",
+        async ({ body, params, request, set }) => {
+            try {
+                const conversation =
+                    await conversationsService.updateConversation(
+                        request,
+                        params.conversationId,
+                        body
+                    );
+
+                return { conversation };
+            } catch (error) {
+                return handleConversationError(error, set);
+            }
+        },
+        {
+            body: updateConversationBody,
+            params: conversationParams
+        }
+    )
+    .delete(
+        "/:conversationId",
+        async ({ params, request, set }) => {
+            try {
+                return await conversationsService.deleteConversation(
+                    request,
+                    params.conversationId
+                );
+            } catch (error) {
+                return handleConversationError(error, set);
+            }
+        },
+        {
             params: conversationParams
         }
     );

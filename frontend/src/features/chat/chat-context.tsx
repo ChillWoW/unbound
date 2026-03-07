@@ -105,6 +105,7 @@ interface ChatContextValue {
     conversations: ConversationSummary[];
     conversationsError: string | null;
     createConversation: (prompt: string, attachments?: ChatAttachment[]) => Promise<ConversationDetail>;
+    deleteConversation: (conversationId: string) => Promise<void>;
     getConversation: (conversationId: string) => ConversationDetail | undefined;
     getConversationError: (conversationId: string) => string | null;
     isConversationLoading: (conversationId: string) => boolean;
@@ -120,6 +121,7 @@ interface ChatContextValue {
         assistantMessageId: string
     ) => Promise<void>;
     modelsError: string | null;
+    renameConversation: (conversationId: string, title: string) => Promise<void>;
     reconnectToGeneration: (conversationId: string) => Promise<void>;
     selectedModelId: string | null;
     sendMessage: (
@@ -129,6 +131,10 @@ interface ChatContextValue {
     ) => Promise<ConversationDetail>;
     setSelectedModelId: (modelId: string | null) => void;
     stopGeneration: (conversationId: string) => void;
+    toggleFavoriteConversation: (
+        conversationId: string,
+        isFavorite: boolean
+    ) => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -154,11 +160,16 @@ function getErrorMessage(error: unknown): string {
 }
 
 function sortConversations(items: ConversationSummary[]) {
-    return [...items].sort(
-        (left, right) =>
+    return [...items].sort((left, right) => {
+        if (left.isFavorite !== right.isFavorite) {
+            return left.isFavorite ? -1 : 1;
+        }
+
+        return (
             new Date(right.lastMessageAt).getTime() -
             new Date(left.lastMessageAt).getTime()
-    );
+        );
+    });
 }
 
 function toConversationSummary(
@@ -168,6 +179,7 @@ function toConversationSummary(
         id: conversation.id,
         title: conversation.title,
         titleSource: conversation.titleSource,
+        isFavorite: conversation.isFavorite,
         createdAt: conversation.createdAt,
         updatedAt: conversation.updatedAt,
         lastMessageAt: conversation.lastMessageAt,
@@ -525,7 +537,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
                         };
                     });
                 },
-                onError(error) {
+                onError(_error) {
                     if (abortController.signal.aborted) return;
                     setConversationDetails((current) => {
                         const existing = current[conversationId];
@@ -968,6 +980,67 @@ export function ChatProvider({ children }: PropsWithChildren) {
         []
     );
 
+    const renameConversation = useCallback(
+        async (conversationId: string, title: string) => {
+            try {
+                const response = await chatApi.updateConversation(conversationId, {
+                    title
+                });
+                upsertConversation(response.conversation);
+            } catch (error) {
+                throw new Error(getErrorMessage(error));
+            }
+        },
+        [upsertConversation]
+    );
+
+    const toggleFavoriteConversation = useCallback(
+        async (conversationId: string, isFavorite: boolean) => {
+            try {
+                const response = await chatApi.updateConversation(conversationId, {
+                    isFavorite
+                });
+                upsertConversation(response.conversation);
+            } catch (error) {
+                throw new Error(getErrorMessage(error));
+            }
+        },
+        [upsertConversation]
+    );
+
+    const deleteConversation = useCallback(async (conversationId: string) => {
+        try {
+            stopGeneration(conversationId);
+            await chatApi.deleteConversation(conversationId);
+
+            setConversations((current) =>
+                current.filter((conversation) => conversation.id !== conversationId)
+            );
+
+            setConversationDetails((current) => {
+                const { [conversationId]: _removedConversation, ...rest } = current;
+                return rest;
+            });
+
+            setConversationErrors((current) => {
+                const { [conversationId]: _removedError, ...rest } = current;
+                return rest;
+            });
+
+            setConversationLoadingState((current) => {
+                const { [conversationId]: _removedLoadingState, ...rest } = current;
+                return rest;
+            });
+
+            setConversationSendingState((current) => {
+                const { [conversationId]: _removedSendingState, ...rest } = current;
+                return rest;
+            });
+        } catch (error) {
+            throw new Error(getErrorMessage(error));
+        }
+    }, [stopGeneration]);
+
     const setSelectedModelId = useCallback(
         (modelId: string | null) => {
             setSelectedModelIdState(modelId);
@@ -987,6 +1060,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
             conversations,
             conversationsError,
             createConversation,
+            deleteConversation,
             getConversation,
             getConversationError,
             isConversationLoading,
@@ -999,17 +1073,20 @@ export function ChatProvider({ children }: PropsWithChildren) {
             loadModels,
             markConversationRead,
             modelsError,
+            renameConversation,
             reconnectToGeneration,
             selectedModelId,
             sendMessage,
             setSelectedModelId,
-            stopGeneration
+            stopGeneration,
+            toggleFavoriteConversation
         }),
         [
             availableModels,
             conversations,
             conversationsError,
             createConversation,
+            deleteConversation,
             getConversation,
             getConversationError,
             isConversationLoading,
@@ -1022,11 +1099,13 @@ export function ChatProvider({ children }: PropsWithChildren) {
             loadModels,
             markConversationRead,
             modelsError,
+            renameConversation,
             reconnectToGeneration,
             selectedModelId,
             sendMessage,
             setSelectedModelId,
-            stopGeneration
+            stopGeneration,
+            toggleFavoriteConversation
         ]
     );
 

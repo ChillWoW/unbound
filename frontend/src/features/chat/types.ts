@@ -43,6 +43,7 @@ export interface ConversationSummary {
     id: string;
     title: string;
     titleSource: string;
+    isFavorite: boolean;
     createdAt: string;
     updatedAt: string;
     lastMessageAt: string;
@@ -80,6 +81,11 @@ export interface ModelsResponse {
 
 export interface ConversationResponse {
     conversation: ConversationDetail;
+}
+
+export interface ConversationDeleteResponse {
+    success: boolean;
+    conversationId: string;
 }
 
 export interface ConversationReadResponse {

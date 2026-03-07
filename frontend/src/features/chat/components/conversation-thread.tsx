@@ -297,7 +297,7 @@ export function ConversationThread({
                                     key={message.id}
                                     className="flex justify-end"
                                 >
-                                    <div className="max-w-[80%] rounded-2xl bg-dark-700 px-4 py-3 space-y-2">
+                                    <div className="max-w-[80%] rounded-md bg-dark-700 px-2 py-1 space-y-2">
                                         {images.length > 0 && (
                                             <div className="flex flex-wrap gap-2">
                                                 {images.map((img, i) => (
@@ -305,18 +305,18 @@ export function ConversationThread({
                                                         key={i}
                                                         src={`data:${img.mimeType};base64,${img.data}`}
                                                         alt="attachment"
-                                                        className="max-h-48 rounded-lg object-contain"
+                                                        className="max-h-48 rounded-md object-contain"
                                                     />
                                                 ))}
                                             </div>
                                         )}
                                         {text && (
-                                            <p className="whitespace-pre-wrap text-[15px] leading-7 text-white">
+                                            <p className="whitespace-pre-wrap text-sm leading-7 text-white">
                                                 {text}
                                             </p>
                                         )}
                                         {!text && images.length === 0 && (
-                                            <p className="whitespace-pre-wrap text-[15px] leading-7 text-white">
+                                            <p className="whitespace-pre-wrap text-sm leading-7 text-white">
                                                 Unsupported message part.
                                             </p>
                                         )}

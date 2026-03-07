@@ -43,6 +43,7 @@ export interface ConversationSummary {
     id: string;
     title: string;
     titleSource: string;
+    isFavorite: boolean;
     createdAt: string;
     updatedAt: string;
     lastMessageAt: string;
@@ -160,6 +161,7 @@ export function toConversationSummary(input: {
         id: conversation.id,
         title: conversation.title,
         titleSource: conversation.titleSource,
+        isFavorite: conversation.isFavorite,
         createdAt: conversation.createdAt.toISOString(),
         updatedAt: conversation.updatedAt.toISOString(),
         lastMessageAt: conversation.lastMessageAt.toISOString(),

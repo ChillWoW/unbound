@@ -17,6 +17,7 @@ export const conversationsRepository = {
             .from(conversations)
             .where(eq(conversations.userId, userId))
             .orderBy(
+                desc(conversations.isFavorite),
                 desc(conversations.lastMessageAt),
                 desc(conversations.updatedAt)
             );
@@ -250,5 +251,63 @@ export const conversationsRepository = {
             .returning();
 
         return readState ?? null;
+    },
+
+    async updateConversationByIdForUser(
+        userId: string,
+        conversationId: string,
+        input: {
+            title?: string;
+            titleSource?: string;
+            isFavorite?: boolean;
+        }
+    ) {
+        const set: {
+            title?: string;
+            titleSource?: string;
+            isFavorite?: boolean;
+            updatedAt: Date;
+        } = {
+            updatedAt: new Date()
+        };
+
+        if (input.title !== undefined) {
+            set.title = input.title;
+        }
+
+        if (input.titleSource !== undefined) {
+            set.titleSource = input.titleSource;
+        }
+
+        if (input.isFavorite !== undefined) {
+            set.isFavorite = input.isFavorite;
+        }
+
+        const [updated] = await db
+            .update(conversations)
+            .set(set)
+            .where(
+                and(
+                    eq(conversations.id, conversationId),
+                    eq(conversations.userId, userId)
+                )
+            )
+            .returning();
+
+        return updated ?? null;
+    },
+
+    async deleteConversationByIdForUser(userId: string, conversationId: string) {
+        const [deleted] = await db
+            .delete(conversations)
+            .where(
+                and(
+                    eq(conversations.id, conversationId),
+                    eq(conversations.userId, userId)
+                )
+            )
+            .returning({ id: conversations.id });
+
+        return deleted ?? null;
     }
 };

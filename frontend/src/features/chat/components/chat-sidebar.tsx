@@ -1,25 +1,31 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ConversationSummary } from "../types";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
-    PlusIcon,
-    SignInIcon,
-    UserPlusIcon,
-    XIcon,
-    SidebarSimpleIcon,
     DotsThreeVerticalIcon,
-    StarIcon,
-    PencilSimpleIcon,
-    TrashIcon,
     GearSixIcon,
-    SignOutIcon
+    PencilSimpleIcon,
+    PlusIcon,
+    SidebarSimpleIcon,
+    SignInIcon,
+    SignOutIcon,
+    StarIcon,
+    TrashIcon,
+    UserPlusIcon,
+    XIcon
 } from "@phosphor-icons/react";
 import {
+    Button,
+    Input,
     Menu,
     MenuContent,
     MenuItem,
     MenuSeparator,
-    MenuTrigger
+    MenuTrigger,
+    Modal,
+    ModalContent,
+    ModalDescription,
+    ModalTitle
 } from "@/components/ui";
 import { useAuth } from "@/features/auth/use-auth";
 import { cn } from "@/lib/cn";
@@ -29,18 +35,39 @@ import { getUserInitials } from "../utils/get-user-initials";
 interface ChatSidebarProps {
     className?: string;
     currentPath: string;
-    /** Mobile mode: called when the sidebar should close */
     onClose?: () => void;
     onNewChat?: () => void;
-    /** If true, sidebar is being shown inside a mobile overlay */
     isMobile?: boolean;
-    /** Desktop collapsed state (controlled by parent) */
     isCollapsed?: boolean;
-    /** Called when the toggle button is clicked on desktop */
     onToggleCollapse?: () => void;
 }
 
+interface ConversationActionsMenuProps {
+    conversation: ConversationSummary;
+    isActive: boolean;
+    onDeleteRequest: (conversation: ConversationSummary) => void;
+    onRename: (conversationId: string, title: string) => Promise<void>;
+    onToggleFavorite: (conversationId: string, isFavorite: boolean) => Promise<void>;
+}
+
+interface ConversationListItemProps {
+    conversation: ConversationSummary;
+    currentPath: string;
+    onDeleteRequest: (conversation: ConversationSummary) => void;
+    onNavigate: () => void;
+    onRename: (conversationId: string, title: string) => Promise<void>;
+    onToggleFavorite: (conversationId: string, isFavorite: boolean) => Promise<void>;
+}
+
 type TimeGroup = "Today" | "Yesterday" | "This week" | "This month" | "Older";
+
+const TIME_GROUP_ORDER: TimeGroup[] = [
+    "Today",
+    "Yesterday",
+    "This week",
+    "This month",
+    "Older"
+];
 
 function getTimeGroup(dateStr: string): TimeGroup {
     const now = new Date();
@@ -64,14 +91,6 @@ function getTimeGroup(dateStr: string): TimeGroup {
     return "Older";
 }
 
-const TIME_GROUP_ORDER: TimeGroup[] = [
-    "Today",
-    "Yesterday",
-    "This week",
-    "This month",
-    "Older"
-];
-
 function getDisplayName(
     name: string | null | undefined,
     email: string | undefined
@@ -84,6 +103,260 @@ function getDisplayName(
     return email.split("@")[0];
 }
 
+function toErrorMessage(error: unknown): string {
+    if (error instanceof Error && error.message.trim().length > 0) {
+        return error.message;
+    }
+
+    return "Something went wrong. Please try again.";
+}
+
+function ConversationActionsMenu({
+    conversation,
+    isActive,
+    onDeleteRequest,
+    onRename,
+    onToggleFavorite
+}: ConversationActionsMenuProps) {
+    const [isOpen, setIsOpen] = useState(false);
+    const [isRenaming, setIsRenaming] = useState(false);
+    const [renameValue, setRenameValue] = useState(conversation.title);
+    const [renameError, setRenameError] = useState<string | null>(null);
+    const [menuError, setMenuError] = useState<string | null>(null);
+    const [isRenamingPending, setIsRenamingPending] = useState(false);
+    const [isFavoritePending, setIsFavoritePending] = useState(false);
+    const renameInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (!isOpen) {
+            setIsRenaming(false);
+            setRenameError(null);
+            setMenuError(null);
+            setRenameValue(conversation.title);
+        }
+    }, [conversation.title, isOpen]);
+
+    useEffect(() => {
+        if (!isRenaming) {
+            return;
+        }
+
+        const frame = requestAnimationFrame(() => {
+            renameInputRef.current?.focus();
+            renameInputRef.current?.select();
+        });
+
+        return () => cancelAnimationFrame(frame);
+    }, [isRenaming]);
+
+    async function handleFavoriteToggle() {
+        setMenuError(null);
+        setIsFavoritePending(true);
+
+        try {
+            await onToggleFavorite(conversation.id, !conversation.isFavorite);
+            setIsOpen(false);
+        } catch (error) {
+            setMenuError(toErrorMessage(error));
+        } finally {
+            setIsFavoritePending(false);
+        }
+    }
+
+    async function handleRenameSubmit() {
+        setRenameError(null);
+        const normalizedTitle = renameValue.replace(/\s+/g, " ").trim();
+
+        if (!normalizedTitle) {
+            setRenameError("Title cannot be empty.");
+            return;
+        }
+
+        if (normalizedTitle === conversation.title) {
+            setIsOpen(false);
+            return;
+        }
+
+        setIsRenamingPending(true);
+
+        try {
+            await onRename(conversation.id, normalizedTitle);
+            setIsOpen(false);
+        } catch (error) {
+            setRenameError(toErrorMessage(error));
+        } finally {
+            setIsRenamingPending(false);
+        }
+    }
+
+    function handleRenameCancel() {
+        setIsRenaming(false);
+        setRenameError(null);
+        setRenameValue(conversation.title);
+    }
+
+    return (
+        <Menu open={isOpen} onOpenChange={setIsOpen}>
+            <MenuTrigger
+                className={cn(
+                    "mr-1 shrink-0 rounded-md p-1 text-dark-200 transition-all hover:bg-dark-600 hover:text-white focus:outline-none",
+                    isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                )}
+                onClick={(event) => event.preventDefault()}
+            >
+                <DotsThreeVerticalIcon className="size-4" weight="bold" />
+            </MenuTrigger>
+            <MenuContent side="right" align="start" sideOffset={4}>
+                {isRenaming ? (
+                    <div className="px-2 py-1.5">
+                        <Input
+                            ref={renameInputRef}
+                            className="border border-dark-600"
+                            value={renameValue}
+                            onChange={(event) => setRenameValue(event.target.value)}
+                            onMouseDown={(event) => event.stopPropagation()}
+                            onClick={(event) => event.stopPropagation()}
+                            onKeyDownCapture={(event) => event.stopPropagation()}
+                            onKeyDown={(event) => {
+                                event.stopPropagation();
+
+                                if (event.key === "Enter") {
+                                    event.preventDefault();
+                                    void handleRenameSubmit();
+                                }
+
+                                if (event.key === "Escape") {
+                                    event.preventDefault();
+                                    handleRenameCancel();
+                                }
+                            }}
+                            maxLength={120}
+                            disabled={isRenamingPending}
+                        />
+
+                        {renameError ? (
+                            <p className="mt-1 text-xs text-red-300">{renameError}</p>
+                        ) : null}
+
+                        <div className="mt-2 flex justify-end gap-1">
+                            <Button
+                                variant="ghost"
+                                className="h-7 px-2 text-xs"
+                                onClick={handleRenameCancel}
+                                disabled={isRenamingPending}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                className="h-7 px-2 text-xs"
+                                onClick={() => void handleRenameSubmit()}
+                                disabled={isRenamingPending}
+                            >
+                                {isRenamingPending ? "Saving..." : "Save"}
+                            </Button>
+                        </div>
+                    </div>
+                ) : (
+                    <>
+                        <MenuItem
+                            disabled={isFavoritePending}
+                            onSelect={(event) => {
+                                event?.preventDefault();
+                                void handleFavoriteToggle();
+                            }}
+                        >
+                            <StarIcon
+                                className="size-4"
+                                weight={conversation.isFavorite ? "fill" : "regular"}
+                            />
+                            {conversation.isFavorite
+                                ? "Remove favorite"
+                                : "Favorite"}
+                        </MenuItem>
+                        <MenuItem
+                            closeOnClick={false}
+                            onSelect={(event) => {
+                                event?.preventDefault();
+                                setIsRenaming(true);
+                                setRenameError(null);
+                                setMenuError(null);
+                                setRenameValue(conversation.title);
+                            }}
+                        >
+                            <PencilSimpleIcon className="size-4" />
+                            Rename
+                        </MenuItem>
+                        <MenuSeparator />
+                        <MenuItem
+                            destructive
+                            onSelect={(event) => {
+                                event?.preventDefault();
+                                onDeleteRequest(conversation);
+                                setIsOpen(false);
+                            }}
+                        >
+                            <TrashIcon className="size-4" />
+                            Delete
+                        </MenuItem>
+
+                        {menuError ? (
+                            <p className="px-3 pt-1 pb-1 text-xs text-red-300">
+                                {menuError}
+                            </p>
+                        ) : null}
+                    </>
+                )}
+            </MenuContent>
+        </Menu>
+    );
+}
+
+function ConversationListItem({
+    conversation,
+    currentPath,
+    onDeleteRequest,
+    onNavigate,
+    onRename,
+    onToggleFavorite
+}: ConversationListItemProps) {
+    const isActive = currentPath === `/conversations/${conversation.id}`;
+
+    return (
+        <div
+            className={cn(
+                "group relative flex items-center rounded-md transition-colors",
+                isActive
+                    ? "bg-dark-700 text-white"
+                    : "text-dark-200 hover:bg-dark-700 hover:text-white"
+            )}
+        >
+            <Link
+                to="/conversations/$conversationId"
+                params={{
+                    conversationId: conversation.id
+                }}
+                onClick={onNavigate}
+                className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-1.5 text-sm"
+            >
+                <span className="min-w-0 flex-1 truncate text-inherit">
+                    {conversation.title}
+                </span>
+                {conversation.hasUnreadAssistantReply ? (
+                    <span className="size-1.5 shrink-0 rounded-full bg-sky-400" />
+                ) : null}
+            </Link>
+
+            <ConversationActionsMenu
+                conversation={conversation}
+                isActive={isActive}
+                onDeleteRequest={onDeleteRequest}
+                onRename={onRename}
+                onToggleFavorite={onToggleFavorite}
+            />
+        </div>
+    );
+}
+
 export function ChatSidebar({
     className,
     currentPath,
@@ -93,28 +366,51 @@ export function ChatSidebar({
     isCollapsed: isCollapsedProp = false,
     onToggleCollapse
 }: ChatSidebarProps) {
-    const { conversations, conversationsError, isLoadingConversations } =
-        useChat();
+    const {
+        conversations,
+        conversationsError,
+        deleteConversation,
+        isLoadingConversations,
+        renameConversation,
+        toggleFavoriteConversation
+    } = useChat();
     const { isAuthenticated, isLoading, logout, user } = useAuth();
     const navigate = useNavigate();
     const [isLoggingOut, setIsLoggingOut] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<ConversationSummary | null>(
+        null
+    );
+    const [deleteError, setDeleteError] = useState<string | null>(null);
+    const [isDeletingConversation, setIsDeletingConversation] = useState(false);
+
+    const favoriteConversations = useMemo(
+        () => conversations.filter((conversation) => conversation.isFavorite),
+        [conversations]
+    );
 
     const groupedConversations = useMemo(() => {
         const groups = new Map<TimeGroup, ConversationSummary[]>();
-        for (const c of conversations) {
-            const group = getTimeGroup(c.lastMessageAt);
+
+        for (const conversation of conversations) {
+            if (conversation.isFavorite) {
+                continue;
+            }
+
+            const group = getTimeGroup(conversation.lastMessageAt);
             if (!groups.has(group)) groups.set(group, []);
-            groups.get(group)!.push(c);
+            groups.get(group)?.push(conversation);
         }
-        return TIME_GROUP_ORDER.filter((g) => groups.has(g)).map((g) => ({
-            label: g,
-            items: groups.get(g)!
-        }));
+
+        return TIME_GROUP_ORDER.filter((group) => groups.has(group)).map(
+            (group) => ({
+                label: group,
+                items: groups.get(group) ?? []
+            })
+        );
     }, [conversations]);
 
     const initials = getUserInitials(user?.name ?? user?.email);
     const displayName = getDisplayName(user?.name, user?.email);
-
     const collapsed = !isMobile && isCollapsedProp;
 
     function handleToggle() {
@@ -136,6 +432,35 @@ export function ChatSidebar({
         void navigate({ to: "/" });
     }
 
+    function handleDeleteRequest(conversation: ConversationSummary) {
+        setDeleteError(null);
+        setDeleteTarget(conversation);
+    }
+
+    async function handleDeleteConversation() {
+        if (!deleteTarget) {
+            return;
+        }
+
+        setDeleteError(null);
+        setIsDeletingConversation(true);
+
+        try {
+            await deleteConversation(deleteTarget.id);
+            const deletedConversationId = deleteTarget.id;
+            setDeleteTarget(null);
+
+            if (currentPath === `/conversations/${deletedConversationId}`) {
+                await navigate({ to: "/" });
+                handleNavigate();
+            }
+        } catch (error) {
+            setDeleteError(toErrorMessage(error));
+        } finally {
+            setIsDeletingConversation(false);
+        }
+    }
+
     async function handleLogout() {
         setIsLoggingOut(true);
 
@@ -148,277 +473,292 @@ export function ChatSidebar({
     }
 
     return (
-        <aside
-            className={cn(
-                "flex h-full flex-col border-r border-dark-600 bg-dark-800 text-white transition-[width] duration-200 ease-out",
-                collapsed ? "w-14" : "w-full",
-                className
-            )}
-        >
-            <div className="flex items-center justify-between p-2">
-                <div
-                    className={cn(
-                        "flex items-center gap-1 overflow-hidden transition-opacity duration-200 hover:opacity-90 cursor-pointer",
-                        collapsed ? "w-0 opacity-0" : "opacity-100"
-                    )}
-                    onClick={() => navigate({ to: "/" })}
-                >
-                    <img
-                        src="/logos/logo.svg"
-                        alt="Logo"
-                        className="size-10 shrink-0"
-                    />
-                    <span className="whitespace-nowrap text-sm font-semibold text-white">
-                        Unbound
-                    </span>
+        <>
+            <aside
+                className={cn(
+                    "flex h-full flex-col border-r border-dark-600 bg-dark-800 text-white transition-[width] duration-200 ease-out",
+                    collapsed ? "w-14" : "w-full",
+                    className
+                )}
+            >
+                <div className="flex items-center justify-between p-2">
+                    <div
+                        className={cn(
+                            "flex cursor-pointer items-center gap-1 overflow-hidden transition-opacity duration-200 hover:opacity-90",
+                            collapsed ? "w-0 opacity-0" : "opacity-100"
+                        )}
+                        onClick={() => navigate({ to: "/" })}
+                    >
+                        <img
+                            src="/logos/logo.svg"
+                            alt="Logo"
+                            className="size-10 shrink-0"
+                        />
+                        <span className="whitespace-nowrap text-sm font-semibold text-white">
+                            Unbound
+                        </span>
+                    </div>
+
+                    <button
+                        type="button"
+                        onClick={handleToggle}
+                        className={cn(
+                            "inline-flex shrink-0 items-center justify-center rounded-md text-dark-100 transition hover:bg-dark-600 hover:text-white",
+                            collapsed ? "mx-auto size-8" : "size-8"
+                        )}
+                    >
+                        {isMobile ? (
+                            <XIcon className="size-4" weight="bold" />
+                        ) : collapsed ? (
+                            <SidebarSimpleIcon className="size-4" weight="bold" />
+                        ) : (
+                            <SidebarSimpleIcon className="size-4" weight="fill" />
+                        )}
+                    </button>
                 </div>
 
-                <button
-                    type="button"
-                    onClick={handleToggle}
-                    className={cn(
-                        "inline-flex shrink-0 items-center justify-center rounded-md text-dark-100 transition hover:bg-dark-600 hover:text-white",
-                        collapsed ? "mx-auto size-8" : "size-8"
-                    )}
-                >
-                    {isMobile ? (
-                        <XIcon className="size-4" weight="bold" />
-                    ) : collapsed ? (
-                        <SidebarSimpleIcon className="size-4" weight="bold" />
+                <div className="px-2 pb-2">
+                    {collapsed ? (
+                        <button
+                            type="button"
+                            onClick={handleNewChat}
+                            className="mx-auto flex size-8 items-center justify-center rounded-md text-dark-300 transition hover:bg-dark-700 hover:text-white"
+                        >
+                            <PlusIcon className="size-4" weight="bold" />
+                        </button>
                     ) : (
-                        <SidebarSimpleIcon className="size-4" weight="fill" />
+                        <button
+                            type="button"
+                            onClick={handleNewChat}
+                            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-dark-200 transition hover:bg-dark-700 hover:text-white"
+                        >
+                            <PlusIcon className="size-4 shrink-0" weight="bold" />
+                            <span>New chat</span>
+                        </button>
                     )}
-                </button>
-            </div>
+                </div>
 
-            <div className="px-2 pb-2">
-                {collapsed ? (
-                    <button
-                        type="button"
-                        onClick={handleNewChat}
-                        className="mx-auto flex size-8 items-center justify-center rounded-md text-dark-300 transition hover:bg-dark-700 hover:text-white"
-                    >
-                        <PlusIcon className="size-4" weight="bold" />
-                    </button>
-                ) : (
-                    <button
-                        type="button"
-                        onClick={handleNewChat}
-                        className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-dark-200 transition hover:bg-dark-700 hover:text-white"
-                    >
-                        <PlusIcon className="size-4 shrink-0" weight="bold" />
-                        <span>New chat</span>
-                    </button>
-                )}
-            </div>
-
-            {!collapsed && (
-                <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-                    <div>
-                        {isLoadingConversations ? (
-                            <div className="px-3 py-2 text-sm text-dark-200">
-                                Loading conversations...
-                            </div>
-                        ) : null}
-
-                        {!isLoadingConversations && conversationsError ? (
-                            <div className="px-3 py-2 text-sm text-red-200">
-                                {conversationsError}
-                            </div>
-                        ) : null}
-
-                        {groupedConversations.map(({ label, items }) => (
-                            <div key={label} className="mb-3">
-                                <div className="px-2 py-2 text-xs font-medium text-dark-200">
-                                    {label}
+                {!collapsed && (
+                    <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+                        <div>
+                            {isLoadingConversations ? (
+                                <div className="px-3 py-2 text-sm text-dark-200">
+                                    Loading conversations...
                                 </div>
-                                <div className="space-y-0.5">
-                                    {items.map((conversation) => {
-                                        const isActive =
-                                            currentPath ===
-                                            `/conversations/${conversation.id}`;
+                            ) : null}
 
-                                        return (
-                                            <div
-                                                key={conversation.id}
-                                                className={cn(
-                                                    "group relative flex items-center rounded-md transition-colors",
-                                                    isActive
-                                                        ? "bg-dark-700 text-white"
-                                                        : "text-dark-200 hover:bg-dark-700 hover:text-white"
-                                                )}
-                                            >
-                                                <Link
-                                                    to="/conversations/$conversationId"
-                                                    params={{
-                                                        conversationId:
-                                                            conversation.id
-                                                    }}
-                                                    onClick={handleNavigate}
-                                                    className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-1.5 text-sm"
-                                                >
-                                                    <span className="min-w-0 flex-1 truncate text-inherit">
-                                                        {conversation.title}
-                                                    </span>
-                                                    {conversation.hasUnreadAssistantReply ? (
-                                                        <span className="size-1.5 shrink-0 rounded-full bg-sky-400" />
-                                                    ) : null}
-                                                </Link>
-
-                                                <Menu>
-                                                    <MenuTrigger
-                                                        className={cn(
-                                                            "mr-1 shrink-0 rounded-md p-1 text-dark-200 transition-all hover:bg-dark-600 hover:text-white focus:outline-none",
-                                                            isActive
-                                                                ? "opacity-100"
-                                                                : "opacity-0 group-hover:opacity-100"
-                                                        )}
-                                                        onClick={(e) =>
-                                                            e.preventDefault()
-                                                        }
-                                                    >
-                                                        <DotsThreeVerticalIcon
-                                                            className="size-4"
-                                                            weight="bold"
-                                                        />
-                                                    </MenuTrigger>
-                                                    <MenuContent
-                                                        side="right"
-                                                        align="start"
-                                                        sideOffset={4}
-                                                    >
-                                                        <MenuItem
-                                                            onClick={() => {}}
-                                                        >
-                                                            <StarIcon className="size-4" />
-                                                            Favorite
-                                                        </MenuItem>
-                                                        <MenuItem
-                                                            onClick={() => {}}
-                                                        >
-                                                            <PencilSimpleIcon className="size-4" />
-                                                            Rename
-                                                        </MenuItem>
-                                                        <MenuSeparator />
-                                                        <MenuItem
-                                                            onClick={() => {}}
-                                                            destructive
-                                                        >
-                                                            <TrashIcon className="size-4" />
-                                                            Delete
-                                                        </MenuItem>
-                                                    </MenuContent>
-                                                </Menu>
-                                            </div>
-                                        );
-                                    })}
+                            {!isLoadingConversations && conversationsError ? (
+                                <div className="px-3 py-2 text-sm text-red-200">
+                                    {conversationsError}
                                 </div>
-                            </div>
-                        ))}
-                    </div>
-                </nav>
-            )}
+                            ) : null}
 
-            <div className="mt-auto border-t border-dark-600 p-2">
-                {isLoading ? (
-                    <div className="px-3 py-2 text-sm text-dark-200">
-                        {collapsed ? "..." : "Loading..."}
-                    </div>
-                ) : isAuthenticated && user ? (
-                    <Menu>
-                        <MenuTrigger
-                            className={cn(
-                                "w-full rounded-md transition hover:bg-dark-700",
-                                collapsed
-                                    ? "flex justify-center p-1"
-                                    : "block p-1"
-                            )}
-                        >
-                            <div
-                                className={cn(
-                                    "flex items-center",
-                                    collapsed ? "justify-center" : "gap-3"
-                                )}
-                            >
-                                <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-dark-600 text-sm font-semibold text-dark-50">
-                                    {initials}
-                                </div>
-
-                                {!collapsed && (
-                                    <div className="min-w-0 flex-1 text-left">
-                                        <div className="truncate text-sm text-white">
-                                            {displayName}
-                                        </div>
-                                        <div className="truncate text-xs text-dark-200">
-                                            {user.email}
-                                        </div>
+                            {favoriteConversations.length > 0 ? (
+                                <div className="mb-3">
+                                    <div className="px-2 py-2 text-xs font-medium text-dark-200">
+                                        Favorites
                                     </div>
-                                )}
-                            </div>
-                        </MenuTrigger>
+                                    <div className="space-y-0.5">
+                                        {favoriteConversations.map((conversation) => (
+                                            <ConversationListItem
+                                                key={conversation.id}
+                                                conversation={conversation}
+                                                currentPath={currentPath}
+                                                onDeleteRequest={handleDeleteRequest}
+                                                onNavigate={handleNavigate}
+                                                onRename={renameConversation}
+                                                onToggleFavorite={
+                                                    toggleFavoriteConversation
+                                                }
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : null}
 
-                        <MenuContent align="end" side="top">
-                            <MenuItem
-                                onClick={() => {
-                                    navigate({ to: "/settings" });
-                                    handleNavigate();
-                                }}
-                            >
-                                <GearSixIcon className="size-4" />
-                                Settings
-                            </MenuItem>
-                            <MenuSeparator />
-                            <MenuItem
-                                onClick={handleLogout}
-                                disabled={isLoggingOut}
-                                destructive
-                            >
-                                <SignOutIcon className="size-4" />
-                                {isLoggingOut ? "Logging out..." : "Logout"}
-                            </MenuItem>
-                        </MenuContent>
-                    </Menu>
-                ) : collapsed ? (
-                    <div className="flex flex-col items-center gap-2">
-                        <Link
-                            to="/login"
-                            onClick={handleNavigate}
-                            className="flex size-10 items-center justify-center rounded-lg text-dark-200 transition hover:bg-white/5 hover:text-white"
-                            title="Login"
-                        >
-                            <SignInIcon className="size-4" weight="bold" />
-                        </Link>
-                        <Link
-                            to="/register"
-                            onClick={handleNavigate}
-                            className="flex size-10 items-center justify-center rounded-lg bg-primary-50 text-dark-900 transition hover:bg-primary-300"
-                            title="Register"
-                        >
-                            <UserPlusIcon className="size-4" weight="bold" />
-                        </Link>
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-2 gap-2">
-                        <Link
-                            to="/login"
-                            onClick={handleNavigate}
-                            className="inline-flex items-center justify-center gap-2 rounded-md border border-dark-400 px-2.5 py-1.5 text-sm text-white transition hover:bg-dark-600"
-                        >
-                            <SignInIcon className="size-4" weight="bold" />
-                            Login
-                        </Link>
+                            {groupedConversations.map(({ label, items }) => (
+                                <div key={label} className="mb-3">
+                                    <div className="px-2 py-2 text-xs font-medium text-dark-200">
+                                        {label}
+                                    </div>
+                                    <div className="space-y-0.5">
+                                        {items.map((conversation) => (
+                                            <ConversationListItem
+                                                key={conversation.id}
+                                                conversation={conversation}
+                                                currentPath={currentPath}
+                                                onDeleteRequest={handleDeleteRequest}
+                                                onNavigate={handleNavigate}
+                                                onRename={renameConversation}
+                                                onToggleFavorite={
+                                                    toggleFavoriteConversation
+                                                }
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
 
-                        <Link
-                            to="/register"
-                            onClick={handleNavigate}
-                            className="inline-flex items-center justify-center gap-2 rounded-md bg-primary-50 px-2.5 py-1.5 text-sm text-dark-900 transition hover:bg-primary-200"
-                        >
-                            <UserPlusIcon className="size-4" weight="bold" />
-                            Register
-                        </Link>
-                    </div>
+                            {!isLoadingConversations &&
+                            !conversationsError &&
+                            favoriteConversations.length === 0 &&
+                            groupedConversations.length === 0 ? (
+                                <div className="px-3 py-2 text-sm text-dark-200">
+                                    No conversations yet.
+                                </div>
+                            ) : null}
+                        </div>
+                    </nav>
                 )}
-            </div>
-        </aside>
+
+                <div className="mt-auto border-t border-dark-600 p-2">
+                    {isLoading ? (
+                        <div className="px-3 py-2 text-sm text-dark-200">
+                            {collapsed ? "..." : "Loading..."}
+                        </div>
+                    ) : isAuthenticated && user ? (
+                        <Menu>
+                            <MenuTrigger
+                                className={cn(
+                                    "w-full rounded-md transition hover:bg-dark-700",
+                                    collapsed
+                                        ? "flex justify-center p-1"
+                                        : "block p-1"
+                                )}
+                            >
+                                <div
+                                    className={cn(
+                                        "flex items-center",
+                                        collapsed ? "justify-center" : "gap-3"
+                                    )}
+                                >
+                                    <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-dark-600 text-sm font-semibold text-dark-50">
+                                        {initials}
+                                    </div>
+
+                                    {!collapsed && (
+                                        <div className="min-w-0 flex-1 text-left">
+                                            <div className="truncate text-sm text-white">
+                                                {displayName}
+                                            </div>
+                                            <div className="truncate text-xs text-dark-200">
+                                                {user.email}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </MenuTrigger>
+
+                            <MenuContent align="end" side="top">
+                                <MenuItem
+                                    onClick={() => {
+                                        navigate({ to: "/settings" });
+                                        handleNavigate();
+                                    }}
+                                >
+                                    <GearSixIcon className="size-4" />
+                                    Settings
+                                </MenuItem>
+                                <MenuSeparator />
+                                <MenuItem
+                                    onClick={handleLogout}
+                                    disabled={isLoggingOut}
+                                    destructive
+                                >
+                                    <SignOutIcon className="size-4" />
+                                    {isLoggingOut ? "Logging out..." : "Logout"}
+                                </MenuItem>
+                            </MenuContent>
+                        </Menu>
+                    ) : collapsed ? (
+                        <div className="flex flex-col items-center gap-2">
+                            <Link
+                                to="/login"
+                                onClick={handleNavigate}
+                                className="flex size-10 items-center justify-center rounded-lg text-dark-200 transition hover:bg-white/5 hover:text-white"
+                                title="Login"
+                            >
+                                <SignInIcon className="size-4" weight="bold" />
+                            </Link>
+                            <Link
+                                to="/register"
+                                onClick={handleNavigate}
+                                className="flex size-10 items-center justify-center rounded-lg bg-primary-50 text-dark-900 transition hover:bg-primary-300"
+                                title="Register"
+                            >
+                                <UserPlusIcon className="size-4" weight="bold" />
+                            </Link>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-2 gap-2">
+                            <Link
+                                to="/login"
+                                onClick={handleNavigate}
+                                className="inline-flex items-center justify-center gap-2 rounded-md border border-dark-400 px-2.5 py-1.5 text-sm text-white transition hover:bg-dark-600"
+                            >
+                                <SignInIcon className="size-4" weight="bold" />
+                                Login
+                            </Link>
+
+                            <Link
+                                to="/register"
+                                onClick={handleNavigate}
+                                className="inline-flex items-center justify-center gap-2 rounded-md bg-primary-50 px-2.5 py-1.5 text-sm text-dark-900 transition hover:bg-primary-200"
+                            >
+                                <UserPlusIcon className="size-4" weight="bold" />
+                                Register
+                            </Link>
+                        </div>
+                    )}
+                </div>
+            </aside>
+
+            <Modal
+                open={deleteTarget !== null}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setDeleteTarget(null);
+                        setDeleteError(null);
+                    }
+                }}
+            >
+                <ModalContent className="max-w-md">
+                    <div className="space-y-4 p-4">
+                        <div>
+                            <ModalTitle>Delete conversation?</ModalTitle>
+                            <ModalDescription>
+                                {deleteTarget
+                                    ? `This will permanently delete "${deleteTarget.title}" and its messages.`
+                                    : "This will permanently delete this conversation and its messages."}
+                            </ModalDescription>
+                        </div>
+
+                        {deleteError ? (
+                            <p className="text-sm text-red-300">{deleteError}</p>
+                        ) : null}
+
+                        <div className="flex justify-end gap-2">
+                            <Button
+                                variant="ghost"
+                                onClick={() => {
+                                    setDeleteTarget(null);
+                                    setDeleteError(null);
+                                }}
+                                disabled={isDeletingConversation}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={() => void handleDeleteConversation()}
+                                disabled={isDeletingConversation}
+                                className="bg-red-500 text-red-50 hover:bg-red-400"
+                            >
+                                {isDeletingConversation ? "Deleting..." : "Delete"}
+                            </Button>
+                        </div>
+                    </div>
+                </ModalContent>
+            </Modal>
+        </>
     );
 }

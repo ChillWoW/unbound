@@ -1,4 +1,11 @@
-import { index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+    boolean,
+    index,
+    pgTable,
+    text,
+    timestamp,
+    uuid
+} from "drizzle-orm/pg-core";
 import { users } from "./users";
 
 export const conversations = pgTable(
@@ -10,6 +17,7 @@ export const conversations = pgTable(
             .references(() => users.id, { onDelete: "cascade" }),
         title: text("title").notNull(),
         titleSource: text("title_source").notNull(),
+        isFavorite: boolean("is_favorite").default(false).notNull(),
         createdAt: timestamp("created_at", { withTimezone: true })
             .defaultNow()
             .notNull(),

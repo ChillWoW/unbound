@@ -51,6 +51,24 @@ function getReadStateMap(readStates: ConversationReadRecord[]) {
 }
 
 const STALE_PENDING_THRESHOLD_MS = 5 * 60 * 1000;
+const MAX_CONVERSATION_TITLE_LENGTH = 120;
+
+function normalizeManualConversationTitle(value: string): string {
+    const normalized = value.replace(/\s+/g, " ").trim();
+
+    if (!normalized) {
+        throw new ConversationError(400, "Conversation title is required.");
+    }
+
+    if (normalized.length > MAX_CONVERSATION_TITLE_LENGTH) {
+        throw new ConversationError(
+            400,
+            `Conversation title must be ${MAX_CONVERSATION_TITLE_LENGTH} characters or less.`
+        );
+    }
+
+    return normalized;
+}
 
 async function markStalePendingMessages(
     messages: MessageRecord[],
@@ -234,6 +252,72 @@ export const conversationsService = {
             success: true,
             conversationId,
             assistantMessageId: input.assistantMessageId
+        };
+    },
+
+    async updateConversation(
+        request: Request,
+        conversationId: string,
+        input: { title?: string; isFavorite?: boolean }
+    ) {
+        const user = await requireAuth(request);
+
+        const hasTitleUpdate = input.title !== undefined;
+        const hasFavoriteUpdate = input.isFavorite !== undefined;
+
+        if (!hasTitleUpdate && !hasFavoriteUpdate) {
+            throw new ConversationError(
+                400,
+                "Provide at least one field to update."
+            );
+        }
+
+        const conversation =
+            await conversationsRepository.findConversationByIdForUser(
+                user.id,
+                conversationId
+            );
+
+        if (!conversation) {
+            throw new ConversationError(404, "Conversation not found.");
+        }
+
+        await conversationsRepository.updateConversationByIdForUser(
+            user.id,
+            conversationId,
+            {
+                ...(hasTitleUpdate
+                    ? {
+                          title: normalizeManualConversationTitle(input.title!),
+                          titleSource: "manual"
+                      }
+                    : {}),
+                ...(hasFavoriteUpdate ? { isFavorite: input.isFavorite } : {})
+            }
+        );
+
+        return getConversationDetailOrThrow(user.id, conversationId);
+    },
+
+    async deleteConversation(request: Request, conversationId: string) {
+        const user = await requireAuth(request);
+
+        const deleted = await conversationsRepository.deleteConversationByIdForUser(
+            user.id,
+            conversationId
+        );
+
+        if (!deleted) {
+            throw new ConversationError(404, "Conversation not found.");
+        }
+
+        if (generationManager.isActive(conversationId)) {
+            generationManager.fail(conversationId, "Conversation deleted.");
+        }
+
+        return {
+            success: true,
+            conversationId
         };
     }
 };

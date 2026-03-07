@@ -1,5 +1,6 @@
 import api, { API_BASE_URL } from "@/lib/api";
 import type {
+    ConversationDeleteResponse,
     ConversationReadResponse,
     ConversationResponse,
     ConversationsResponse,
@@ -46,6 +47,24 @@ export const chatApi = {
             {
                 body: { assistantMessageId }
             }
+        );
+    },
+
+    updateConversation(
+        conversationId: string,
+        input: { title?: string; isFavorite?: boolean }
+    ) {
+        return api.patch<ConversationResponse>(
+            `/api/conversations/${conversationId}`,
+            {
+                body: input
+            }
+        );
+    },
+
+    deleteConversation(conversationId: string) {
+        return api.delete<ConversationDeleteResponse>(
+            `/api/conversations/${conversationId}`
         );
     },
 
