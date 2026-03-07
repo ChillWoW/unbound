@@ -13,6 +13,12 @@ export interface TextMessagePart {
     text: string;
 }
 
+export interface ImageMessagePart {
+    type: "image";
+    data: string; // base64
+    mimeType: string;
+}
+
 export interface ToolInvocationPart {
     type: "tool-invocation";
     toolInvocationId: string;
@@ -22,7 +28,7 @@ export interface ToolInvocationPart {
     result?: unknown;
 }
 
-export type MessagePart = TextMessagePart | ToolInvocationPart;
+export type MessagePart = TextMessagePart | ImageMessagePart | ToolInvocationPart;
 
 export interface ConversationMessage {
     id: string;
@@ -69,7 +75,7 @@ export function createConversationTitle(prompt: string): string {
     const normalized = normalizeWhitespace(prompt);
 
     if (!normalized) {
-        return "New chat";
+        return "Image conversation";
     }
 
     if (normalized.length <= 60) {
@@ -79,19 +85,31 @@ export function createConversationTitle(prompt: string): string {
     return `${normalized.slice(0, 57).trimEnd()}...`;
 }
 
-export function createTextMessageParts(content: string): MessagePart[] {
+export function createMessageParts(
+    content: string,
+    attachments?: Array<{ data: string; mimeType: string }>
+): MessagePart[] {
+    const parts: MessagePart[] = [];
     const normalized = content.trim();
 
-    if (!normalized) {
+    if (normalized) {
+        parts.push({ type: "text", text: normalized });
+    }
+
+    for (const att of attachments ?? []) {
+        parts.push({ type: "image", data: att.data, mimeType: att.mimeType });
+    }
+
+    if (parts.length === 0) {
         throw new ConversationError(400, "Message content is required.");
     }
 
-    return [
-        {
-            type: "text",
-            text: normalized
-        }
-    ];
+    return parts;
+}
+
+/** @deprecated Use createMessageParts instead */
+export function createTextMessageParts(content: string): MessagePart[] {
+    return createMessageParts(content);
 }
 
 export function getMessagePreview(parts: MessagePart[]): string {

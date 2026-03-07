@@ -48,11 +48,11 @@ function ConversationPage() {
         );
     }, [conversation, conversationId, markConversationRead]);
 
-    async function handleSubmit(value: string) {
+    async function handleSubmit(value: string, attachments: import("@/features/chat/components/chat-input").ChatAttachment[]) {
         setSubmissionError(null);
 
         try {
-            await sendMessage(conversationId, value);
+            await sendMessage(conversationId, value, attachments);
         } catch (submitError) {
             if (submitError instanceof Error) {
                 setSubmissionError(submitError.message);

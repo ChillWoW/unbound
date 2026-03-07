@@ -12,6 +12,7 @@ import { ApiError } from "@/lib/api";
 import { useAuth } from "@/features/auth/use-auth";
 import { chatApi } from "./api";
 import { parseAIStream } from "./utils/parse-ai-stream";
+import type { ChatAttachment } from "./components/chat-input";
 import type {
     ChatModel,
     ConversationDetail,
@@ -19,6 +20,27 @@ import type {
     ConversationSummary,
     MessagePart
 } from "./types";
+
+function fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const result = reader.result as string;
+            resolve(result.split(",")[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
+async function prepareAttachments(attachments: ChatAttachment[]) {
+    return Promise.all(
+        attachments.map(async (a) => ({
+            data: await fileToBase64(a.file),
+            mimeType: a.file.type
+        }))
+    );
+}
 
 function getSelectedModelStorageKey(userId: string) {
     return `unbound.chat.selected-model:${userId}`;
@@ -51,7 +73,7 @@ interface ChatContextValue {
     availableModels: ChatModel[];
     conversations: ConversationSummary[];
     conversationsError: string | null;
-    createConversation: (prompt: string) => Promise<ConversationDetail>;
+    createConversation: (prompt: string, attachments?: ChatAttachment[]) => Promise<ConversationDetail>;
     getConversation: (conversationId: string) => ConversationDetail | undefined;
     getConversationError: (conversationId: string) => string | null;
     isConversationLoading: (conversationId: string) => boolean;
@@ -70,7 +92,8 @@ interface ChatContextValue {
     selectedModelId: string | null;
     sendMessage: (
         conversationId: string,
-        prompt: string
+        prompt: string,
+        attachments?: ChatAttachment[]
     ) => Promise<ConversationDetail>;
     setSelectedModelId: (modelId: string | null) => void;
 }
@@ -480,7 +503,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
     );
 
     const createConversation = useCallback(
-        async (prompt: string) => {
+        async (prompt: string, attachments?: ChatAttachment[]) => {
             const modelId = selectedModelIdRef.current;
 
             if (!modelId) {
@@ -490,7 +513,10 @@ export function ChatProvider({ children }: PropsWithChildren) {
             setIsCreatingConversation(true);
 
             try {
-                const response = await chatApi.createConversation(prompt);
+                const preparedAttachments = attachments?.length
+                    ? await prepareAttachments(attachments)
+                    : undefined;
+                const response = await chatApi.createConversation(prompt, preparedAttachments);
                 upsertConversation(response.conversation);
 
                 const conversationId = response.conversation.id;
@@ -561,7 +587,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
     );
 
     const sendMessage = useCallback(
-        async (conversationId: string, prompt: string) => {
+        async (conversationId: string, prompt: string, attachments?: ChatAttachment[]) => {
             const modelId = selectedModelIdRef.current;
 
             if (!modelId) {
@@ -571,9 +597,13 @@ export function ChatProvider({ children }: PropsWithChildren) {
             setConversationSending(conversationId, true);
 
             try {
+                const preparedAttachments = attachments?.length
+                    ? await prepareAttachments(attachments)
+                    : undefined;
                 const persistResponse = await chatApi.sendMessage(
                     conversationId,
-                    prompt
+                    prompt,
+                    preparedAttachments
                 );
                 upsertConversation(persistResponse.conversation);
 

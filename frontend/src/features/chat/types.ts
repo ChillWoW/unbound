@@ -3,6 +3,12 @@ export interface TextMessagePart {
     text: string;
 }
 
+export interface ImageMessagePart {
+    type: "image";
+    data: string; // base64
+    mimeType: string;
+}
+
 export interface ToolInvocationPart {
     type: "tool-invocation";
     toolInvocationId: string;
@@ -12,7 +18,7 @@ export interface ToolInvocationPart {
     result?: unknown;
 }
 
-export type MessagePart = TextMessagePart | ToolInvocationPart;
+export type MessagePart = TextMessagePart | ImageMessagePart | ToolInvocationPart;
 
 export type MessageRole = "user" | "assistant" | "system" | "tool";
 export type MessageStatus = "pending" | "complete" | "failed";

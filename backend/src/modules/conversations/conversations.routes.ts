@@ -7,8 +7,14 @@ const conversationParams = t.Object({
     conversationId: t.String({ minLength: 1, maxLength: 64 })
 });
 
+const attachmentSchema = t.Object({
+    data: t.String({ minLength: 1 }),
+    mimeType: t.String({ minLength: 1 })
+});
+
 const messageBody = t.Object({
-    content: t.String({ minLength: 1, maxLength: 12000 })
+    content: t.String({ maxLength: 12000 }),
+    attachments: t.Optional(t.Array(attachmentSchema, { maxItems: 10 }))
 });
 
 const readBody = t.Object({

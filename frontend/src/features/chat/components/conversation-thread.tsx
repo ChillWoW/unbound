@@ -14,7 +14,7 @@ import type {
     MessagePart,
     ToolInvocationPart
 } from "../types";
-import { ChatInput } from "./chat-input";
+import { ChatInput, type ChatAttachment } from "./chat-input";
 
 function getMessageText(parts: MessagePart[]) {
     return parts
@@ -236,7 +236,7 @@ interface ConversationThreadProps {
     isLoadingModels?: boolean;
     modelsError?: string | null;
     onModelChange: (modelId: string | null) => void;
-    onSubmit: (value: string) => Promise<void> | void;
+    onSubmit: (value: string, attachments: ChatAttachment[]) => Promise<void> | void;
     selectedModelId: string | null;
 }
 
@@ -282,16 +282,38 @@ export function ConversationThread({
                     {conversation.messages.map((message) => {
                         if (message.role === "user") {
                             const text = getMessageText(message.parts);
+                            const images = message.parts.filter(
+                                (p): p is import("../types").ImageMessagePart =>
+                                    p.type === "image"
+                            );
                             return (
                                 <div
                                     key={message.id}
                                     className="flex justify-end"
                                 >
-                                    <div className="max-w-[80%] rounded-2xl bg-dark-700 px-4 py-3">
-                                        <p className="whitespace-pre-wrap text-[15px] leading-7 text-white">
-                                            {text ||
-                                                "Unsupported message part."}
-                                        </p>
+                                    <div className="max-w-[80%] rounded-2xl bg-dark-700 px-4 py-3 space-y-2">
+                                        {images.length > 0 && (
+                                            <div className="flex flex-wrap gap-2">
+                                                {images.map((img, i) => (
+                                                    <img
+                                                        key={i}
+                                                        src={`data:${img.mimeType};base64,${img.data}`}
+                                                        alt="attachment"
+                                                        className="max-h-48 rounded-lg object-contain"
+                                                    />
+                                                ))}
+                                            </div>
+                                        )}
+                                        {text && (
+                                            <p className="whitespace-pre-wrap text-[15px] leading-7 text-white">
+                                                {text}
+                                            </p>
+                                        )}
+                                        {!text && images.length === 0 && (
+                                            <p className="whitespace-pre-wrap text-[15px] leading-7 text-white">
+                                                Unsupported message part.
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                             );

@@ -4,7 +4,7 @@ import { conversationsRepository } from "./conversations.repository";
 import {
     ConversationError,
     createConversationTitle,
-    createTextMessageParts,
+    createMessageParts,
     toConversationDetail,
     toConversationSummary,
     type ConversationReadRecord,
@@ -114,9 +114,9 @@ export const conversationsService = {
         return getConversationDetailOrThrow(user.id, conversationId);
     },
 
-    async createConversation(request: Request, input: { content: string }) {
+    async createConversation(request: Request, input: { content: string; attachments?: Array<{ data: string; mimeType: string }> }) {
         const user = await requireAuth(request);
-        const messageParts = createTextMessageParts(input.content);
+        const messageParts = createMessageParts(input.content, input.attachments);
         const title = createConversationTitle(input.content);
 
         const { conversation } =
@@ -137,7 +137,7 @@ export const conversationsService = {
     async createConversationMessage(
         request: Request,
         conversationId: string,
-        input: { content: string }
+        input: { content: string; attachments?: Array<{ data: string; mimeType: string }> }
     ) {
         const user = await requireAuth(request);
         const conversation =
@@ -154,7 +154,7 @@ export const conversationsService = {
             conversationId,
             messageId: createCustomId("msg"),
             messageRole: "user",
-            messageParts: createTextMessageParts(input.content),
+            messageParts: createMessageParts(input.content, input.attachments),
             messageStatus: "complete"
         });
 

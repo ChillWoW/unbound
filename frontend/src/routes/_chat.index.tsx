@@ -23,7 +23,7 @@ function HomePage() {
         setSelectedModelId
     } = useChat();
 
-    async function handleSubmit(value: string) {
+    async function handleSubmit(value: string, attachments: import("@/features/chat/components/chat-input").ChatAttachment[]) {
         setError(null);
 
         if (!isAuthenticated) {
@@ -32,7 +32,7 @@ function HomePage() {
         }
 
         try {
-            const conversation = await createConversation(value);
+            const conversation = await createConversation(value, attachments);
             setDraft("");
             await navigate({
                 to: "/conversations/$conversationId",

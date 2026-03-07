@@ -19,9 +19,9 @@ export const chatApi = {
         );
     },
 
-    createConversation(content: string) {
+    createConversation(content: string, attachments?: Array<{ data: string; mimeType: string }>) {
         return api.post<ConversationResponse>("/api/conversations", {
-            body: { content }
+            body: { content, attachments }
         });
     },
 
@@ -48,11 +48,11 @@ export const chatApi = {
         );
     },
 
-    sendMessage(conversationId: string, content: string) {
+    sendMessage(conversationId: string, content: string, attachments?: Array<{ data: string; mimeType: string }>) {
         return api.post<ConversationResponse>(
             `/api/conversations/${conversationId}/messages`,
             {
-                body: { content }
+                body: { content, attachments }
             }
         );
     }

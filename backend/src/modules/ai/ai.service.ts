@@ -23,13 +23,34 @@ function toModelMessages(records: MessageRecord[]): ModelMessage[] {
         const parts = record.parts as MessagePart[];
 
         if (role === "user") {
-            const text = parts
-                .filter((p) => p.type === "text")
-                .map((p) => p.text)
-                .join("\n\n");
+            const imageParts = parts.filter((p) => p.type === "image");
 
-            if (text) {
-                result.push({ role: "user", content: text });
+            if (imageParts.length === 0) {
+                const text = parts
+                    .filter((p) => p.type === "text")
+                    .map((p) => p.text)
+                    .join("\n\n");
+
+                if (text) {
+                    result.push({ role: "user", content: text });
+                }
+            } else {
+                const content: Array<
+                    | { type: "text"; text: string }
+                    | { type: "image"; image: string; mimeType: string }
+                > = [];
+
+                for (const p of parts) {
+                    if (p.type === "text" && p.text) {
+                        content.push({ type: "text", text: p.text });
+                    } else if (p.type === "image") {
+                        content.push({ type: "image", image: p.data, mimeType: p.mimeType });
+                    }
+                }
+
+                if (content.length > 0) {
+                    result.push({ role: "user", content });
+                }
             }
         } else if (role === "assistant") {
             const textParts = parts.filter((p) => p.type === "text");
