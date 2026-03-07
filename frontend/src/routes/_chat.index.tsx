@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/features/auth/use-auth";
 import { useChat } from "@/features/chat/chat-context";
@@ -8,8 +8,22 @@ export const Route = createFileRoute("/_chat/")({
     component: HomePage
 });
 
+const TITLES = [
+    "How can I help you today?",
+    "What's on your mind?",
+    "What are we working on?",
+    "What do you need?",
+    "Let's figure it out.",
+    "Where do you want to start?",
+    "What can I do for you?"
+];
+
 function HomePage() {
     const [draft, setDraft] = useState("");
+    const title = useMemo(
+        () => TITLES[Math.floor(Math.random() * TITLES.length)],
+        []
+    );
     const [error, setError] = useState<string | null>(null);
     const navigate = useNavigate();
     const { isAuthenticated, isLoading } = useAuth();
@@ -23,7 +37,10 @@ function HomePage() {
         setSelectedModelId
     } = useChat();
 
-    async function handleSubmit(value: string, attachments: import("@/features/chat/components/chat-input").ChatAttachment[]) {
+    async function handleSubmit(
+        value: string,
+        attachments: import("@/features/chat/components/chat-input").ChatAttachment[]
+    ) {
         setError(null);
 
         if (!isAuthenticated) {
@@ -49,11 +66,9 @@ function HomePage() {
     }
 
     return (
-        <main className="flex h-full items-center justify-center">
-            <div className="flex flex-col gap-12 items-center w-full max-w-xl">
-                <p className="text-2xl font-semibold">
-                    How Can I Help You Today?
-                </p>
+        <main className="flex h-full items-center justify-center px-4">
+            <div className="flex flex-col gap-8 items-center w-full max-w-xl">
+                <p className="text-2xl font-semibold">{title}</p>
 
                 {error && <p className="text-sm text-red-500">{error}</p>}
 
