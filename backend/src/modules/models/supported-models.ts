@@ -26,8 +26,27 @@ const supportedModelDefinitions: SupportedModelDefinition[] = [
         id: "arcee-ai/trinity-large-preview:free",
         name: "Trinity Large Preview",
         provider: "arcee-ai",
-        description: "Arcee's 400B parameter model from Arcee AI",
+        description: "400B parameter model from Arcee AI",
         free: true
+    },
+    {
+        id: "minimax/minimax-m2.5",
+        name: "Minimax M2.5",
+        provider: "minimax",
+        description:
+            "SOTA language model designed for real-world productivity from Minimax"
+    },
+    {
+        id: "moonshotai/kimi-k2.5",
+        name: "Kimi K2.5",
+        provider: "moonshot",
+        description: "MoonShot AI's latest multimodal model"
+    },
+    {
+        id: "x-ai/grok-4.1-fast",
+        name: "Grok 4.1 Fast",
+        provider: "x-ai",
+        description: "xAI's best agentic tool calling model"
     }
 ];
 

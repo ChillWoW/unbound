@@ -17,12 +17,15 @@ import {
     InfoIcon
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/cn";
-import { Arcee, Qwen, Stepfun } from "@lobehub/icons";
+import { Arcee, Qwen, Stepfun, Minimax, Moonshot, XAI } from "@lobehub/icons";
 
 const ICONS: Record<string, React.ComponentType<any>> = {
     qwen: Qwen,
     stepfun: Stepfun,
-    "arcee-ai": Arcee
+    "arcee-ai": Arcee,
+    minimax: Minimax,
+    moonshot: Moonshot,
+    "x-ai": XAI
 };
 
 function formatPricing(raw: string): string {
@@ -283,9 +286,7 @@ export function ModelSelector({
                 )}
                 disabled={disabled}
             >
-                {ModelIcon && (
-                    <ModelIcon className="size-4 opacity-50" />
-                )}
+                {ModelIcon && <ModelIcon className="size-4 opacity-50" />}
                 <span className="truncate">{modelName}</span>
             </PopoverTrigger>
 
@@ -323,7 +324,9 @@ export function ModelSelector({
                     {filterOpen && (
                         <div className="flex flex-wrap gap-1 border-b border-dark-600 px-2 py-2">
                             {FILTER_OPTIONS.map((filter) => {
-                                const active = activeFilters.includes(filter.key);
+                                const active = activeFilters.includes(
+                                    filter.key
+                                );
                                 return (
                                     <button
                                         key={filter.key}
