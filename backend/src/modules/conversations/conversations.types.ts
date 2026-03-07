@@ -13,7 +13,16 @@ export interface TextMessagePart {
     text: string;
 }
 
-export type MessagePart = TextMessagePart;
+export interface ToolInvocationPart {
+    type: "tool-invocation";
+    toolInvocationId: string;
+    toolName: string;
+    args: Record<string, unknown>;
+    state: "call" | "result" | "error";
+    result?: unknown;
+}
+
+export type MessagePart = TextMessagePart | ToolInvocationPart;
 
 export interface ConversationMessage {
     id: string;

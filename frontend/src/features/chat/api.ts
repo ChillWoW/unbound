@@ -1,4 +1,4 @@
-import api from "@/lib/api";
+import api, { API_BASE_URL } from "@/lib/api";
 import type {
     ConversationReadResponse,
     ConversationResponse,
@@ -7,6 +7,18 @@ import type {
 } from "./types";
 
 export const chatApi = {
+    generateResponse(conversationId: string, modelId: string) {
+        return fetch(
+            `${API_BASE_URL}/api/conversations/${conversationId}/generate`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({ modelId })
+            }
+        );
+    },
+
     createConversation(content: string) {
         return api.post<ConversationResponse>("/api/conversations", {
             body: { content }

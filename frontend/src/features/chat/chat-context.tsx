@@ -11,10 +11,13 @@ import {
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/features/auth/use-auth";
 import { chatApi } from "./api";
+import { parseAIStream } from "./utils/parse-ai-stream";
 import type {
     ChatModel,
     ConversationDetail,
-    ConversationSummary
+    ConversationMessage,
+    ConversationSummary,
+    MessagePart
 } from "./types";
 
 function getSelectedModelStorageKey(userId: string) {
@@ -284,13 +287,221 @@ export function ChatProvider({ children }: PropsWithChildren) {
         void loadModels().catch(() => undefined);
     }, [isAuthenticated, isLoading, loadModels]);
 
+    const runGeneration = useCallback(
+        async (conversationId: string, modelId: string) => {
+            const optimisticId = `msg_optimistic_${Date.now()}`;
+            const optimisticMessage: ConversationMessage = {
+                id: optimisticId,
+                role: "assistant",
+                parts: [],
+                status: "pending",
+                createdAt: new Date().toISOString(),
+                metadata: { model: modelId }
+            };
+
+            setConversationDetails((current) => {
+                const existing = current[conversationId];
+                if (!existing) return current;
+                return {
+                    ...current,
+                    [conversationId]: {
+                        ...existing,
+                        messages: [...existing.messages, optimisticMessage]
+                    }
+                };
+            });
+
+            const streamResponse = await chatApi.generateResponse(
+                conversationId,
+                modelId
+            );
+
+            if (!streamResponse.ok) {
+                let errorMessage = "Generation failed.";
+                try {
+                    const errorData = await streamResponse.json();
+                    if (errorData?.message) errorMessage = errorData.message;
+                } catch {
+                    // use default
+                }
+                throw new Error(errorMessage);
+            }
+
+            let realMessageId = optimisticId;
+            let accumulatedText = "";
+            const toolParts: MessagePart[] = [];
+
+            await parseAIStream(streamResponse, {
+                onMessageStart(messageId) {
+                    realMessageId = messageId;
+                    setConversationDetails((current) => {
+                        const existing = current[conversationId];
+                        if (!existing) return current;
+                        return {
+                            ...current,
+                            [conversationId]: {
+                                ...existing,
+                                messages: existing.messages.map((m) =>
+                                    m.id === optimisticId
+                                        ? { ...m, id: messageId }
+                                        : m
+                                )
+                            }
+                        };
+                    });
+                },
+                onTextDelta(text) {
+                    accumulatedText += text;
+                    const currentText = accumulatedText;
+                    setConversationDetails((current) => {
+                        const existing = current[conversationId];
+                        if (!existing) return current;
+                        return {
+                            ...current,
+                            [conversationId]: {
+                                ...existing,
+                                messages: existing.messages.map((m) =>
+                                    m.id === realMessageId
+                                        ? {
+                                              ...m,
+                                              parts: [
+                                                  {
+                                                      type: "text" as const,
+                                                      text: currentText
+                                                  },
+                                                  ...toolParts
+                                              ]
+                                          }
+                                        : m
+                                )
+                            }
+                        };
+                    });
+                },
+                onToolCall(toolCall) {
+                    toolParts.push({
+                        type: "tool-invocation",
+                        toolInvocationId: toolCall.toolCallId,
+                        toolName: toolCall.toolName,
+                        args: toolCall.args,
+                        state: "call"
+                    });
+                    const currentParts: MessagePart[] = [
+                        ...(accumulatedText
+                            ? [
+                                  {
+                                      type: "text" as const,
+                                      text: accumulatedText
+                                  }
+                              ]
+                            : []),
+                        ...toolParts
+                    ];
+                    setConversationDetails((current) => {
+                        const existing = current[conversationId];
+                        if (!existing) return current;
+                        return {
+                            ...current,
+                            [conversationId]: {
+                                ...existing,
+                                messages: existing.messages.map((m) =>
+                                    m.id === realMessageId
+                                        ? { ...m, parts: currentParts }
+                                        : m
+                                )
+                            }
+                        };
+                    });
+                },
+                onToolResult(toolResult) {
+                    const idx = toolParts.findIndex(
+                        (p) =>
+                            p.type === "tool-invocation" &&
+                            p.toolInvocationId === toolResult.toolCallId
+                    );
+                    if (idx !== -1) {
+                        toolParts[idx] = {
+                            ...toolParts[idx],
+                            state: "result",
+                            result: toolResult.result
+                        } as MessagePart;
+                    }
+                    const currentParts: MessagePart[] = [
+                        ...(accumulatedText
+                            ? [
+                                  {
+                                      type: "text" as const,
+                                      text: accumulatedText
+                                  }
+                              ]
+                            : []),
+                        ...toolParts
+                    ];
+                    setConversationDetails((current) => {
+                        const existing = current[conversationId];
+                        if (!existing) return current;
+                        return {
+                            ...current,
+                            [conversationId]: {
+                                ...existing,
+                                messages: existing.messages.map((m) =>
+                                    m.id === realMessageId
+                                        ? { ...m, parts: currentParts }
+                                        : m
+                                )
+                            }
+                        };
+                    });
+                },
+                onError() {
+                    setConversationDetails((current) => {
+                        const existing = current[conversationId];
+                        if (!existing) return current;
+                        return {
+                            ...current,
+                            [conversationId]: {
+                                ...existing,
+                                messages: existing.messages.map((m) =>
+                                    m.id === realMessageId
+                                        ? { ...m, status: "failed" }
+                                        : m
+                                )
+                            }
+                        };
+                    });
+                }
+            });
+
+            const finalResponse =
+                await chatApi.getConversation(conversationId);
+            upsertConversation(finalResponse.conversation);
+        },
+        [upsertConversation]
+    );
+
     const createConversation = useCallback(
         async (prompt: string) => {
+            const modelId = selectedModelIdRef.current;
+
+            if (!modelId) {
+                throw new Error("No model selected.");
+            }
+
             setIsCreatingConversation(true);
 
             try {
                 const response = await chatApi.createConversation(prompt);
                 upsertConversation(response.conversation);
+
+                const conversationId = response.conversation.id;
+
+                setConversationSending(conversationId, true);
+                runGeneration(conversationId, modelId)
+                    .catch(() => undefined)
+                    .finally(() =>
+                        setConversationSending(conversationId, false)
+                    );
+
                 return response.conversation;
             } catch (error) {
                 throw new Error(getErrorMessage(error));
@@ -298,7 +509,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 setIsCreatingConversation(false);
             }
         },
-        [upsertConversation]
+        [runGeneration, setConversationSending, upsertConversation]
     );
 
     const loadConversation = useCallback(
@@ -351,22 +562,43 @@ export function ChatProvider({ children }: PropsWithChildren) {
 
     const sendMessage = useCallback(
         async (conversationId: string, prompt: string) => {
+            const modelId = selectedModelIdRef.current;
+
+            if (!modelId) {
+                throw new Error("No model selected.");
+            }
+
             setConversationSending(conversationId, true);
 
             try {
-                const response = await chatApi.sendMessage(
+                const persistResponse = await chatApi.sendMessage(
                     conversationId,
                     prompt
                 );
-                upsertConversation(response.conversation);
-                return response.conversation;
+                upsertConversation(persistResponse.conversation);
+
+                await runGeneration(conversationId, modelId);
+
+                const finalConversation =
+                    conversationDetails[conversationId];
+                if (finalConversation) return finalConversation;
+
+                const reloaded =
+                    await chatApi.getConversation(conversationId);
+                upsertConversation(reloaded.conversation);
+                return reloaded.conversation;
             } catch (error) {
                 throw new Error(getErrorMessage(error));
             } finally {
                 setConversationSending(conversationId, false);
             }
         },
-        [setConversationSending, upsertConversation]
+        [
+            conversationDetails,
+            runGeneration,
+            setConversationSending,
+            upsertConversation
+        ]
     );
 
     const markConversationRead = useCallback(

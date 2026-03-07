@@ -1,10 +1,28 @@
-export interface MessagePart {
+export interface TextMessagePart {
     type: "text";
     text: string;
 }
 
+export interface ToolInvocationPart {
+    type: "tool-invocation";
+    toolInvocationId: string;
+    toolName: string;
+    args: Record<string, unknown>;
+    state: "call" | "result" | "error";
+    result?: unknown;
+}
+
+export type MessagePart = TextMessagePart | ToolInvocationPart;
+
 export type MessageRole = "user" | "assistant" | "system" | "tool";
 export type MessageStatus = "pending" | "complete" | "failed";
+
+export interface MessageMetadata {
+    model?: string;
+    generationStartedAt?: string;
+    generationCompletedAt?: string;
+    [key: string]: unknown;
+}
 
 export interface ConversationMessage {
     id: string;
@@ -12,7 +30,7 @@ export interface ConversationMessage {
     parts: MessagePart[];
     status: MessageStatus;
     createdAt: string;
-    metadata: Record<string, unknown> | null;
+    metadata: MessageMetadata | null;
 }
 
 export interface ConversationSummary {

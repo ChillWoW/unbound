@@ -31,7 +31,7 @@ export class ApiError<T = unknown> extends Error {
     }
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:1234";
+export const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:1234";
 
 function createUrl(path: string, query?: ApiQueryParams): string {
     const url = new URL(path, API_BASE_URL);

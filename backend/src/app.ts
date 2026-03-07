@@ -5,6 +5,7 @@ import { authRoutes } from "./modules/auth/auth.routes";
 import { conversationsRoutes } from "./modules/conversations/conversations.routes";
 import { modelsRoutes } from "./modules/models/models.routes";
 import { settingsRoutes } from "./modules/settings/settings.routes";
+import { aiRoutes } from "./modules/ai/ai.routes";
 
 export const app = new Elysia()
     .use(
@@ -20,4 +21,5 @@ export const app = new Elysia()
     .use(authRoutes)
     .use(conversationsRoutes)
     .use(modelsRoutes)
-    .use(settingsRoutes);
+    .use(settingsRoutes)
+    .use(aiRoutes);

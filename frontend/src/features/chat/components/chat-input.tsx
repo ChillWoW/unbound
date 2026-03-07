@@ -9,8 +9,25 @@ import {
 } from "@phosphor-icons/react";
 import { Button, Tooltip } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import type { ChatModel } from "../types";
+import type { ChatModel, ConversationMessage } from "../types";
 import { ModelSelector } from "./model-selector";
+
+function estimateTokens(messages: ConversationMessage[]): number {
+    let chars = 0;
+    for (const msg of messages) {
+        for (const part of msg.parts) {
+            if (part.type === "text") {
+                chars += part.text.length;
+            } else if (part.type === "tool-invocation") {
+                chars += JSON.stringify(part.args).length;
+                if (part.result !== undefined) {
+                    chars += JSON.stringify(part.result).length;
+                }
+            }
+        }
+    }
+    return Math.ceil(chars / 4);
+}
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -66,21 +83,45 @@ function generateId(): string {
 
 // ── Context Window Meter ─────────────────────────────────────────────────────
 
-function ContextWindowMeter({ model }: { model: ChatModel | null }) {
+function ContextWindowMeter({
+    model,
+    estimatedTokenCount
+}: {
+    model: ChatModel | null;
+    estimatedTokenCount: number;
+}) {
     const size = 24;
     const strokeWidth = 4;
     const radius = (size - strokeWidth) / 2;
     const circumference = 2 * Math.PI * radius;
-    const placeholderRatio = 0.22;
-    const dashLength = circumference * placeholderRatio;
+
+    const contextLength = model?.contextLength ?? 0;
+    const ratio =
+        contextLength > 0
+            ? Math.min(estimatedTokenCount / contextLength, 1)
+            : 0;
+
+    const dashLength = circumference * ratio;
     const gapLength = circumference - dashLength;
+
+    const colorClass =
+        ratio > 0.9
+            ? "text-red-400"
+            : ratio > 0.7
+              ? "text-amber-400"
+              : "text-primary-500";
+
+    const usedFormatted =
+        estimatedTokenCount >= 1000
+            ? `~${(estimatedTokenCount / 1000).toFixed(1)}K`
+            : `~${estimatedTokenCount}`;
 
     return (
         <Tooltip
             disabled={!model}
             content={
                 model
-                    ? `${model.name} context window: ${formatContextWindow(model.contextLength)} tokens max`
+                    ? `${model.name}: ${usedFormatted} / ${formatContextWindow(model.contextLength)} tokens`
                     : "Context usage unavailable"
             }
             side="top"
@@ -109,7 +150,7 @@ function ContextWindowMeter({ model }: { model: ChatModel | null }) {
                         strokeWidth={strokeWidth}
                         strokeLinecap="round"
                         strokeDasharray={`${dashLength} ${gapLength}`}
-                        className="text-primary-500"
+                        className={colorClass}
                     />
                 </svg>
             </div>
@@ -188,6 +229,7 @@ function AttachmentChip({
 
 interface ChatInputProps {
     className?: string;
+    conversationMessages?: ConversationMessage[];
     disabled?: boolean;
     isSubmitting?: boolean;
     isModelsLoading?: boolean;
@@ -207,6 +249,7 @@ interface ChatInputProps {
 
 export function ChatInput({
     className,
+    conversationMessages = [],
     disabled = false,
     isSubmitting = false,
     isModelsLoading = false,
@@ -460,7 +503,12 @@ export function ChatInput({
 
                 <div className="flex items-center gap-2">
                     {showContextBadge ? (
-                        <ContextWindowMeter model={selectedModel} />
+                        <ContextWindowMeter
+                            model={selectedModel}
+                            estimatedTokenCount={estimateTokens(
+                                conversationMessages
+                            )}
+                        />
                     ) : null}
 
                     {/* Hidden file input */}

@@ -193,6 +193,31 @@ export const conversationsRepository = {
         return message ?? null;
     },
 
+    async updateMessage(
+        messageId: string,
+        input: {
+            parts?: MessagePart[];
+            status?: MessageStatus;
+            metadata?: Record<string, unknown> | null;
+        }
+    ) {
+        const set: Record<string, unknown> = {};
+
+        if (input.parts !== undefined) set.parts = input.parts;
+        if (input.status !== undefined) set.status = input.status;
+        if (input.metadata !== undefined) set.metadata = input.metadata;
+
+        if (Object.keys(set).length === 0) return null;
+
+        const [updated] = await db
+            .update(messages)
+            .set(set)
+            .where(eq(messages.id, messageId))
+            .returning();
+
+        return updated ?? null;
+    },
+
     async upsertConversationRead(input: {
         conversationId: string;
         userId: string;
