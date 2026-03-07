@@ -13,7 +13,15 @@ function HomePage() {
     const [error, setError] = useState<string | null>(null);
     const navigate = useNavigate();
     const { isAuthenticated, isLoading } = useAuth();
-    const { createConversation, isCreatingConversation } = useChat();
+    const {
+        availableModels,
+        createConversation,
+        isCreatingConversation,
+        isLoadingModels,
+        modelsError,
+        selectedModelId,
+        setSelectedModelId
+    } = useChat();
 
     async function handleSubmit(value: string) {
         setError(null);
@@ -52,6 +60,11 @@ function HomePage() {
                 <ChatInput
                     disabled={isLoading || isCreatingConversation}
                     isSubmitting={isCreatingConversation}
+                    isModelsLoading={isLoadingModels}
+                    models={availableModels}
+                    modelsError={modelsError}
+                    selectedModelId={selectedModelId}
+                    onSelectedModelChange={setSelectedModelId}
                     value={draft}
                     onChange={setDraft}
                     onSubmit={handleSubmit}

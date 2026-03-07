@@ -4,15 +4,48 @@ import {
     useContext,
     useEffect,
     useMemo,
+    useRef,
     useState,
     type PropsWithChildren
 } from "react";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/features/auth/use-auth";
 import { chatApi } from "./api";
-import type { ConversationDetail, ConversationSummary } from "./types";
+import type {
+    ChatModel,
+    ConversationDetail,
+    ConversationSummary
+} from "./types";
+
+function getSelectedModelStorageKey(userId: string) {
+    return `unbound.chat.selected-model:${userId}`;
+}
+
+function readStoredSelectedModelId(userId: string): string | null {
+    if (typeof window === "undefined") {
+        return null;
+    }
+
+    return window.localStorage.getItem(getSelectedModelStorageKey(userId));
+}
+
+function writeStoredSelectedModelId(userId: string, modelId: string | null) {
+    if (typeof window === "undefined") {
+        return;
+    }
+
+    const key = getSelectedModelStorageKey(userId);
+
+    if (!modelId) {
+        window.localStorage.removeItem(key);
+        return;
+    }
+
+    window.localStorage.setItem(key, modelId);
+}
 
 interface ChatContextValue {
+    availableModels: ChatModel[];
     conversations: ConversationSummary[];
     conversationsError: string | null;
     createConversation: (prompt: string) => Promise<ConversationDetail>;
@@ -22,16 +55,21 @@ interface ChatContextValue {
     isConversationSending: (conversationId: string) => boolean;
     isCreatingConversation: boolean;
     isLoadingConversations: boolean;
+    isLoadingModels: boolean;
     loadConversation: (conversationId: string) => Promise<ConversationDetail>;
     loadConversations: () => Promise<void>;
+    loadModels: () => Promise<void>;
     markConversationRead: (
         conversationId: string,
         assistantMessageId: string
     ) => Promise<void>;
+    modelsError: string | null;
+    selectedModelId: string | null;
     sendMessage: (
         conversationId: string,
         prompt: string
     ) => Promise<ConversationDetail>;
+    setSelectedModelId: (modelId: string | null) => void;
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -83,7 +121,8 @@ function toConversationSummary(
 }
 
 export function ChatProvider({ children }: PropsWithChildren) {
-    const { isAuthenticated, isLoading } = useAuth();
+    const { isAuthenticated, isLoading, user } = useAuth();
+    const [availableModels, setAvailableModels] = useState<ChatModel[]>([]);
     const [conversations, setConversations] = useState<ConversationSummary[]>(
         []
     );
@@ -102,8 +141,18 @@ export function ChatProvider({ children }: PropsWithChildren) {
     const [conversationsError, setConversationsError] = useState<string | null>(
         null
     );
+    const [modelsError, setModelsError] = useState<string | null>(null);
     const [isLoadingConversations, setIsLoadingConversations] = useState(false);
+    const [isLoadingModels, setIsLoadingModels] = useState(false);
     const [isCreatingConversation, setIsCreatingConversation] = useState(false);
+    const [selectedModelId, setSelectedModelIdState] = useState<string | null>(
+        null
+    );
+    const selectedModelIdRef = useRef<string | null>(null);
+
+    useEffect(() => {
+        selectedModelIdRef.current = selectedModelId;
+    }, [selectedModelId]);
 
     const upsertConversation = useCallback(
         (conversation: ConversationDetail | ConversationSummary) => {
@@ -167,6 +216,44 @@ export function ChatProvider({ children }: PropsWithChildren) {
         }
     }, [isAuthenticated]);
 
+    const loadModels = useCallback(async () => {
+        if (!isAuthenticated || !user) {
+            setAvailableModels([]);
+            setSelectedModelIdState(null);
+            return;
+        }
+
+        setIsLoadingModels(true);
+        setModelsError(null);
+
+        try {
+            const response = await chatApi.listModels();
+            const storedModelId = readStoredSelectedModelId(user.id);
+            const currentSelectedModelId = selectedModelIdRef.current;
+            const nextSelectedModelId =
+                currentSelectedModelId &&
+                response.models.some(
+                    (model) => model.id === currentSelectedModelId
+                )
+                    ? currentSelectedModelId
+                    : storedModelId &&
+                        response.models.some((model) => model.id === storedModelId)
+                      ? storedModelId
+                      : response.models[0]?.id ?? null;
+
+            setAvailableModels(response.models);
+            setSelectedModelIdState(nextSelectedModelId);
+            writeStoredSelectedModelId(user.id, nextSelectedModelId);
+        } catch (error) {
+            setAvailableModels([]);
+            setSelectedModelIdState(null);
+            setModelsError(getErrorMessage(error));
+            throw error;
+        } finally {
+            setIsLoadingModels(false);
+        }
+    }, [isAuthenticated, user]);
+
     useEffect(() => {
         if (isLoading) {
             return;
@@ -178,12 +265,24 @@ export function ChatProvider({ children }: PropsWithChildren) {
             setConversationErrors({});
             setConversationLoadingState({});
             setConversationSendingState({});
+            setAvailableModels([]);
             setConversationsError(null);
+            setIsLoadingModels(false);
+            setModelsError(null);
+            setSelectedModelIdState(null);
             return;
         }
 
         void loadConversations();
     }, [isAuthenticated, isLoading, loadConversations]);
+
+    useEffect(() => {
+        if (isLoading || !isAuthenticated) {
+            return;
+        }
+
+        void loadModels().catch(() => undefined);
+    }, [isAuthenticated, isLoading, loadModels]);
 
     const createConversation = useCallback(
         async (prompt: string) => {
@@ -309,8 +408,22 @@ export function ChatProvider({ children }: PropsWithChildren) {
         []
     );
 
+    const setSelectedModelId = useCallback(
+        (modelId: string | null) => {
+            setSelectedModelIdState(modelId);
+
+            if (!user) {
+                return;
+            }
+
+            writeStoredSelectedModelId(user.id, modelId);
+        },
+        [user]
+    );
+
     const value = useMemo<ChatContextValue>(
         () => ({
+            availableModels,
             conversations,
             conversationsError,
             createConversation,
@@ -320,12 +433,18 @@ export function ChatProvider({ children }: PropsWithChildren) {
             isConversationSending,
             isCreatingConversation,
             isLoadingConversations,
+            isLoadingModels,
             loadConversation,
             loadConversations,
+            loadModels,
             markConversationRead,
-            sendMessage
+            modelsError,
+            selectedModelId,
+            sendMessage,
+            setSelectedModelId
         }),
         [
+            availableModels,
             conversations,
             conversationsError,
             createConversation,
@@ -335,10 +454,15 @@ export function ChatProvider({ children }: PropsWithChildren) {
             isConversationSending,
             isCreatingConversation,
             isLoadingConversations,
+            isLoadingModels,
             loadConversation,
             loadConversations,
+            loadModels,
             markConversationRead,
-            sendMessage
+            modelsError,
+            selectedModelId,
+            sendMessage,
+            setSelectedModelId
         ]
     );
 

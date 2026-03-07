@@ -1,10 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
-    GearSix,
     PlusIcon,
     SignIn,
-    SignOut,
     UserPlus,
     XIcon,
     SidebarSimpleIcon
@@ -64,7 +62,6 @@ export function ChatSidebar({
 
     const initials = getUserInitials(user?.name ?? user?.email);
     const displayName = getDisplayName(user?.name, user?.email);
-    const isSettingsActive = currentPath === "/settings";
 
     const collapsed = !isMobile && isCollapsedProp;
 

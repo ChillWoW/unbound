@@ -8,7 +8,7 @@ const PopoverTrigger = React.forwardRef<
     HTMLButtonElement,
     React.ComponentPropsWithoutRef<typeof Base.Trigger>
 >(({ className, ...props }, ref) => (
-    <Base.Trigger ref={ref} className={cn(className)} {...props} />
+    <Base.Trigger ref={ref} className={cn("w-full", className)} {...props} />
 ));
 PopoverTrigger.displayName = "PopoverTrigger";
 
@@ -50,8 +50,8 @@ const PopoverContent = React.forwardRef<
                     tabIndex={-1}
                     style={{ outline: "none" }}
                     className={cn(
-                        "min-w-[240px] max-w-[300px] bg-dark-800 border border-dark-600 text-dark-50 shadow-sm rounded-md px-2 py-0.5 text-xs outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0",
-                        "animate-in fade-in-0 zoom-in-95 duration-150 data-[ending-style]:animate-out data-[ending-style]:fade-out-0 data-[ending-style]:zoom-out-95",
+                        "min-w-[240px] bg-dark-800 border border-dark-600 text-dark-50 shadow-sm rounded-md px-2 py-0.5 text-xs outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0",
+                        "animate-in fade-in-0 zoom-in-95 duration-150 data-[ending-style]:animate-out data-[ending-style]:fade-out-0 data-[ending-style]:zoom-out-95 max-w-[300px]",
                         className
                     )}
                     {...props}

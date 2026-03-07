@@ -33,8 +33,25 @@ export interface ConversationDetail extends ConversationSummary {
     messages: ConversationMessage[];
 }
 
+export interface ChatModel {
+    id: string;
+    name: string;
+    provider: string;
+    description: string | null;
+    contextLength: number | null;
+    promptPricing: string | null;
+    completionPricing: string | null;
+    inputModalities: string[];
+    outputModalities: string[];
+    free?: boolean;
+}
+
 export interface ConversationsResponse {
     conversations: ConversationSummary[];
+}
+
+export interface ModelsResponse {
+    models: ChatModel[];
 }
 
 export interface ConversationResponse {

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { ConversationDetail, MessagePart } from "../types";
+import type { ChatModel, ConversationDetail, MessagePart } from "../types";
 import { ChatInput } from "./chat-input";
 
 function getMessageText(parts: MessagePart[]) {
@@ -11,16 +11,26 @@ function getMessageText(parts: MessagePart[]) {
 }
 
 interface ConversationThreadProps {
+    availableModels: ChatModel[];
     conversation: ConversationDetail;
     error?: string | null;
     isSending?: boolean;
+    isLoadingModels?: boolean;
+    modelsError?: string | null;
+    onModelChange: (modelId: string | null) => void;
     onSubmit: (value: string) => Promise<void> | void;
+    selectedModelId: string | null;
 }
 
 export function ConversationThread({
+    availableModels,
     conversation,
     error,
     isSending = false,
+    isLoadingModels = false,
+    modelsError = null,
+    onModelChange,
+    selectedModelId,
     onSubmit
 }: ConversationThreadProps) {
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -81,6 +91,12 @@ export function ConversationThread({
                     ) : null}
 
                     <ChatInput
+                        models={availableModels}
+                        selectedModelId={selectedModelId}
+                        onSelectedModelChange={onModelChange}
+                        isModelsLoading={isLoadingModels}
+                        modelsError={modelsError}
+                        showContextBadge
                         placeholder="Send a message..."
                         onSubmit={onSubmit}
                         disabled={isSending}

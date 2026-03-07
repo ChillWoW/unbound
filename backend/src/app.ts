@@ -3,6 +3,7 @@ import { Elysia } from "elysia";
 import { env } from "./config/env";
 import { authRoutes } from "./modules/auth/auth.routes";
 import { conversationsRoutes } from "./modules/conversations/conversations.routes";
+import { modelsRoutes } from "./modules/models/models.routes";
 import { settingsRoutes } from "./modules/settings/settings.routes";
 
 export const app = new Elysia()
@@ -18,4 +19,5 @@ export const app = new Elysia()
     .get("/api/hello", () => ({ message: "Hello from Elysia" }))
     .use(authRoutes)
     .use(conversationsRoutes)
+    .use(modelsRoutes)
     .use(settingsRoutes);

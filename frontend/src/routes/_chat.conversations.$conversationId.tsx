@@ -11,12 +11,17 @@ function ConversationPage() {
     const { conversationId } = Route.useParams();
     const [submissionError, setSubmissionError] = useState<string | null>(null);
     const {
+        availableModels,
         getConversation,
         getConversationError,
         isConversationLoading,
         isConversationSending,
+        isLoadingModels,
         loadConversation,
+        modelsError,
         markConversationRead,
+        selectedModelId,
+        setSelectedModelId,
         sendMessage
     } = useChat();
     const conversation = getConversation(conversationId);
@@ -95,10 +100,15 @@ function ConversationPage() {
 
     return (
         <ConversationThread
+            availableModels={availableModels}
             conversation={conversation}
             error={submissionError}
             isSending={isSending}
+            isLoadingModels={isLoadingModels}
+            modelsError={modelsError}
+            onModelChange={setSelectedModelId}
             onSubmit={handleSubmit}
+            selectedModelId={selectedModelId}
         />
     );
 }

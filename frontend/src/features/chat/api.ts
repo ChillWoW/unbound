@@ -2,7 +2,8 @@ import api from "@/lib/api";
 import type {
     ConversationReadResponse,
     ConversationResponse,
-    ConversationsResponse
+    ConversationsResponse,
+    ModelsResponse
 } from "./types";
 
 export const chatApi = {
@@ -20,6 +21,10 @@ export const chatApi = {
 
     listConversations() {
         return api.get<ConversationsResponse>("/api/conversations");
+    },
+
+    listModels() {
+        return api.get<ModelsResponse>("/api/models");
     },
 
     markConversationRead(conversationId: string, assistantMessageId: string) {
