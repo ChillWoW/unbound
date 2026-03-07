@@ -24,6 +24,16 @@ function getNumberEnv(name: string, fallback: number): number {
     return parsed;
 }
 
+function getHex32ByteEnv(name: string): Buffer {
+    const value = getRequiredEnv(name).trim();
+
+    if (!/^[a-fA-F0-9]{64}$/.test(value)) {
+        throw new Error(`${name} must be a 64-character hex string.`);
+    }
+
+    return Buffer.from(value, "hex");
+}
+
 const nodeEnv = process.env.NODE_ENV ?? "development";
 
 export const env = {
@@ -36,5 +46,6 @@ export const env = {
     sessionMaxAgeSeconds: getNumberEnv(
         "SESSION_MAX_AGE_SECONDS",
         60 * 60 * 24 * 30
-    )
+    ),
+    settingsEncryptionKey: getHex32ByteEnv("SETTINGS_ENCRYPTION_KEY")
 } as const;

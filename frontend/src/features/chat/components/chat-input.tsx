@@ -6,14 +6,18 @@ import { cn } from "@/lib/cn";
 
 interface ChatInputProps {
     className?: string;
+    disabled?: boolean;
+    isSubmitting?: boolean;
     value?: string;
     onChange?: (value: string) => void;
-    onSubmit?: (value: string) => void;
+    onSubmit?: (value: string) => void | Promise<void>;
     placeholder?: string;
 }
 
 export function ChatInput({
     className,
+    disabled = false,
+    isSubmitting = false,
     value,
     onChange,
     onSubmit,
@@ -33,14 +37,14 @@ export function ChatInput({
         onChange?.(nextValue);
     }
 
-    function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
 
-        if (!trimmedDraft) {
+        if (disabled || isSubmitting || !trimmedDraft) {
             return;
         }
 
-        onSubmit?.(trimmedDraft);
+        await onSubmit?.(trimmedDraft);
 
         if (!isControlled) {
             setInternalValue("");
@@ -60,6 +64,7 @@ export function ChatInput({
                     className="w-full resize-none bg-transparent text-sm text-white outline-none placeholder:text-dark-200"
                     minRows={1}
                     maxRows={8}
+                    disabled={disabled || isSubmitting}
                     placeholder={placeholder}
                     value={draft}
                     onChange={(event) => updateValue(event.target.value)}
@@ -74,7 +79,7 @@ export function ChatInput({
                 <Button
                     type="submit"
                     variant="primary"
-                    disabled={!trimmedDraft}
+                    disabled={disabled || isSubmitting || !trimmedDraft}
                     className="size-8 p-0"
                 >
                     <ArrowUpIcon className="size-4" weight="bold" />

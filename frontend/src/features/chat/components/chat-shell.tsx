@@ -97,7 +97,7 @@ export function ChatShell({ children }: PropsWithChildren) {
                     </Button>
                 </header>
 
-                <div className="relative flex-1 overflow-y-auto">
+                <div className="relative flex-1 overflow-hidden">
                     {children}
                 </div>
             </div>

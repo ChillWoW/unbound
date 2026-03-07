@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import {
+    GearSix,
     PlusIcon,
     SignIn,
     SignOut,
@@ -8,7 +9,13 @@ import {
     XIcon,
     SidebarSimpleIcon
 } from "@phosphor-icons/react";
-import { Button } from "@/components/ui";
+import {
+    Button,
+    Menu,
+    MenuContent,
+    MenuItem,
+    MenuTrigger
+} from "@/components/ui";
 import { useAuth } from "@/features/auth/use-auth";
 import { cn } from "@/lib/cn";
 import { useChat } from "../chat-context";
@@ -49,12 +56,15 @@ export function ChatSidebar({
     isCollapsed: isCollapsedProp = false,
     onToggleCollapse
 }: ChatSidebarProps) {
-    const { conversations } = useChat();
+    const { conversations, conversationsError, isLoadingConversations } =
+        useChat();
     const { isAuthenticated, isLoading, logout, user } = useAuth();
+    const navigate = useNavigate();
     const [isLoggingOut, setIsLoggingOut] = useState(false);
 
     const initials = getUserInitials(user?.name ?? user?.email);
     const displayName = getDisplayName(user?.name, user?.email);
+    const isSettingsActive = currentPath === "/settings";
 
     const collapsed = !isMobile && isCollapsedProp;
 
@@ -70,6 +80,11 @@ export function ChatSidebar({
         if (isMobile) {
             onClose?.();
         }
+    }
+
+    function handleNewChat() {
+        onNewChat?.();
+        void navigate({ to: "/" });
     }
 
     async function handleLogout() {
@@ -94,9 +109,10 @@ export function ChatSidebar({
             <div className="flex items-center justify-between p-2">
                 <div
                     className={cn(
-                        "flex items-center gap-1 overflow-hidden transition-opacity duration-200",
+                        "flex items-center gap-1 overflow-hidden transition-opacity duration-200 hover:opacity-90 cursor-pointer",
                         collapsed ? "w-0 opacity-0" : "opacity-100"
                     )}
+                    onClick={() => navigate({ to: "/" })}
                 >
                     <img
                         src="/logos/logo.svg"
@@ -130,7 +146,7 @@ export function ChatSidebar({
                 {collapsed ? (
                     <button
                         type="button"
-                        onClick={onNewChat}
+                        onClick={handleNewChat}
                         className="mx-auto flex size-8 items-center justify-center rounded-md text-dark-100 transition hover:bg-dark-600 hover:text-white"
                     >
                         <PlusIcon className="size-4" weight="bold" />
@@ -139,7 +155,7 @@ export function ChatSidebar({
                     <Button
                         variant="ghost"
                         className="group w-full justify-start gap-2 text-dark-100 hover:text-white"
-                        onClick={onNewChat}
+                        onClick={handleNewChat}
                     >
                         <PlusIcon className="size-4" weight="bold" />
                         <span>New chat</span>
@@ -150,6 +166,18 @@ export function ChatSidebar({
             {!collapsed && (
                 <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
                     <div className="space-y-1">
+                        {isLoadingConversations ? (
+                            <div className="px-3 py-2 text-sm text-dark-200">
+                                Loading conversations...
+                            </div>
+                        ) : null}
+
+                        {!isLoadingConversations && conversationsError ? (
+                            <div className="px-3 py-2 text-sm text-red-200">
+                                {conversationsError}
+                            </div>
+                        ) : null}
+
                         {conversations.map((conversation) => {
                             const isActive =
                                 currentPath ===
@@ -173,9 +201,14 @@ export function ChatSidebar({
                                             : "text-dark-100 hover:bg-dark-600 hover:text-white"
                                     )}
                                 >
-                                    <span className="block truncate">
-                                        {conversation.title}
-                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="min-w-0 flex-1 truncate">
+                                            {conversation.title}
+                                        </span>
+                                        {conversation.hasUnreadAssistantReply ? (
+                                            <span className="size-2 shrink-0 rounded-full bg-sky-400" />
+                                        ) : null}
+                                    </div>
                                 </Link>
                             );
                         })}
@@ -189,53 +222,50 @@ export function ChatSidebar({
                         {collapsed ? "..." : "Loading..."}
                     </div>
                 ) : isAuthenticated && user ? (
-                    <div className="flex flex-col gap-2">
-                        <div
+                    <Menu>
+                        <MenuTrigger
                             className={cn(
-                                "flex items-center rounded-md py-2",
-                                collapsed ? "justify-center px-0" : "gap-3 px-1"
+                                "w-full rounded-md transition hover:bg-dark-700",
+                                collapsed
+                                    ? "flex justify-center p-1"
+                                    : "block p-1"
                             )}
                         >
-                            <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-dark-600 text-sm font-semibold text-dark-50">
-                                {initials}
-                            </div>
-
-                            {!collapsed && (
-                                <div className="min-w-0 flex-1">
-                                    <div className="truncate text-sm text-white">
-                                        {displayName}
-                                    </div>
-                                    <div className="truncate text-xs text-dark-200">
-                                        {user.email}
-                                    </div>
+                            <div
+                                className={cn(
+                                    "flex items-center",
+                                    collapsed ? "justify-center" : "gap-3"
+                                )}
+                            >
+                                <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-dark-600 text-sm font-semibold text-dark-50">
+                                    {initials}
                                 </div>
-                            )}
-                        </div>
 
-                        {collapsed ? (
-                            <Button
-                                variant="ghost"
-                                className="size-8 p-0 mx-auto text-dark-100 hover:text-white"
+                                {!collapsed && (
+                                    <div className="min-w-0 flex-1 text-left">
+                                        <div className="truncate text-sm text-white">
+                                            {displayName}
+                                        </div>
+                                        <div className="truncate text-xs text-dark-200">
+                                            {user.email}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </MenuTrigger>
+
+                        <MenuContent align="end" side="top">
+                            <MenuItem onClick={handleNavigate}>
+                                <Link to="/settings">Settings</Link>
+                            </MenuItem>
+                            <MenuItem
                                 onClick={handleLogout}
-                            >
-                                <SignOut className="size-4" weight="bold" />
-                            </Button>
-                        ) : (
-                            <Button
-                                variant="ghost"
-                                className="w-full justify-start gap-2"
                                 disabled={isLoggingOut}
-                                onClick={handleLogout}
                             >
-                                <SignOut className="size-4" weight="bold" />
-                                <span>
-                                    {isLoggingOut
-                                        ? "Signing out..."
-                                        : "Log out"}
-                                </span>
-                            </Button>
-                        )}
-                    </div>
+                                {isLoggingOut ? "Logging out..." : "Logout"}
+                            </MenuItem>
+                        </MenuContent>
+                    </Menu>
                 ) : collapsed ? (
                     <div className="flex flex-col items-center gap-2">
                         <Link
