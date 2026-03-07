@@ -1,0 +1,167 @@
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import type { Components } from "react-markdown";
+import { CodeBlock } from "./code-block";
+import { ImageViewer } from "./image-viewer";
+
+interface MarkdownRendererProps {
+    content: string;
+    isStreaming?: boolean;
+}
+
+const components: Components = {
+    code({ className, children, ...props }) {
+        const match = /language-(\w+)/.exec(className || "");
+        const isBlock = match !== null;
+
+        if (isBlock) {
+            return (
+                <CodeBlock language={match[1]}>
+                    {String(children).replace(/\n$/, "")}
+                </CodeBlock>
+            );
+        }
+
+        return (
+            <code
+                className="rounded bg-dark-700 px-1 py-0.5 text-[13px] font-mono text-primary-300"
+                {...props}
+            >
+                {children}
+            </code>
+        );
+    },
+    pre({ children }) {
+        return <>{children}</>;
+    },
+    p({ children }) {
+        return (
+            <p className="mb-3 text-sm leading-7 text-dark-100 last:mb-0">
+                {children}
+            </p>
+        );
+    },
+    h1({ children }) {
+        return (
+            <h1 className="mb-2 mt-4 text-xl font-bold text-dark-50">
+                {children}
+            </h1>
+        );
+    },
+    h2({ children }) {
+        return (
+            <h2 className="mb-2 mt-3 text-lg font-semibold text-dark-50">
+                {children}
+            </h2>
+        );
+    },
+    h3({ children }) {
+        return (
+            <h3 className="mb-1 mt-2 text-base font-semibold text-dark-50">
+                {children}
+            </h3>
+        );
+    },
+    h4({ children }) {
+        return (
+            <h4 className="mb-1 mt-2 text-sm font-semibold text-dark-50">
+                {children}
+            </h4>
+        );
+    },
+    ul({ children }) {
+        return (
+            <ul className="mb-3 list-disc space-y-1 pl-5 text-dark-50">
+                {children}
+            </ul>
+        );
+    },
+    ol({ children }) {
+        return (
+            <ol className="mb-3 list-decimal space-y-1 pl-5 text-dark-50">
+                {children}
+            </ol>
+        );
+    },
+    li({ children }) {
+        return <li className="text-sm leading-7">{children}</li>;
+    },
+    blockquote({ children }) {
+        return (
+            <blockquote className="my-3 border-l-2 border-primary-400 pl-3 italic text-dark-200">
+                {children}
+            </blockquote>
+        );
+    },
+    a({ href, children }) {
+        return (
+            <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary-400 underline hover:text-primary-200"
+            >
+                {children}
+            </a>
+        );
+    },
+    img({ src, alt }) {
+        return <ImageViewer src={src || ""} alt={alt || ""} />;
+    },
+    table({ children }) {
+        return (
+            <div className="my-3 overflow-x-auto">
+                <table className="w-full border-collapse text-sm text-dark-50">
+                    {children}
+                </table>
+            </div>
+        );
+    },
+    th({ children }) {
+        return (
+            <th className="border border-dark-600 bg-dark-800 px-3 py-1.5 text-left font-semibold">
+                {children}
+            </th>
+        );
+    },
+    td({ children }) {
+        return (
+            <td className="border border-dark-600 text-dark-100 px-3 py-1.5">
+                {children}
+            </td>
+        );
+    },
+    strong({ children }) {
+        return (
+            <strong className="font-semibold text-dark-100">{children}</strong>
+        );
+    },
+    em({ children }) {
+        return <em className="italic text-dark-100">{children}</em>;
+    },
+    hr() {
+        return <hr className="my-4 border-dark-600" />;
+    }
+};
+
+export function MarkdownRenderer({
+    content,
+    isStreaming
+}: MarkdownRendererProps) {
+    return (
+        <div className="min-w-0">
+            <ReactMarkdown
+                remarkPlugins={[remarkGfm, remarkMath]}
+                rehypePlugins={[rehypeKatex]}
+                components={components}
+            >
+                {content}
+            </ReactMarkdown>
+            {isStreaming && (
+                <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-primary-400 align-middle" />
+            )}
+        </div>
+    );
+}

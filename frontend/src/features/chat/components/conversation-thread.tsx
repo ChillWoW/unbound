@@ -15,6 +15,7 @@ import type {
     ToolInvocationPart
 } from "../types";
 import { ChatInput, type ChatAttachment } from "./chat-input";
+import { MarkdownRenderer } from "@/components/markdown/markdown-renderer";
 
 function getMessageText(parts: MessagePart[]) {
     return parts
@@ -105,9 +106,7 @@ function CopyButton({ text }: { text: string }) {
             await navigator.clipboard.writeText(text);
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
-        } catch {
-            // clipboard access denied
-        }
+        } catch {}
     }, [text]);
 
     return (
@@ -115,7 +114,7 @@ function CopyButton({ text }: { text: string }) {
             <button
                 type="button"
                 onClick={handleCopy}
-                className="flex size-7 items-center justify-center rounded-md text-dark-300 transition-colors hover:bg-dark-700 hover:text-white"
+                className="flex size-7 items-center justify-center rounded-md text-dark-300 transition-colors hover:bg-dark-800 hover:text-white"
             >
                 {copied ? (
                     <CheckIcon className="size-3.5" weight="bold" />
@@ -148,7 +147,7 @@ function MessageMetadataDisplay({
     return (
         <div className="flex items-center gap-2 text-[11px] text-dark-300">
             {model && <span>{model}</span>}
-            {model && time && <span>·</span>}
+            {model && time && <span>-</span>}
             {time && (
                 <span className="flex items-center gap-1">
                     <ClockIcon className="size-3" weight="bold" />
@@ -202,13 +201,15 @@ function AssistantMessage({
             ))}
 
             {(text || isWaiting) && (
-                <p className="whitespace-pre-wrap text-[15px] leading-7 text-dark-100">
-                    {text || null}
-                    {isWaiting && <StreamingIndicator />}
-                    {isStreaming && (
-                        <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-primary-400 align-middle" />
+                <div>
+                    {text && (
+                        <MarkdownRenderer
+                            content={text}
+                            isStreaming={isStreaming}
+                        />
                     )}
-                </p>
+                    {isWaiting && <StreamingIndicator />}
+                </div>
             )}
 
             {message.status === "failed" && (
@@ -237,7 +238,10 @@ interface ConversationThreadProps {
     modelsError?: string | null;
     onModelChange: (modelId: string | null) => void;
     onStop?: () => void;
-    onSubmit: (value: string, attachments: ChatAttachment[]) => Promise<void> | void;
+    onSubmit: (
+        value: string,
+        attachments: ChatAttachment[]
+    ) => Promise<void> | void;
     selectedModelId: string | null;
 }
 
