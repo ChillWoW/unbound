@@ -6,13 +6,14 @@ import {
 import { cn } from "@/lib/cn";
 
 export interface ButtonProps extends BaseButtonProps {
-    variant?: "primary" | "default";
+    variant?: "primary" | "default" | "ghost";
     className?: string;
 }
 
 const variantClasses = {
     primary: "bg-primary-50 hover:bg-primary-400 text-dark-900",
-    default: "bg-dark-700 hover:bg-dark-600 text-white"
+    default: "bg-dark-700 hover:bg-dark-600 text-white",
+    ghost: "bg-transparent hover:bg-dark-600 text-white"
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
