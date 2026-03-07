@@ -348,7 +348,7 @@ export function ConversationThread({
                         modelsError={modelsError}
                         showContextBadge
                         placeholder="Send a message..."
-                        onStop={onStop}
+                        {...(onStop && { onStop })}
                         onSubmit={onSubmit}
                         disabled={isSending}
                         isSubmitting={isSending}
