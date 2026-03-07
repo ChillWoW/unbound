@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, createFileRoute } from "@tanstack/react-router";
-import { ShieldCheck } from "@phosphor-icons/react";
+import {
+    ShieldCheckIcon,
+    KeyIcon,
+    CheckCircleIcon,
+    XCircleIcon,
+    type IconWeight
+} from "@phosphor-icons/react";
 import { Button, Input } from "@/components/ui";
 import { useAuth } from "@/features/auth/use-auth";
 import { settingsApi } from "@/features/settings/api";
 import type { UserSettingsSummary } from "@/features/settings/types";
 import { ApiError } from "@/lib/api";
+import { cn } from "@/lib/cn";
 
 const defaultSettings: UserSettingsSummary = {
     hasOpenRouterApiKey: false,
@@ -37,8 +44,17 @@ export const Route = createFileRoute("/_chat/settings")({
     component: SettingsPage
 });
 
+type Category = "api-keys";
+
+const CATEGORIES: {
+    id: Category;
+    label: string;
+    icon: React.ComponentType<{ className?: string; weight?: IconWeight }>;
+}[] = [{ id: "api-keys", label: "API Keys", icon: KeyIcon }];
+
 function SettingsPage() {
     const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
+    const [activeCategory, setActiveCategory] = useState<Category>("api-keys");
     const [settings, setSettings] =
         useState<UserSettingsSummary>(defaultSettings);
     const [apiKey, setApiKey] = useState("");
@@ -140,121 +156,189 @@ function SettingsPage() {
 
     if (isAuthLoading || (isAuthenticated && isLoadingSettings)) {
         return (
-            <section className="flex h-full items-center justify-center px-4 py-10">
+            <div className="flex h-full items-center justify-center">
                 <p className="text-sm text-dark-200">Loading settings...</p>
-            </section>
+            </div>
         );
     }
 
     return (
-        <section className="flex h-full flex-col overflow-y-auto px-4 py-10 sm:px-6 lg:px-10">
-            <div className="mx-auto w-full max-w-xl">
-                <h1 className="text-lg font-semibold text-white">Settings</h1>
-
-                <p className="mt-1 text-sm text-dark-200">
-                    Manage your account and API configuration.
+        <div className="flex h-full overflow-hidden">
+            <aside className="flex w-56 shrink-0 flex-col border-r border-dark-600 px-3 py-6">
+                <p className="mb-2 px-1 text-xs font-semibold uppercase text-dark-300">
+                    Settings
                 </p>
-
-                {/* OpenRouter section */}
-                <div className="mt-8">
-                    <div className="flex items-center gap-2 text-sm font-medium text-dark-100">
-                        <ShieldCheck className="size-4 text-dark-200" />
-                        OpenRouter API key
-                    </div>
-
-                    <div className="mt-3 rounded-md border border-dark-600 bg-dark-800/80 p-4">
-                        <div className="flex items-center gap-2 text-sm">
-                            <span className="text-dark-200">Status:</span>
-                            <span
-                                className={
-                                    settings.hasOpenRouterApiKey
-                                        ? "text-emerald-400"
-                                        : "text-dark-300"
-                                }
-                            >
-                                {settings.hasOpenRouterApiKey
-                                    ? "Configured"
-                                    : "Not configured"}
-                            </span>
-                        </div>
-
-                        {settings.openRouterApiKeyPreview ? (
-                            <p className="mt-2 text-sm text-dark-200">
-                                Key: {settings.openRouterApiKeyPreview}
-                            </p>
-                        ) : null}
-
-                        {updatedAtLabel ? (
-                            <p className="mt-1 text-xs text-dark-300">
-                                Updated {updatedAtLabel}
-                            </p>
-                        ) : null}
-                    </div>
-                </div>
-
-                <form className="mt-4 space-y-3" onSubmit={handleSave}>
-                    <label className="block space-y-1.5">
-                        <span className="text-sm text-dark-200">
-                            New API key
-                        </span>
-                        <Input
-                            value={apiKey}
-                            onChange={(event) => setApiKey(event.target.value)}
-                            placeholder="sk-or-v1-..."
-                            autoComplete="off"
-                            leftSection={
-                                <ShieldCheck className="size-4 text-dark-300" />
-                            }
-                            className="bg-dark-800/80"
-                            disabled={
-                                isLoadingSettings || isSaving || isRemoving
-                            }
-                        />
-                    </label>
-
-                    {error ? (
-                        <div className="rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-                            {error}
-                        </div>
-                    ) : null}
-
-                    {notice ? (
-                        <div className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
-                            {notice}
-                        </div>
-                    ) : null}
-
-                    <div className="flex items-center gap-2 pt-1">
-                        <Button
-                            type="submit"
-                            variant="primary"
-                            disabled={
-                                isLoadingSettings ||
-                                isSaving ||
-                                isRemoving ||
-                                !apiKey.trim()
-                            }
-                        >
-                            {isSaving ? "Saving..." : "Save key"}
-                        </Button>
-
-                        <Button
+                <nav className="space-y-0.5">
+                    {CATEGORIES.map(({ id, label, icon: Icon }) => (
+                        <button
+                            key={id}
                             type="button"
-                            variant="ghost"
-                            onClick={handleRemove}
-                            disabled={
-                                isLoadingSettings ||
-                                isSaving ||
-                                isRemoving ||
-                                !settings.hasOpenRouterApiKey
-                            }
-                            className="text-dark-200 hover:text-white"
+                            onClick={() => setActiveCategory(id)}
+                            className={cn(
+                                "flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors",
+                                activeCategory === id
+                                    ? "bg-dark-700 text-white"
+                                    : "text-dark-200 hover:bg-dark-700 hover:text-white"
+                            )}
                         >
-                            {isRemoving ? "Removing..." : "Remove key"}
-                        </Button>
+                            <Icon
+                                className="size-4 shrink-0"
+                                weight="regular"
+                            />
+                            {label}
+                        </button>
+                    ))}
+                </nav>
+            </aside>
+
+            <div className="flex-1 overflow-y-auto px-8 py-8">
+                {activeCategory === "api-keys" && (
+                    <div className="max-w-2xl mx-auto">
+                        <h1 className="text-lg font-semibold text-white">
+                            API Keys
+                        </h1>
+                        <p className="mt-1 text-sm text-dark-200">
+                            Connect external services by providing your API
+                            keys.
+                        </p>
+
+                        <div className="mt-6 rounded-md border border-dark-600 bg-dark-900 overflow-hidden">
+                            <div className="flex items-center gap-3 border-b border-dark-600 px-5 py-4">
+                                <div className="flex size-8 items-center justify-center rounded-md bg-dark-700">
+                                    <KeyIcon
+                                        className="size-4 text-dark-200"
+                                        weight="bold"
+                                    />
+                                </div>
+                                <div>
+                                    <h2 className="text-sm font-medium text-white">
+                                        OpenRouter
+                                    </h2>
+                                    <p className="text-xs text-dark-200">
+                                        Required to use models via OpenRouter
+                                    </p>
+                                </div>
+                                <div className="ml-auto flex items-center gap-1.5">
+                                    {settings.hasOpenRouterApiKey ? (
+                                        <>
+                                            <CheckCircleIcon
+                                                className="size-4 text-emerald-400"
+                                                weight="fill"
+                                            />
+                                            <span className="text-xs text-emerald-400">
+                                                Configured
+                                            </span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <XCircleIcon
+                                                className="size-4 text-dark-200"
+                                                weight="fill"
+                                            />
+                                            <span className="text-xs text-dark-200">
+                                                Not configured
+                                            </span>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="p-4">
+                                {settings.openRouterApiKeyPreview ? (
+                                    <div className="mb-2 flex items-center gap-2.5 rounded-md bg-dark-700 px-3 py-2.5">
+                                        <ShieldCheckIcon className="size-4 shrink-0 text-dark-200" />
+                                        <span className="flex-1 text-sm text-dark-100">
+                                            {settings.openRouterApiKeyPreview}
+                                        </span>
+                                        {updatedAtLabel ? (
+                                            <span className="text-xs text-dark-200">
+                                                Updated {updatedAtLabel}
+                                            </span>
+                                        ) : null}
+                                    </div>
+                                ) : null}
+
+                                <form
+                                    className="space-y-2"
+                                    onSubmit={handleSave}
+                                >
+                                    <label className="block space-y-2">
+                                        <span className="text-xs font-semibold text-dark-200">
+                                            {settings.hasOpenRouterApiKey
+                                                ? "Replace key"
+                                                : "Add key"}
+                                        </span>
+                                        <Input
+                                            value={apiKey}
+                                            onChange={(event) =>
+                                                setApiKey(event.target.value)
+                                            }
+                                            placeholder="sk-or-v1-..."
+                                            autoComplete="off"
+                                            leftSection={
+                                                <ShieldCheckIcon className="size-4 text-dark-200" />
+                                            }
+                                            className="bg-dark-700"
+                                            disabled={
+                                                isLoadingSettings ||
+                                                isSaving ||
+                                                isRemoving
+                                            }
+                                        />
+                                    </label>
+
+                                    {error ? (
+                                        <div className="rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                                            {error}
+                                        </div>
+                                    ) : null}
+
+                                    {notice ? (
+                                        <div className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
+                                            {notice}
+                                        </div>
+                                    ) : null}
+
+                                    <div className="flex items-center gap-2 pt-1">
+                                        <Button
+                                            type="submit"
+                                            variant="primary"
+                                            disabled={
+                                                isLoadingSettings ||
+                                                isSaving ||
+                                                isRemoving ||
+                                                !apiKey.trim()
+                                            }
+                                        >
+                                            {isSaving
+                                                ? "Saving..."
+                                                : "Save key"}
+                                        </Button>
+
+                                        {settings.hasOpenRouterApiKey ? (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                onClick={handleRemove}
+                                                disabled={
+                                                    isLoadingSettings ||
+                                                    isSaving ||
+                                                    isRemoving
+                                                }
+                                                className="text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                                            >
+                                                {isRemoving
+                                                    ? "Removing..."
+                                                    : "Remove key"}
+                                            </Button>
+                                        ) : null}
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
                     </div>
-                </form>
+                )}
             </div>
-        </section>
+        </div>
     );
 }
