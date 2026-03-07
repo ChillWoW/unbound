@@ -1,4 +1,5 @@
 export * from "./Button";
+export * from "./ImageViewer";
 export * from "./Checkbox";
 export * from "./Input";
 export * from "./Menu";

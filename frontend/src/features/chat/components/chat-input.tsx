@@ -174,7 +174,7 @@ function AttachmentChip({
     return (
         <div
             className={cn(
-                "group relative flex items-center gap-2 rounded-lg border border-dark-600 bg-dark-700/60 px-2 py-1.5",
+                "group relative flex items-center gap-2 rounded-md border border-dark-600 bg-dark-700 px-2 py-1.5",
                 "transition-colors hover:border-dark-500"
             )}
         >
@@ -188,12 +188,12 @@ function AttachmentChip({
                 <div className="flex size-8 shrink-0 items-center justify-center rounded bg-dark-600">
                     {attachment.type === "pdf" ? (
                         <FileTextIcon
-                            className="size-4 text-red-400"
+                            className="size-4 text-dark-200"
                             weight="bold"
                         />
                     ) : (
                         <ImageIcon
-                            className="size-4 text-blue-400"
+                            className="size-4 text-dark-200"
                             weight="bold"
                         />
                     )}

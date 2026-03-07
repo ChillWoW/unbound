@@ -47,7 +47,10 @@ interface ConversationActionsMenuProps {
     isActive: boolean;
     onDeleteRequest: (conversation: ConversationSummary) => void;
     onRename: (conversationId: string, title: string) => Promise<void>;
-    onToggleFavorite: (conversationId: string, isFavorite: boolean) => Promise<void>;
+    onToggleFavorite: (
+        conversationId: string,
+        isFavorite: boolean
+    ) => Promise<void>;
 }
 
 interface ConversationListItemProps {
@@ -56,7 +59,10 @@ interface ConversationListItemProps {
     onDeleteRequest: (conversation: ConversationSummary) => void;
     onNavigate: () => void;
     onRename: (conversationId: string, title: string) => Promise<void>;
-    onToggleFavorite: (conversationId: string, isFavorite: boolean) => Promise<void>;
+    onToggleFavorite: (
+        conversationId: string,
+        isFavorite: boolean
+    ) => Promise<void>;
 }
 
 type TimeGroup = "Today" | "Yesterday" | "This week" | "This month" | "Older";
@@ -200,7 +206,9 @@ function ConversationActionsMenu({
             <MenuTrigger
                 className={cn(
                     "mr-1 shrink-0 rounded-md p-1 text-dark-200 transition-all hover:bg-dark-600 hover:text-white focus:outline-none",
-                    isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                    isActive
+                        ? "opacity-100"
+                        : "opacity-0 group-hover:opacity-100"
                 )}
                 onClick={(event) => event.preventDefault()}
             >
@@ -213,10 +221,14 @@ function ConversationActionsMenu({
                             ref={renameInputRef}
                             className="border border-dark-600"
                             value={renameValue}
-                            onChange={(event) => setRenameValue(event.target.value)}
+                            onChange={(event) =>
+                                setRenameValue(event.target.value)
+                            }
                             onMouseDown={(event) => event.stopPropagation()}
                             onClick={(event) => event.stopPropagation()}
-                            onKeyDownCapture={(event) => event.stopPropagation()}
+                            onKeyDownCapture={(event) =>
+                                event.stopPropagation()
+                            }
                             onKeyDown={(event) => {
                                 event.stopPropagation();
 
@@ -235,7 +247,9 @@ function ConversationActionsMenu({
                         />
 
                         {renameError ? (
-                            <p className="mt-1 text-xs text-red-300">{renameError}</p>
+                            <p className="mt-1 text-xs text-red-300">
+                                {renameError}
+                            </p>
                         ) : null}
 
                         <div className="mt-2 flex justify-end gap-1">
@@ -267,7 +281,9 @@ function ConversationActionsMenu({
                         >
                             <StarIcon
                                 className="size-4"
-                                weight={conversation.isFavorite ? "fill" : "regular"}
+                                weight={
+                                    conversation.isFavorite ? "fill" : "regular"
+                                }
                             />
                             {conversation.isFavorite
                                 ? "Remove favorite"
@@ -327,7 +343,7 @@ function ConversationListItem({
                 "group relative flex items-center rounded-md transition-colors",
                 isActive
                     ? "bg-dark-700 text-white"
-                    : "text-dark-200 hover:bg-dark-700 hover:text-white"
+                    : "text-dark-100 hover:bg-dark-700 hover:text-white"
             )}
         >
             <Link
@@ -377,9 +393,8 @@ export function ChatSidebar({
     const { isAuthenticated, isLoading, logout, user } = useAuth();
     const navigate = useNavigate();
     const [isLoggingOut, setIsLoggingOut] = useState(false);
-    const [deleteTarget, setDeleteTarget] = useState<ConversationSummary | null>(
-        null
-    );
+    const [deleteTarget, setDeleteTarget] =
+        useState<ConversationSummary | null>(null);
     const [deleteError, setDeleteError] = useState<string | null>(null);
     const [isDeletingConversation, setIsDeletingConversation] = useState(false);
 
@@ -510,9 +525,15 @@ export function ChatSidebar({
                         {isMobile ? (
                             <XIcon className="size-4" weight="bold" />
                         ) : collapsed ? (
-                            <SidebarSimpleIcon className="size-4" weight="bold" />
+                            <SidebarSimpleIcon
+                                className="size-4"
+                                weight="bold"
+                            />
                         ) : (
-                            <SidebarSimpleIcon className="size-4" weight="fill" />
+                            <SidebarSimpleIcon
+                                className="size-4"
+                                weight="fill"
+                            />
                         )}
                     </button>
                 </div>
@@ -532,7 +553,10 @@ export function ChatSidebar({
                             onClick={handleNewChat}
                             className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-dark-200 transition hover:bg-dark-700 hover:text-white"
                         >
-                            <PlusIcon className="size-4 shrink-0" weight="bold" />
+                            <PlusIcon
+                                className="size-4 shrink-0"
+                                weight="bold"
+                            />
                             <span>New chat</span>
                         </button>
                     )}
@@ -559,19 +583,25 @@ export function ChatSidebar({
                                         Favorites
                                     </div>
                                     <div className="space-y-0.5">
-                                        {favoriteConversations.map((conversation) => (
-                                            <ConversationListItem
-                                                key={conversation.id}
-                                                conversation={conversation}
-                                                currentPath={currentPath}
-                                                onDeleteRequest={handleDeleteRequest}
-                                                onNavigate={handleNavigate}
-                                                onRename={renameConversation}
-                                                onToggleFavorite={
-                                                    toggleFavoriteConversation
-                                                }
-                                            />
-                                        ))}
+                                        {favoriteConversations.map(
+                                            (conversation) => (
+                                                <ConversationListItem
+                                                    key={conversation.id}
+                                                    conversation={conversation}
+                                                    currentPath={currentPath}
+                                                    onDeleteRequest={
+                                                        handleDeleteRequest
+                                                    }
+                                                    onNavigate={handleNavigate}
+                                                    onRename={
+                                                        renameConversation
+                                                    }
+                                                    onToggleFavorite={
+                                                        toggleFavoriteConversation
+                                                    }
+                                                />
+                                            )
+                                        )}
                                     </div>
                                 </div>
                             ) : null}
@@ -587,7 +617,9 @@ export function ChatSidebar({
                                                 key={conversation.id}
                                                 conversation={conversation}
                                                 currentPath={currentPath}
-                                                onDeleteRequest={handleDeleteRequest}
+                                                onDeleteRequest={
+                                                    handleDeleteRequest
+                                                }
                                                 onNavigate={handleNavigate}
                                                 onRename={renameConversation}
                                                 onToggleFavorite={
@@ -686,7 +718,10 @@ export function ChatSidebar({
                                 className="flex size-10 items-center justify-center rounded-lg bg-primary-50 text-dark-900 transition hover:bg-primary-300"
                                 title="Register"
                             >
-                                <UserPlusIcon className="size-4" weight="bold" />
+                                <UserPlusIcon
+                                    className="size-4"
+                                    weight="bold"
+                                />
                             </Link>
                         </div>
                     ) : (
@@ -705,7 +740,10 @@ export function ChatSidebar({
                                 onClick={handleNavigate}
                                 className="inline-flex items-center justify-center gap-2 rounded-md bg-primary-50 px-2.5 py-1.5 text-sm text-dark-900 transition hover:bg-primary-200"
                             >
-                                <UserPlusIcon className="size-4" weight="bold" />
+                                <UserPlusIcon
+                                    className="size-4"
+                                    weight="bold"
+                                />
                                 Register
                             </Link>
                         </div>
@@ -734,7 +772,9 @@ export function ChatSidebar({
                         </div>
 
                         {deleteError ? (
-                            <p className="text-sm text-red-300">{deleteError}</p>
+                            <p className="text-sm text-red-300">
+                                {deleteError}
+                            </p>
                         ) : null}
 
                         <div className="flex justify-end gap-2">
@@ -753,7 +793,9 @@ export function ChatSidebar({
                                 disabled={isDeletingConversation}
                                 className="bg-red-500 text-red-50 hover:bg-red-400"
                             >
-                                {isDeletingConversation ? "Deleting..." : "Delete"}
+                                {isDeletingConversation
+                                    ? "Deleting..."
+                                    : "Delete"}
                             </Button>
                         </div>
                     </div>

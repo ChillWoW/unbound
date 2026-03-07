@@ -5,7 +5,7 @@ import {
     CheckIcon,
     ClockIcon
 } from "@phosphor-icons/react";
-import { Tooltip } from "@/components/ui";
+import { Tooltip, ImageViewer } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type {
     ChatModel,
@@ -348,11 +348,11 @@ export function ConversationThread({
                                         {images.length > 0 && (
                                             <div className="flex flex-wrap gap-2">
                                                 {images.map((img, i) => (
-                                                    <img
+                                                    <ImageViewer
                                                         key={i}
                                                         src={`data:${img.mimeType};base64,${img.data}`}
                                                         alt="attachment"
-                                                        className="max-h-48 rounded-md object-contain"
+                                                        imgClassName="max-h-48 w-auto max-w-full"
                                                     />
                                                 ))}
                                             </div>
