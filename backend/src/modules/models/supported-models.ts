@@ -56,7 +56,7 @@ export function selectSupportedModels(models: ModelSummary[]): ModelSummary[] {
             ...model,
             name: definition.name,
             provider: definition.provider,
-            description: model.description ?? definition.description,
+            description: definition.description,
             free: definition.free
         };
     });

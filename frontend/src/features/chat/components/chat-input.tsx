@@ -277,6 +277,9 @@ export function ChatInput({
         () => models.find((model) => model.id === selectedModelId) ?? null,
         [models, selectedModelId]
     );
+    const supportsImages = selectedModel
+        ? selectedModel.inputModalities.includes("image")
+        : true;
     const isModelSelectDisabled =
         disabled || isSubmitting || isModelsLoading || models.length === 0;
     const modelMessage = useMemo(() => {
@@ -522,7 +525,7 @@ export function ChatInput({
                         disabled={disabled || isSubmitting}
                     />
 
-                    <Tooltip content="Attach images or PDFs">
+                    <Tooltip content={supportsImages ? "Attach images or PDFs" : "This model doesn't support image attachments"}>
                         <Button
                             type="button"
                             variant="ghost"
@@ -530,6 +533,7 @@ export function ChatInput({
                             disabled={
                                 disabled ||
                                 isSubmitting ||
+                                !supportsImages ||
                                 attachments.length >= MAX_ATTACHMENTS
                             }
                             onClick={() => fileInputRef.current?.click()}
