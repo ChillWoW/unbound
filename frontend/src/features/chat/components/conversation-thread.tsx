@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-    BrainIcon,
     CaretRightIcon,
     CopyIcon,
     CheckIcon,
-    WrenchIcon,
     ClockIcon
 } from "@phosphor-icons/react";
 import { Tooltip } from "@/components/ui";
@@ -49,39 +47,30 @@ function getModelDisplayName(
 }
 
 function ReasoningDisplay({ part, isStreaming }: { part: ReasoningMessagePart; isStreaming: boolean }) {
-    const [expanded, setExpanded] = useState(isStreaming);
-
-    useEffect(() => {
-        if (isStreaming) {
-            setExpanded(true);
-        }
-    }, [isStreaming]);
+    const [expanded, setExpanded] = useState(true);
 
     return (
-        <div className="my-2 rounded-lg border border-dark-600 bg-dark-800/60">
+        <div className="my-2">
             <button
                 type="button"
                 onClick={() => setExpanded(!expanded)}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs"
+                className="flex items-center gap-1.5 text-xs"
             >
-                <BrainIcon className="size-3.5 text-purple-400" weight="fill" />
-                <span className="font-medium text-dark-100">
-                    {isStreaming ? "Thinking..." : "Thought process"}
+                <span className={cn("font-medium", isStreaming ? "wave-text" : "text-dark-300")}>
+                    Thinking
                 </span>
                 <CaretRightIcon
                     className={cn(
-                        "ml-auto size-3 text-dark-300 transition-transform",
+                        "size-3 text-dark-300 transition-transform",
                         expanded && "rotate-90"
                     )}
                     weight="bold"
                 />
             </button>
             {expanded && (
-                <div className="border-t border-dark-600 px-3 py-2">
-                    <p className="whitespace-pre-wrap text-xs leading-5 text-dark-200">
-                        {part.text}
-                    </p>
-                </div>
+                <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-dark-300">
+                    {part.text}
+                </p>
             )}
         </div>
     );
@@ -89,53 +78,34 @@ function ReasoningDisplay({ part, isStreaming }: { part: ReasoningMessagePart; i
 
 function ToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
     const [expanded, setExpanded] = useState(false);
+    const isPending = part.state === "call";
+    const hasOutput = part.state === "result" && part.result !== undefined;
 
     return (
-        <div className="my-2 rounded-lg border border-dark-600 bg-dark-800/60">
+        <div className="my-1.5">
             <button
                 type="button"
                 onClick={() => setExpanded(!expanded)}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs"
+                className="flex items-center gap-1.5 text-xs"
             >
-                <WrenchIcon
-                    className="size-3.5 text-primary-400"
-                    weight="bold"
-                />
-                <span className="font-medium text-dark-100">
+                <span className={cn("font-medium", isPending ? "wave-text" : "text-dark-300")}>
                     {part.toolName}
                 </span>
-                {part.state === "call" && (
-                    <span className="ml-auto text-dark-300">Running...</span>
-                )}
-                {part.state === "result" && (
-                    <span className="ml-auto text-green-400">Done</span>
-                )}
-                {part.state === "error" && (
-                    <span className="ml-auto text-red-400">Error</span>
-                )}
+                <CaretRightIcon
+                    className={cn(
+                        "size-3 text-dark-300 transition-transform",
+                        expanded && "rotate-90"
+                    )}
+                    weight="bold"
+                />
             </button>
 
-            {expanded && (
-                <div className="border-t border-dark-600 px-3 py-2 text-xs">
-                    {Object.keys(part.args).length > 0 && (
-                        <div className="mb-2">
-                            <span className="text-dark-300">Arguments:</span>
-                            <pre className="mt-1 overflow-x-auto rounded bg-dark-900 p-2 text-dark-100">
-                                {JSON.stringify(part.args, null, 2)}
-                            </pre>
-                        </div>
-                    )}
-                    {part.state === "result" && part.result !== undefined && (
-                        <div>
-                            <span className="text-dark-300">Result:</span>
-                            <pre className="mt-1 overflow-x-auto rounded bg-dark-900 p-2 text-dark-100">
-                                {typeof part.result === "string"
-                                    ? part.result
-                                    : JSON.stringify(part.result, null, 2)}
-                            </pre>
-                        </div>
-                    )}
-                </div>
+            {expanded && hasOutput && (
+                <pre className="mt-2 overflow-x-auto rounded bg-dark-900 p-2 text-xs text-dark-100">
+                    {typeof part.result === "string"
+                        ? part.result
+                        : JSON.stringify(part.result, null, 2)}
+                </pre>
             )}
         </div>
     );
@@ -203,16 +173,8 @@ function MessageMetadataDisplay({
 
 function StreamingIndicator() {
     return (
-        <div className="flex items-center gap-1.5 py-1">
-            <div className="size-1.5 animate-pulse rounded-full bg-primary-400" />
-            <div
-                className="size-1.5 animate-pulse rounded-full bg-primary-400"
-                style={{ animationDelay: "150ms" }}
-            />
-            <div
-                className="size-1.5 animate-pulse rounded-full bg-primary-400"
-                style={{ animationDelay: "300ms" }}
-            />
+        <div className="py-1">
+            <span className="wave-text text-xs font-medium">Thinking</span>
         </div>
     );
 }

@@ -83,3 +83,24 @@ body {
     );
     color: var(--color-dark-600);
 }
+
+@keyframes wave-shimmer {
+    0% { background-position: -200% center; }
+    100% { background-position: 200% center; }
+}
+
+.wave-text {
+    background: linear-gradient(
+        90deg,
+        var(--color-dark-300) 0%,
+        var(--color-dark-300) 25%,
+        var(--color-dark-50) 50%,
+        var(--color-dark-300) 75%,
+        var(--color-dark-300) 100%
+    );
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: wave-shimmer 1.8s linear infinite;
+}
