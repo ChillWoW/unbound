@@ -8,7 +8,8 @@ const conversationParams = t.Object({
 });
 
 const generateBody = t.Object({
-    modelId: t.String({ minLength: 1, maxLength: 200 })
+    modelId: t.String({ minLength: 1, maxLength: 200 }),
+    thinking: t.Optional(t.Boolean())
 });
 
 function handleAiError(error: unknown, set: { status?: number | string }) {
@@ -33,7 +34,8 @@ export const aiRoutes = new Elysia({ prefix: "/api/conversations" })
                 return await aiService.generateResponse(
                     request,
                     params.conversationId,
-                    body.modelId
+                    body.modelId,
+                    body.thinking ?? false
                 );
             } catch (error) {
                 return handleAiError(error, set);

@@ -22,6 +22,7 @@ export const messages = pgTable(
                           state: "call" | "result" | "error";
                           result?: unknown;
                       }
+                    | { type: "reasoning"; text: string }
                 >
             >()
             .notNull(),

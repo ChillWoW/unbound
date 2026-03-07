@@ -13,6 +13,7 @@ export interface GenerationEntry {
     emitter: EventEmitter;
     finished: boolean;
     accumulatedText: string;
+    accumulatedReasoning: string;
     toolParts: MessagePart[];
 }
 
@@ -33,6 +34,7 @@ class GenerationManager {
             emitter: new EventEmitter(),
             finished: false,
             accumulatedText: "",
+            accumulatedReasoning: "",
             toolParts: []
         };
 

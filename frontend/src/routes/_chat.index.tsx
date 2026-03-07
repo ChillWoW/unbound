@@ -33,8 +33,10 @@ function HomePage() {
         isCreatingConversation,
         isLoadingModels,
         modelsError,
+        isThinkingEnabled,
         selectedModelId,
-        setSelectedModelId
+        setSelectedModelId,
+        setThinkingEnabled
     } = useChat();
 
     async function handleSubmit(
@@ -76,10 +78,12 @@ function HomePage() {
                     disabled={isLoading || isCreatingConversation || !isAuthenticated}
                     isSubmitting={isCreatingConversation}
                     isModelsLoading={isLoadingModels}
+                    isThinkingEnabled={isThinkingEnabled}
                     models={availableModels}
                     modelsError={modelsError}
                     selectedModelId={selectedModelId}
                     onSelectedModelChange={setSelectedModelId}
+                    onThinkingChange={setThinkingEnabled}
                     value={draft}
                     onChange={setDraft}
                     onSubmit={handleSubmit}

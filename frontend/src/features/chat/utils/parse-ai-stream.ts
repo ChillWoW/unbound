@@ -1,5 +1,6 @@
 export interface ReconnectState {
     text: string;
+    reasoning: string;
     toolParts: Array<{
         type: "tool-invocation";
         toolInvocationId: string;
@@ -13,6 +14,7 @@ export interface ReconnectState {
 export interface StreamCallbacks {
     onMessageStart?: (messageId: string) => void;
     onTextDelta?: (text: string) => void;
+    onReasoning?: (text: string) => void;
     onToolCall?: (toolCall: {
         toolCallId: string;
         toolName: string;
@@ -78,6 +80,10 @@ export async function parseAIStream(
                         callbacks.onTextDelta?.(event.text as string);
                         break;
 
+                    case "reasoning":
+                        callbacks.onReasoning?.(event.text as string);
+                        break;
+
                     case "tool-call":
                         callbacks.onToolCall?.({
                             toolCallId: event.toolCallId as string,
@@ -103,7 +109,9 @@ export async function parseAIStream(
                         break;
 
                     case "reconnect-state":
-                        callbacks.onReconnectState?.(event as unknown as ReconnectState);
+                        callbacks.onReconnectState?.(
+                            event as unknown as ReconnectState
+                        );
                         break;
 
                     case "done":

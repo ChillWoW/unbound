@@ -1,17 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+    BrainIcon,
+    CaretRightIcon,
     CopyIcon,
     CheckIcon,
     WrenchIcon,
     ClockIcon
 } from "@phosphor-icons/react";
 import { Tooltip } from "@/components/ui";
+import { cn } from "@/lib/cn";
 import type {
     ChatModel,
     ConversationDetail,
     ConversationMessage,
     MessageMetadata,
     MessagePart,
+    ReasoningMessagePart,
     ToolInvocationPart
 } from "../types";
 import { ChatInput, type ChatAttachment } from "./chat-input";
@@ -42,6 +46,39 @@ function getModelDisplayName(
 ): string {
     const model = availableModels.find((m) => m.id === modelId);
     return model?.name ?? modelId.split("/").pop() ?? modelId;
+}
+
+function ReasoningDisplay({ part, isStreaming }: { part: ReasoningMessagePart; isStreaming: boolean }) {
+    const [expanded, setExpanded] = useState(false);
+
+    return (
+        <div className="my-2 rounded-lg border border-dark-600 bg-dark-800/60">
+            <button
+                type="button"
+                onClick={() => setExpanded(!expanded)}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs"
+            >
+                <BrainIcon className="size-3.5 text-purple-400" weight="fill" />
+                <span className="font-medium text-dark-100">
+                    {isStreaming ? "Thinking..." : "Thought process"}
+                </span>
+                <CaretRightIcon
+                    className={cn(
+                        "ml-auto size-3 text-dark-300 transition-transform",
+                        expanded && "rotate-90"
+                    )}
+                    weight="bold"
+                />
+            </button>
+            {expanded && (
+                <div className="border-t border-dark-600 px-3 py-2">
+                    <p className="whitespace-pre-wrap text-xs leading-5 text-dark-200">
+                        {part.text}
+                    </p>
+                </div>
+            )}
+        </div>
+    );
 }
 
 function ToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
@@ -185,14 +222,28 @@ function AssistantMessage({
     const toolParts = message.parts.filter(
         (p): p is ToolInvocationPart => p.type === "tool-invocation"
     );
+    const reasoningParts = message.parts.filter(
+        (p): p is ReasoningMessagePart => p.type === "reasoning"
+    );
     const isStreaming = message.status === "pending" && text.length > 0;
+    const isReasoningStreaming =
+        message.status === "pending" && reasoningParts.length > 0 && text.length === 0;
     const isWaiting =
         message.status === "pending" &&
         text.length === 0 &&
-        toolParts.length === 0;
+        toolParts.length === 0 &&
+        reasoningParts.length === 0;
 
     return (
         <div className="group w-full">
+            {reasoningParts.map((part, i) => (
+                <ReasoningDisplay
+                    key={`reasoning-${i}`}
+                    part={part}
+                    isStreaming={isReasoningStreaming}
+                />
+            ))}
+
             {toolParts.map((part) => (
                 <ToolInvocationDisplay
                     key={part.toolInvocationId}
@@ -235,6 +286,7 @@ interface ConversationThreadProps {
     error?: string | null;
     isSending?: boolean;
     isLoadingModels?: boolean;
+    isThinkingEnabled?: boolean;
     modelsError?: string | null;
     onModelChange: (modelId: string | null) => void;
     onStop?: () => void;
@@ -242,6 +294,7 @@ interface ConversationThreadProps {
         value: string,
         attachments: ChatAttachment[]
     ) => Promise<void> | void;
+    onThinkingChange?: (enabled: boolean) => void;
     selectedModelId: string | null;
 }
 
@@ -251,9 +304,11 @@ export function ConversationThread({
     error,
     isSending = false,
     isLoadingModels = false,
+    isThinkingEnabled = false,
     modelsError = null,
     onModelChange,
     onStop,
+    onThinkingChange,
     selectedModelId,
     onSubmit
 }: ConversationThreadProps) {
@@ -349,7 +404,9 @@ export function ConversationThread({
                         selectedModelId={selectedModelId}
                         onSelectedModelChange={onModelChange}
                         isModelsLoading={isLoadingModels}
+                        isThinkingEnabled={isThinkingEnabled}
                         modelsError={modelsError}
+                        onThinkingChange={onThinkingChange}
                         showContextBadge
                         placeholder="Send a message..."
                         {...(onStop && { onStop })}

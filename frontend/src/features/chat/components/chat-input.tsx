@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, useCallback } from "react";
 import TextareaAutosize from "react-textarea-autosize";
 import {
     ArrowUpIcon,
+    BrainIcon,
     PaperclipIcon,
     XIcon,
     FileTextIcon,
@@ -234,9 +235,11 @@ interface ChatInputProps {
     disabled?: boolean;
     isSubmitting?: boolean;
     isModelsLoading?: boolean;
+    isThinkingEnabled?: boolean;
     models?: ChatModel[];
     modelsError?: string | null;
     onSelectedModelChange?: (modelId: string | null) => void;
+    onThinkingChange?: (enabled: boolean) => void;
     showContextBadge?: boolean;
     value?: string;
     onChange?: (value: string) => void;
@@ -255,9 +258,11 @@ export function ChatInput({
     disabled = false,
     isSubmitting = false,
     isModelsLoading = false,
+    isThinkingEnabled = false,
     models = [],
     modelsError = null,
     onSelectedModelChange,
+    onThinkingChange,
     showContextBadge = false,
     value,
     onChange,
@@ -499,6 +504,23 @@ export function ChatInput({
                         }
                         disabled={isModelSelectDisabled}
                     />
+
+                    <Tooltip content={isThinkingEnabled ? "Thinking enabled" : "Enable thinking"}>
+                        <button
+                            type="button"
+                            onClick={() => onThinkingChange?.(!isThinkingEnabled)}
+                            disabled={disabled || isSubmitting}
+                            className={cn(
+                                "flex size-8 items-center justify-center rounded-md transition-colors",
+                                isThinkingEnabled
+                                    ? "bg-primary-500/15 text-primary-400"
+                                    : "text-dark-300 hover:bg-dark-700 hover:text-white",
+                                (disabled || isSubmitting) && "opacity-50 cursor-not-allowed"
+                            )}
+                        >
+                            <BrainIcon className="size-4" weight={isThinkingEnabled ? "fill" : "bold"} />
+                        </button>
+                    </Tooltip>
 
                     {modelMessage ? (
                         <p className="truncate text-xs text-dark-300">

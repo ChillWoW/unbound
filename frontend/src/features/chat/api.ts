@@ -8,14 +8,14 @@ import type {
 } from "./types";
 
 export const chatApi = {
-    generateResponse(conversationId: string, modelId: string, signal?: AbortSignal) {
+    generateResponse(conversationId: string, modelId: string, thinking: boolean, signal?: AbortSignal) {
         return fetch(
             `${API_BASE_URL}/api/conversations/${conversationId}/generate`,
             {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",
-                body: JSON.stringify({ modelId }),
+                body: JSON.stringify({ modelId, thinking }),
                 signal
             }
         );

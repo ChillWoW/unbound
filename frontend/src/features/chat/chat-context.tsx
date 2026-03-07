@@ -65,7 +65,9 @@ function savePartialMessage(messageId: string, parts: MessagePart[]) {
 function loadPartialMessage(messageId: string): MessagePart[] | null {
     if (typeof window === "undefined") return null;
     try {
-        const raw = window.localStorage.getItem(getPartialMessageStorageKey(messageId));
+        const raw = window.localStorage.getItem(
+            getPartialMessageStorageKey(messageId)
+        );
         return raw ? (JSON.parse(raw) as MessagePart[]) : null;
     } catch {
         return null;
@@ -104,7 +106,10 @@ interface ChatContextValue {
     availableModels: ChatModel[];
     conversations: ConversationSummary[];
     conversationsError: string | null;
-    createConversation: (prompt: string, attachments?: ChatAttachment[]) => Promise<ConversationDetail>;
+    createConversation: (
+        prompt: string,
+        attachments?: ChatAttachment[]
+    ) => Promise<ConversationDetail>;
     deleteConversation: (conversationId: string) => Promise<void>;
     getConversation: (conversationId: string) => ConversationDetail | undefined;
     getConversationError: (conversationId: string) => string | null;
@@ -121,8 +126,12 @@ interface ChatContextValue {
         assistantMessageId: string
     ) => Promise<void>;
     modelsError: string | null;
-    renameConversation: (conversationId: string, title: string) => Promise<void>;
+    renameConversation: (
+        conversationId: string,
+        title: string
+    ) => Promise<void>;
     reconnectToGeneration: (conversationId: string) => Promise<void>;
+    isThinkingEnabled: boolean;
     selectedModelId: string | null;
     sendMessage: (
         conversationId: string,
@@ -130,6 +139,7 @@ interface ChatContextValue {
         attachments?: ChatAttachment[]
     ) => Promise<ConversationDetail>;
     setSelectedModelId: (modelId: string | null) => void;
+    setThinkingEnabled: (enabled: boolean) => void;
     stopGeneration: (conversationId: string) => void;
     toggleFavoriteConversation: (
         conversationId: string,
@@ -220,11 +230,19 @@ export function ChatProvider({ children }: PropsWithChildren) {
         null
     );
     const selectedModelIdRef = useRef<string | null>(null);
-    const activeGenerationsRef = useRef<Map<string, AbortController>>(new Map());
+    const [isThinkingEnabled, setIsThinkingEnabled] = useState(false);
+    const isThinkingEnabledRef = useRef(false);
+    const activeGenerationsRef = useRef<Map<string, AbortController>>(
+        new Map()
+    );
 
     useEffect(() => {
         selectedModelIdRef.current = selectedModelId;
     }, [selectedModelId]);
+
+    useEffect(() => {
+        isThinkingEnabledRef.current = isThinkingEnabled;
+    }, [isThinkingEnabled]);
 
     const upsertConversation = useCallback(
         (conversation: ConversationDetail | ConversationSummary) => {
@@ -247,7 +265,10 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 });
                 setConversationDetails((current) => ({
                     ...current,
-                    [conversation.id]: { ...conversation, messages: hydratedMessages }
+                    [conversation.id]: {
+                        ...conversation,
+                        messages: hydratedMessages
+                    }
                 }));
             }
         },
@@ -300,7 +321,9 @@ export function ChatProvider({ children }: PropsWithChildren) {
 
         try {
             const response = await chatApi.listModels();
-            const storedModelId = user ? readStoredSelectedModelId(user.id) : null;
+            const storedModelId = user
+                ? readStoredSelectedModelId(user.id)
+                : null;
             const currentSelectedModelId = selectedModelIdRef.current;
             const nextSelectedModelId =
                 currentSelectedModelId &&
@@ -309,9 +332,11 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 )
                     ? currentSelectedModelId
                     : storedModelId &&
-                        response.models.some((model) => model.id === storedModelId)
+                        response.models.some(
+                            (model) => model.id === storedModelId
+                        )
                       ? storedModelId
-                      : response.models[0]?.id ?? null;
+                      : (response.models[0]?.id ?? null);
 
             setAvailableModels(response.models);
             setSelectedModelIdState(nextSelectedModelId);
@@ -362,6 +387,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
 
     const runGeneration = useCallback(
         async (conversationId: string, modelId: string) => {
+            const thinking = isThinkingEnabledRef.current;
             const abortController = new AbortController();
             activeGenerationsRef.current.set(conversationId, abortController);
 
@@ -392,11 +418,13 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 streamResponse = await chatApi.generateResponse(
                     conversationId,
                     modelId,
+                    thinking,
                     abortController.signal
                 );
             } catch (error) {
                 activeGenerationsRef.current.delete(conversationId);
-                if (error instanceof Error && error.name === "AbortError") return;
+                if (error instanceof Error && error.name === "AbortError")
+                    return;
                 throw error;
             }
 
@@ -413,7 +441,14 @@ export function ChatProvider({ children }: PropsWithChildren) {
 
             let realMessageId = optimisticId;
             let accumulatedText = "";
+            let accumulatedReasoning = "";
             const toolParts: MessagePart[] = [];
+
+            const buildParts = (): MessagePart[] => [
+                ...(accumulatedReasoning ? [{ type: "reasoning" as const, text: accumulatedReasoning }] : []),
+                ...(accumulatedText ? [{ type: "text" as const, text: accumulatedText }] : []),
+                ...toolParts
+            ];
 
             await parseAIStream(streamResponse, {
                 onMessageStart(messageId) {
@@ -434,9 +469,9 @@ export function ChatProvider({ children }: PropsWithChildren) {
                         };
                     });
                 },
-                onTextDelta(text) {
-                    accumulatedText += text;
-                    const currentText = accumulatedText;
+                onReasoning(text) {
+                    accumulatedReasoning += text;
+                    const currentParts = buildParts();
                     setConversationDetails((current) => {
                         const existing = current[conversationId];
                         if (!existing) return current;
@@ -446,16 +481,26 @@ export function ChatProvider({ children }: PropsWithChildren) {
                                 ...existing,
                                 messages: existing.messages.map((m) =>
                                     m.id === realMessageId
-                                        ? {
-                                              ...m,
-                                              parts: [
-                                                  {
-                                                      type: "text" as const,
-                                                      text: currentText
-                                                  },
-                                                  ...toolParts
-                                              ]
-                                          }
+                                        ? { ...m, parts: currentParts }
+                                        : m
+                                )
+                            }
+                        };
+                    });
+                },
+                onTextDelta(text) {
+                    accumulatedText += text;
+                    const currentParts = buildParts();
+                    setConversationDetails((current) => {
+                        const existing = current[conversationId];
+                        if (!existing) return current;
+                        return {
+                            ...current,
+                            [conversationId]: {
+                                ...existing,
+                                messages: existing.messages.map((m) =>
+                                    m.id === realMessageId
+                                        ? { ...m, parts: currentParts }
                                         : m
                                 )
                             }
@@ -470,17 +515,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
                         args: toolCall.args,
                         state: "call"
                     });
-                    const currentParts: MessagePart[] = [
-                        ...(accumulatedText
-                            ? [
-                                  {
-                                      type: "text" as const,
-                                      text: accumulatedText
-                                  }
-                              ]
-                            : []),
-                        ...toolParts
-                    ];
+                    const currentParts = buildParts();
                     setConversationDetails((current) => {
                         const existing = current[conversationId];
                         if (!existing) return current;
@@ -510,17 +545,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
                             result: toolResult.result
                         } as MessagePart;
                     }
-                    const currentParts: MessagePart[] = [
-                        ...(accumulatedText
-                            ? [
-                                  {
-                                      type: "text" as const,
-                                      text: accumulatedText
-                                  }
-                              ]
-                            : []),
-                        ...toolParts
-                    ];
+                    const currentParts = buildParts();
                     setConversationDetails((current) => {
                         const existing = current[conversationId];
                         if (!existing) return current;
@@ -564,10 +589,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
             activeGenerationsRef.current.delete(conversationId);
 
             if (abortController.signal.aborted) {
-                const stoppedParts: MessagePart[] = [
-                    ...(accumulatedText ? [{ type: "text" as const, text: accumulatedText }] : []),
-                    ...toolParts
-                ];
+                const stoppedParts = buildParts();
                 savePartialMessage(realMessageId, stoppedParts);
                 setConversationDetails((current) => {
                     const existing = current[conversationId];
@@ -578,7 +600,11 @@ export function ChatProvider({ children }: PropsWithChildren) {
                             ...existing,
                             messages: existing.messages.map((m) =>
                                 m.id === realMessageId
-                                    ? { ...m, status: "complete", parts: stoppedParts }
+                                    ? {
+                                          ...m,
+                                          status: "complete",
+                                          parts: stoppedParts
+                                      }
                                     : m
                             )
                         }
@@ -587,10 +613,11 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 return;
             }
 
-            const finalResponse =
-                await chatApi.getConversation(conversationId);
+            const finalResponse = await chatApi.getConversation(conversationId);
             // Clear any stale partial save now that generation completed normally
-            clearPartialMessage(finalResponse.conversation.latestAssistantMessageId ?? "");
+            clearPartialMessage(
+                finalResponse.conversation.latestAssistantMessageId ?? ""
+            );
             upsertConversation(finalResponse.conversation);
         },
         [upsertConversation]
@@ -615,21 +642,32 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 if (!contentType.includes("text/event-stream")) {
                     activeGenerationsRef.current.delete(conversationId);
                     setConversationSending(conversationId, false);
-                    const reloaded = await chatApi.getConversation(conversationId);
+                    const reloaded =
+                        await chatApi.getConversation(conversationId);
                     upsertConversation(reloaded.conversation);
                     return;
                 }
 
-                const realMessageId = response.headers.get("x-message-id") ?? "";
+                const realMessageId =
+                    response.headers.get("x-message-id") ?? "";
                 let accumulatedText = "";
+                let accumulatedReasoning = "";
                 const toolParts: MessagePart[] = [];
+
+                const buildParts = (): MessagePart[] => [
+                    ...(accumulatedReasoning ? [{ type: "reasoning" as const, text: accumulatedReasoning }] : []),
+                    ...(accumulatedText ? [{ type: "text" as const, text: accumulatedText }] : []),
+                    ...toolParts
+                ];
 
                 await parseAIStream(response, {
                     onMessageStart(messageId) {
                         setConversationDetails((current) => {
                             const existing = current[conversationId];
                             if (!existing) return current;
-                            const hasMessage = existing.messages.some((m) => m.id === messageId);
+                            const hasMessage = existing.messages.some(
+                                (m) => m.id === messageId
+                            );
                             if (hasMessage) {
                                 return {
                                     ...current,
@@ -637,7 +675,10 @@ export function ChatProvider({ children }: PropsWithChildren) {
                                         ...existing,
                                         messages: existing.messages.map((m) =>
                                             m.id === messageId
-                                                ? { ...m, status: "pending" as const }
+                                                ? {
+                                                      ...m,
+                                                      status: "pending" as const
+                                                  }
                                                 : m
                                         )
                                     }
@@ -648,16 +689,32 @@ export function ChatProvider({ children }: PropsWithChildren) {
                     },
                     onReconnectState(state: ReconnectState) {
                         accumulatedText = state.text;
+                        accumulatedReasoning = state.reasoning || "";
                         toolParts.length = 0;
                         for (const tp of state.toolParts) {
                             toolParts.push(tp);
                         }
-                        const currentParts: MessagePart[] = [
-                            ...(accumulatedText
-                                ? [{ type: "text" as const, text: accumulatedText }]
-                                : []),
-                            ...toolParts
-                        ];
+                        const currentParts = buildParts();
+                        const mid = realMessageId;
+                        setConversationDetails((current) => {
+                            const existing = current[conversationId];
+                            if (!existing) return current;
+                            return {
+                                ...current,
+                                [conversationId]: {
+                                    ...existing,
+                                    messages: existing.messages.map((m) =>
+                                        m.id === mid
+                                            ? { ...m, parts: currentParts }
+                                            : m
+                                    )
+                                }
+                            };
+                        });
+                    },
+                    onReasoning(text) {
+                        accumulatedReasoning += text;
+                        const currentParts = buildParts();
                         const mid = realMessageId;
                         setConversationDetails((current) => {
                             const existing = current[conversationId];
@@ -677,7 +734,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
                     },
                     onTextDelta(text) {
                         accumulatedText += text;
-                        const currentText = accumulatedText;
+                        const currentParts = buildParts();
                         const mid = realMessageId;
                         setConversationDetails((current) => {
                             const existing = current[conversationId];
@@ -688,16 +745,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
                                     ...existing,
                                     messages: existing.messages.map((m) =>
                                         m.id === mid
-                                            ? {
-                                                  ...m,
-                                                  parts: [
-                                                      {
-                                                          type: "text" as const,
-                                                          text: currentText
-                                                      },
-                                                      ...toolParts
-                                                  ]
-                                              }
+                                            ? { ...m, parts: currentParts }
                                             : m
                                     )
                                 }
@@ -712,12 +760,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
                             args: toolCall.args,
                             state: "call"
                         });
-                        const currentParts: MessagePart[] = [
-                            ...(accumulatedText
-                                ? [{ type: "text" as const, text: accumulatedText }]
-                                : []),
-                            ...toolParts
-                        ];
+                        const currentParts = buildParts();
                         const mid = realMessageId;
                         setConversationDetails((current) => {
                             const existing = current[conversationId];
@@ -748,12 +791,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
                                 result: toolResult.result
                             } as MessagePart;
                         }
-                        const currentParts: MessagePart[] = [
-                            ...(accumulatedText
-                                ? [{ type: "text" as const, text: accumulatedText }]
-                                : []),
-                            ...toolParts
-                        ];
+                        const currentParts = buildParts();
                         const mid = realMessageId;
                         setConversationDetails((current) => {
                             const existing = current[conversationId];
@@ -791,7 +829,9 @@ export function ChatProvider({ children }: PropsWithChildren) {
                         });
                     }
                 }).catch((error: unknown) => {
-                    if (!(error instanceof Error && error.name === "AbortError")) {
+                    if (
+                        !(error instanceof Error && error.name === "AbortError")
+                    ) {
                         throw error;
                     }
                 });
@@ -799,7 +839,8 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 activeGenerationsRef.current.delete(conversationId);
 
                 if (!abortController.signal.aborted) {
-                    const finalResponse = await chatApi.getConversation(conversationId);
+                    const finalResponse =
+                        await chatApi.getConversation(conversationId);
                     upsertConversation(finalResponse.conversation);
                 }
             } catch {
@@ -826,7 +867,10 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 const preparedAttachments = attachments?.length
                     ? await prepareAttachments(attachments)
                     : undefined;
-                const response = await chatApi.createConversation(prompt, preparedAttachments);
+                const response = await chatApi.createConversation(
+                    prompt,
+                    preparedAttachments
+                );
                 upsertConversation(response.conversation);
 
                 const conversationId = response.conversation.id;
@@ -897,7 +941,11 @@ export function ChatProvider({ children }: PropsWithChildren) {
     );
 
     const sendMessage = useCallback(
-        async (conversationId: string, prompt: string, attachments?: ChatAttachment[]) => {
+        async (
+            conversationId: string,
+            prompt: string,
+            attachments?: ChatAttachment[]
+        ) => {
             const modelId = selectedModelIdRef.current;
 
             if (!modelId) {
@@ -919,12 +967,10 @@ export function ChatProvider({ children }: PropsWithChildren) {
 
                 await runGeneration(conversationId, modelId);
 
-                const finalConversation =
-                    conversationDetails[conversationId];
+                const finalConversation = conversationDetails[conversationId];
                 if (finalConversation) return finalConversation;
 
-                const reloaded =
-                    await chatApi.getConversation(conversationId);
+                const reloaded = await chatApi.getConversation(conversationId);
                 upsertConversation(reloaded.conversation);
                 return reloaded.conversation;
             } catch (error) {
@@ -983,9 +1029,12 @@ export function ChatProvider({ children }: PropsWithChildren) {
     const renameConversation = useCallback(
         async (conversationId: string, title: string) => {
             try {
-                const response = await chatApi.updateConversation(conversationId, {
-                    title
-                });
+                const response = await chatApi.updateConversation(
+                    conversationId,
+                    {
+                        title
+                    }
+                );
                 upsertConversation(response.conversation);
             } catch (error) {
                 throw new Error(getErrorMessage(error));
@@ -997,9 +1046,12 @@ export function ChatProvider({ children }: PropsWithChildren) {
     const toggleFavoriteConversation = useCallback(
         async (conversationId: string, isFavorite: boolean) => {
             try {
-                const response = await chatApi.updateConversation(conversationId, {
-                    isFavorite
-                });
+                const response = await chatApi.updateConversation(
+                    conversationId,
+                    {
+                        isFavorite
+                    }
+                );
                 upsertConversation(response.conversation);
             } catch (error) {
                 throw new Error(getErrorMessage(error));
@@ -1008,38 +1060,47 @@ export function ChatProvider({ children }: PropsWithChildren) {
         [upsertConversation]
     );
 
-    const deleteConversation = useCallback(async (conversationId: string) => {
-        try {
-            stopGeneration(conversationId);
-            await chatApi.deleteConversation(conversationId);
+    const deleteConversation = useCallback(
+        async (conversationId: string) => {
+            try {
+                stopGeneration(conversationId);
+                await chatApi.deleteConversation(conversationId);
 
-            setConversations((current) =>
-                current.filter((conversation) => conversation.id !== conversationId)
-            );
+                setConversations((current) =>
+                    current.filter(
+                        (conversation) => conversation.id !== conversationId
+                    )
+                );
 
-            setConversationDetails((current) => {
-                const { [conversationId]: _removedConversation, ...rest } = current;
-                return rest;
-            });
+                setConversationDetails((current) => {
+                    const { [conversationId]: _removedConversation, ...rest } =
+                        current;
+                    return rest;
+                });
 
-            setConversationErrors((current) => {
-                const { [conversationId]: _removedError, ...rest } = current;
-                return rest;
-            });
+                setConversationErrors((current) => {
+                    const { [conversationId]: _removedError, ...rest } =
+                        current;
+                    return rest;
+                });
 
-            setConversationLoadingState((current) => {
-                const { [conversationId]: _removedLoadingState, ...rest } = current;
-                return rest;
-            });
+                setConversationLoadingState((current) => {
+                    const { [conversationId]: _removedLoadingState, ...rest } =
+                        current;
+                    return rest;
+                });
 
-            setConversationSendingState((current) => {
-                const { [conversationId]: _removedSendingState, ...rest } = current;
-                return rest;
-            });
-        } catch (error) {
-            throw new Error(getErrorMessage(error));
-        }
-    }, [stopGeneration]);
+                setConversationSendingState((current) => {
+                    const { [conversationId]: _removedSendingState, ...rest } =
+                        current;
+                    return rest;
+                });
+            } catch (error) {
+                throw new Error(getErrorMessage(error));
+            }
+        },
+        [stopGeneration]
+    );
 
     const setSelectedModelId = useCallback(
         (modelId: string | null) => {
@@ -1074,10 +1135,12 @@ export function ChatProvider({ children }: PropsWithChildren) {
             markConversationRead,
             modelsError,
             renameConversation,
+            isThinkingEnabled,
             reconnectToGeneration,
             selectedModelId,
             sendMessage,
             setSelectedModelId,
+            setThinkingEnabled: setIsThinkingEnabled,
             stopGeneration,
             toggleFavoriteConversation
         }),
@@ -1094,6 +1157,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
             isCreatingConversation,
             isLoadingConversations,
             isLoadingModels,
+            isThinkingEnabled,
             loadConversation,
             loadConversations,
             loadModels,

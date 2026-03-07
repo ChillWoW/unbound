@@ -140,9 +140,7 @@ function toModelMessages(records: MessageRecord[]): ModelMessage[] {
 }
 
 function encodeSSE(event: SSEEvent): Uint8Array {
-    return new TextEncoder().encode(
-        `data: ${JSON.stringify(event)}\n\n`
-    );
+    return new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`);
 }
 
 function createSubscriberStream(
@@ -158,11 +156,15 @@ function createSubscriberStream(
                 })
             );
 
-            if (isReconnect && (generation.accumulatedText || generation.toolParts.length > 0)) {
+            if (
+                isReconnect &&
+                (generation.accumulatedText || generation.accumulatedReasoning || generation.toolParts.length > 0)
+            ) {
                 controller.enqueue(
                     encodeSSE({
                         type: "reconnect-state",
                         text: generation.accumulatedText,
+                        reasoning: generation.accumulatedReasoning,
                         toolParts: generation.toolParts
                     })
                 );
@@ -209,7 +211,8 @@ function startBackgroundGeneration(
     modelMessages: ModelMessage[],
     modelId: string,
     apiKey: string,
-    generationStartedAt: string
+    generationStartedAt: string,
+    thinking: boolean
 ) {
     const openrouter = createOpenRouter({ apiKey });
     const assistantMessageId = generation.messageId;
@@ -223,9 +226,14 @@ function startBackgroundGeneration(
             const finalParts: MessagePart[] = [];
 
             for (const step of steps) {
+                const stepReasoning = (step as Record<string, unknown>).reasoningText as string | undefined;
                 const stepText = step.text;
                 const stepToolCalls = step.toolCalls ?? [];
                 const stepToolResults = step.toolResults ?? [];
+
+                if (thinking && stepReasoning) {
+                    finalParts.push({ type: "reasoning", text: stepReasoning });
+                }
 
                 for (const call of stepToolCalls) {
                     const matchingResult = stepToolResults.find(
@@ -261,34 +269,27 @@ function startBackgroundGeneration(
 
             const generationCompletedAt = new Date().toISOString();
 
-            await conversationsRepository.updateMessage(
-                assistantMessageId,
-                {
-                    parts: finalParts,
-                    status:
-                        finishReason === "error" ? "failed" : "complete",
-                    metadata: {
-                        model: modelId,
-                        generationStartedAt,
-                        generationCompletedAt
-                    }
+            await conversationsRepository.updateMessage(assistantMessageId, {
+                parts: finalParts,
+                status: finishReason === "error" ? "failed" : "complete",
+                metadata: {
+                    model: modelId,
+                    generationStartedAt,
+                    generationCompletedAt
                 }
-            );
+            });
 
             generationManager.complete(generation.conversationId);
         },
         onError: async () => {
-            await conversationsRepository.updateMessage(
-                assistantMessageId,
-                {
-                    status: "failed",
-                    metadata: {
-                        model: modelId,
-                        generationStartedAt,
-                        generationCompletedAt: new Date().toISOString()
-                    }
+            await conversationsRepository.updateMessage(assistantMessageId, {
+                status: "failed",
+                metadata: {
+                    model: modelId,
+                    generationStartedAt,
+                    generationCompletedAt: new Date().toISOString()
                 }
-            );
+            });
 
             generationManager.fail(generation.conversationId);
         }
@@ -302,6 +303,8 @@ function startBackgroundGeneration(
 
                 if (event.type === "text-delta") {
                     generation.accumulatedText += event.text as string;
+                } else if (event.type === "reasoning" && thinking) {
+                    generation.accumulatedReasoning += event.text as string;
                 } else if (event.type === "tool-call") {
                     generation.toolParts.push({
                         type: "tool-invocation",
@@ -325,17 +328,16 @@ function startBackgroundGeneration(
                     }
                 }
 
-                generation.emitter.emit("event", event);
+                if (event.type !== "reasoning" || thinking) {
+                    generation.emitter.emit("event", event);
+                }
             }
 
             generation.emitter.emit("event", { type: "done" });
         } catch (error) {
             generation.emitter.emit("event", {
                 type: "error",
-                error:
-                    error instanceof Error
-                        ? error.message
-                        : "Stream failed"
+                error: error instanceof Error ? error.message : "Stream failed"
             });
             generation.emitter.emit("event", { type: "done" });
         }
@@ -364,6 +366,9 @@ function mapChunkToEvent(chunk: unknown): SSEEvent | null {
                 result: c.output
             };
 
+        case "reasoning":
+            return { type: "reasoning", text: (c.text ?? c.textDelta) as string };
+
         case "error":
             return { type: "error", error: String(c.error) };
 
@@ -379,7 +384,8 @@ export const aiService = {
     async generateResponse(
         request: Request,
         conversationId: string,
-        modelId: string
+        modelId: string,
+        thinking = false
     ): Promise<Response> {
         const user = await requireAuth(request);
 
@@ -442,7 +448,8 @@ export const aiService = {
             modelMessages,
             modelId,
             apiKey,
-            generationStartedAt
+            generationStartedAt,
+            thinking
         );
 
         return createSubscriberStream(generation, false);

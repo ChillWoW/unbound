@@ -18,7 +18,16 @@ export interface ToolInvocationPart {
     result?: unknown;
 }
 
-export type MessagePart = TextMessagePart | ImageMessagePart | ToolInvocationPart;
+export interface ReasoningMessagePart {
+    type: "reasoning";
+    text: string;
+}
+
+export type MessagePart =
+    | TextMessagePart
+    | ImageMessagePart
+    | ToolInvocationPart
+    | ReasoningMessagePart;
 
 export type MessageRole = "user" | "assistant" | "system" | "tool";
 export type MessageStatus = "pending" | "complete" | "failed";

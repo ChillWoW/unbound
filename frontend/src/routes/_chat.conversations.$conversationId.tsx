@@ -22,8 +22,10 @@ function ConversationPage() {
         modelsError,
         markConversationRead,
         reconnectToGeneration,
+        isThinkingEnabled,
         selectedModelId,
         setSelectedModelId,
+        setThinkingEnabled,
         sendMessage,
         stopGeneration
     } = useChat();
@@ -123,10 +125,12 @@ function ConversationPage() {
             error={submissionError}
             isSending={isSending}
             isLoadingModels={isLoadingModels}
+            isThinkingEnabled={isThinkingEnabled}
             modelsError={modelsError}
             onModelChange={setSelectedModelId}
             onStop={() => stopGeneration(conversationId)}
             onSubmit={handleSubmit}
+            onThinkingChange={setThinkingEnabled}
             selectedModelId={selectedModelId}
         />
     );
