@@ -143,6 +143,65 @@ function encodeSSE(event: SSEEvent): Uint8Array {
     return new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`);
 }
 
+type ToolInvocationMessagePart = Extract<
+    MessagePart,
+    { type: "tool-invocation" }
+>;
+
+function upsertToolInvocationPart(
+    parts: MessagePart[],
+    incoming: ToolInvocationMessagePart
+) {
+    const idx = parts.findIndex(
+        (p) =>
+            p.type === "tool-invocation" &&
+            p.toolInvocationId === incoming.toolInvocationId
+    );
+
+    if (idx === -1) {
+        parts.push(incoming);
+        return;
+    }
+
+    const existing = parts[idx] as ToolInvocationMessagePart;
+
+    if (
+        incoming.state === "call" &&
+        (existing.state === "result" || existing.state === "error")
+    ) {
+        parts[idx] = {
+            ...existing,
+            toolName: incoming.toolName,
+            args: incoming.args
+        };
+        return;
+    }
+
+    parts[idx] = {
+        ...existing,
+        ...incoming,
+        result: incoming.state === "result" ? incoming.result : undefined
+    };
+}
+
+function applyToolResult(
+    parts: MessagePart[],
+    input: {
+        toolCallId: string;
+        toolName: string;
+        output: unknown;
+    }
+) {
+    upsertToolInvocationPart(parts, {
+        type: "tool-invocation",
+        toolInvocationId: input.toolCallId,
+        toolName: input.toolName,
+        args: {},
+        state: "result",
+        result: input.output
+    });
+}
+
 function createSubscriberStream(
     generation: GenerationEntry,
     isReconnect: boolean
@@ -236,25 +295,22 @@ function startBackgroundGeneration(
                 }
 
                 for (const call of stepToolCalls) {
-                    const matchingResult = stepToolResults.find(
-                        (r: { toolCallId: string }) =>
-                            r.toolCallId === call.toolCallId
-                    );
-                    finalParts.push({
+                    upsertToolInvocationPart(finalParts, {
                         type: "tool-invocation",
                         toolInvocationId: call.toolCallId,
                         toolName: call.toolName,
                         args: (call as unknown as Record<string, unknown>)
                             .input as Record<string, unknown>,
-                        state: matchingResult ? "result" : "call",
-                        result: matchingResult
-                            ? (
-                                  matchingResult as unknown as Record<
-                                      string,
-                                      unknown
-                                  >
-                              ).output
-                            : undefined
+                        state: "call"
+                    });
+                }
+
+                for (const toolResult of stepToolResults) {
+                    applyToolResult(finalParts, {
+                        toolCallId: toolResult.toolCallId,
+                        toolName: toolResult.toolName,
+                        output: (toolResult as unknown as Record<string, unknown>)
+                            .output
                     });
                 }
 
@@ -306,7 +362,7 @@ function startBackgroundGeneration(
                 } else if (event.type === "reasoning" && thinking) {
                     generation.accumulatedReasoning += event.text as string;
                 } else if (event.type === "tool-call") {
-                    generation.toolParts.push({
+                    upsertToolInvocationPart(generation.toolParts, {
                         type: "tool-invocation",
                         toolInvocationId: event.toolCallId as string,
                         toolName: event.toolName as string,
@@ -314,18 +370,11 @@ function startBackgroundGeneration(
                         state: "call"
                     });
                 } else if (event.type === "tool-result") {
-                    const idx = generation.toolParts.findIndex(
-                        (p) =>
-                            p.type === "tool-invocation" &&
-                            p.toolInvocationId === event.toolCallId
-                    );
-                    if (idx !== -1) {
-                        generation.toolParts[idx] = {
-                            ...generation.toolParts[idx],
-                            state: "result",
-                            result: event.result
-                        } as MessagePart;
-                    }
+                    applyToolResult(generation.toolParts, {
+                        toolCallId: event.toolCallId as string,
+                        toolName: event.toolName as string,
+                        output: event.result
+                    });
                 }
 
                 if (event.type !== "reasoning" || thinking) {

@@ -213,7 +213,7 @@ export function ModelSelector({
                 <div className="w-full max-w-md">
                     <PopoverTrigger
                         className={cn(
-                            "inline-flex h-8 max-w-48 cursor-pointer items-center gap-2 rounded-md px-3 text-xs outline-none transition-colors hover:bg-dark-700 focus:outline-none focus-visible:outline-none focus-visible:ring-0",
+                            "inline-flex h-8 max-w-48 cursor-pointer items-center gap-2 rounded-md px-3 text-xs outline-none transition-colors hover:bg-dark-600 focus:outline-none focus-visible:outline-none focus-visible:ring-0",
                             selectedModelId ? "text-dark-50" : "text-dark-100"
                         )}
                         disabled={disabled}

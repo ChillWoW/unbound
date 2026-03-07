@@ -495,31 +495,44 @@ export function ChatInput({
 
             {/* Toolbar */}
             <div className="flex items-center justify-between gap-4 px-2 pb-2 pt-1">
-                <div className="flex items-center gap-2">
-                    <ModelSelector
-                        selectedModelId={selectedModelId}
-                        models={models}
-                        onModelSelected={(model) =>
-                            onSelectedModelChange?.(model.id)
-                        }
-                        disabled={isModelSelectDisabled}
-                    />
+                <div className="flex min-w-0 items-center gap-2">
+                    <div className="min-w-0">
+                        <ModelSelector
+                            selectedModelId={selectedModelId}
+                            models={models}
+                            onModelSelected={(model) =>
+                                onSelectedModelChange?.(model.id)
+                            }
+                            disabled={isModelSelectDisabled}
+                        />
+                    </div>
 
-                    <Tooltip content={isThinkingEnabled ? "Thinking enabled" : "Enable thinking"}>
-                        <button
+                    <Tooltip
+                        content={
+                            isThinkingEnabled
+                                ? "Thinking enabled"
+                                : "Enable thinking"
+                        }
+                    >
+                        <Button
                             type="button"
-                            onClick={() => onThinkingChange?.(!isThinkingEnabled)}
-                            disabled={disabled || isSubmitting}
+                            variant="ghost"
                             className={cn(
-                                "flex size-8 items-center justify-center rounded-md transition-colors",
+                                "size-8 shrink-0 p-0",
                                 isThinkingEnabled
-                                    ? "bg-primary-500/15 text-primary-400"
-                                    : "text-dark-300 hover:bg-dark-700 hover:text-white",
-                                (disabled || isSubmitting) && "opacity-50 cursor-not-allowed"
+                                    ? "bg-dark-600 text-white"
+                                    : "text-dark-200 hover:bg-dark-600 hover:text-white"
                             )}
+                            onClick={() =>
+                                onThinkingChange?.(!isThinkingEnabled)
+                            }
+                            disabled={disabled || isSubmitting}
                         >
-                            <BrainIcon className="size-4" weight={isThinkingEnabled ? "fill" : "bold"} />
-                        </button>
+                            <BrainIcon
+                                className="size-4"
+                                weight={isThinkingEnabled ? "fill" : "bold"}
+                            />
+                        </Button>
                     </Tooltip>
 
                     {modelMessage ? (
@@ -529,7 +542,7 @@ export function ChatInput({
                     ) : null}
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                     {showContextBadge ? (
                         <ContextWindowMeter
                             model={selectedModel}
@@ -539,7 +552,6 @@ export function ChatInput({
                         />
                     ) : null}
 
-                    {/* Hidden file input */}
                     <input
                         ref={fileInputRef}
                         type="file"

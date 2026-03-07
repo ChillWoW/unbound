@@ -18,7 +18,8 @@ import type {
     ConversationDetail,
     ConversationMessage,
     ConversationSummary,
-    MessagePart
+    MessagePart,
+    ToolInvocationPart
 } from "./types";
 
 function fileToBase64(file: File): Promise<string> {
@@ -201,6 +202,56 @@ function toConversationSummary(
     };
 }
 
+function upsertToolInvocationPart(
+    parts: MessagePart[],
+    incoming: ToolInvocationPart
+) {
+    const idx = parts.findIndex(
+        (p) =>
+            p.type === "tool-invocation" &&
+            p.toolInvocationId === incoming.toolInvocationId
+    );
+
+    if (idx === -1) {
+        parts.push(incoming);
+        return;
+    }
+
+    const existing = parts[idx] as ToolInvocationPart;
+
+    if (
+        incoming.state === "call" &&
+        (existing.state === "result" || existing.state === "error")
+    ) {
+        parts[idx] = {
+            ...existing,
+            toolName: incoming.toolName,
+            args: incoming.args
+        };
+        return;
+    }
+
+    parts[idx] = {
+        ...existing,
+        ...incoming,
+        result: incoming.state === "result" ? incoming.result : undefined
+    };
+}
+
+function applyToolResult(
+    parts: MessagePart[],
+    toolResult: { toolCallId: string; toolName: string; result: unknown }
+) {
+    upsertToolInvocationPart(parts, {
+        type: "tool-invocation",
+        toolInvocationId: toolResult.toolCallId,
+        toolName: toolResult.toolName,
+        args: {},
+        state: "result",
+        result: toolResult.result
+    });
+}
+
 export function ChatProvider({ children }: PropsWithChildren) {
     const { isAuthenticated, isLoading, user } = useAuth();
     const [availableModels, setAvailableModels] = useState<ChatModel[]>([]);
@@ -230,7 +281,9 @@ export function ChatProvider({ children }: PropsWithChildren) {
         null
     );
     const selectedModelIdRef = useRef<string | null>(null);
-    const [isThinkingEnabled, setIsThinkingEnabled] = useState(false);
+    const [isThinkingEnabled, setIsThinkingEnabled] = useState(
+        () => localStorage.getItem("thinking-enabled") === "true"
+    );
     const isThinkingEnabledRef = useRef(false);
     const activeGenerationsRef = useRef<Map<string, AbortController>>(
         new Map()
@@ -242,6 +295,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
 
     useEffect(() => {
         isThinkingEnabledRef.current = isThinkingEnabled;
+        localStorage.setItem("thinking-enabled", String(isThinkingEnabled));
     }, [isThinkingEnabled]);
 
     const upsertConversation = useCallback(
@@ -508,7 +562,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
                     });
                 },
                 onToolCall(toolCall) {
-                    toolParts.push({
+                    upsertToolInvocationPart(toolParts, {
                         type: "tool-invocation",
                         toolInvocationId: toolCall.toolCallId,
                         toolName: toolCall.toolName,
@@ -533,18 +587,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
                     });
                 },
                 onToolResult(toolResult) {
-                    const idx = toolParts.findIndex(
-                        (p) =>
-                            p.type === "tool-invocation" &&
-                            p.toolInvocationId === toolResult.toolCallId
-                    );
-                    if (idx !== -1) {
-                        toolParts[idx] = {
-                            ...toolParts[idx],
-                            state: "result",
-                            result: toolResult.result
-                        } as MessagePart;
-                    }
+                    applyToolResult(toolParts, toolResult);
                     const currentParts = buildParts();
                     setConversationDetails((current) => {
                         const existing = current[conversationId];
@@ -692,7 +735,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
                         accumulatedReasoning = state.reasoning || "";
                         toolParts.length = 0;
                         for (const tp of state.toolParts) {
-                            toolParts.push(tp);
+                            upsertToolInvocationPart(toolParts, tp);
                         }
                         const currentParts = buildParts();
                         const mid = realMessageId;
@@ -753,7 +796,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
                         });
                     },
                     onToolCall(toolCall) {
-                        toolParts.push({
+                        upsertToolInvocationPart(toolParts, {
                             type: "tool-invocation",
                             toolInvocationId: toolCall.toolCallId,
                             toolName: toolCall.toolName,
@@ -779,18 +822,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
                         });
                     },
                     onToolResult(toolResult) {
-                        const idx = toolParts.findIndex(
-                            (p) =>
-                                p.type === "tool-invocation" &&
-                                p.toolInvocationId === toolResult.toolCallId
-                        );
-                        if (idx !== -1) {
-                            toolParts[idx] = {
-                                ...toolParts[idx],
-                                state: "result",
-                                result: toolResult.result
-                            } as MessagePart;
-                        }
+                        applyToolResult(toolParts, toolResult);
                         const currentParts = buildParts();
                         const mid = realMessageId;
                         setConversationDetails((current) => {
