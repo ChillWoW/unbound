@@ -10,7 +10,20 @@ export const messages = pgTable(
             .references(() => conversations.id, { onDelete: "cascade" }),
         role: text("role").notNull(),
         parts: jsonb("parts")
-            .$type<Array<{ type: "text"; text: string }>>()
+            .$type<
+                Array<
+                    | { type: "text"; text: string }
+                    | { type: "image"; data: string; mimeType: string }
+                    | {
+                          type: "tool-invocation";
+                          toolInvocationId: string;
+                          toolName: string;
+                          args: Record<string, unknown>;
+                          state: "call" | "result" | "error";
+                          result?: unknown;
+                      }
+                >
+            >()
             .notNull(),
         status: text("status").notNull(),
         metadata: jsonb("metadata").$type<Record<string, unknown> | null>(),

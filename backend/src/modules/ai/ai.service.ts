@@ -1,5 +1,13 @@
 import { randomBytes } from "node:crypto";
-import { streamText, stepCountIs, type ModelMessage } from "ai";
+import {
+    streamText,
+    stepCountIs,
+    type AssistantModelMessage,
+    type JSONValue,
+    type ModelMessage,
+    type ToolResultPart,
+    type UserModelMessage
+} from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { requireAuth } from "../../middleware/require-auth";
 import { settingsService } from "../settings/settings.service";
@@ -18,6 +26,20 @@ import {
 
 function createMessageId(): string {
     return `msg_${randomBytes(10).toString("hex")}`;
+}
+
+function toToolResultOutput(result: unknown): ToolResultPart["output"] {
+    if (typeof result === "string") {
+        return {
+            type: "text",
+            value: result
+        };
+    }
+
+    return {
+        type: "json",
+        value: (result ?? null) as JSONValue
+    };
 }
 
 function toModelMessages(records: MessageRecord[]): ModelMessage[] {
@@ -40,16 +62,20 @@ function toModelMessages(records: MessageRecord[]): ModelMessage[] {
                     result.push({ role: "user", content: text });
                 }
             } else {
-                const content: Array<
-                    | { type: "text"; text: string }
-                    | { type: "image"; image: string; mimeType: string }
+                const content: Extract<
+                    UserModelMessage["content"],
+                    Array<unknown>
                 > = [];
 
                 for (const p of parts) {
                     if (p.type === "text" && p.text) {
                         content.push({ type: "text", text: p.text });
                     } else if (p.type === "image") {
-                        content.push({ type: "image", image: p.data, mimeType: p.mimeType });
+                        content.push({
+                            type: "image",
+                            image: p.data,
+                            mediaType: p.mimeType
+                        });
                     }
                 }
 
@@ -61,9 +87,9 @@ function toModelMessages(records: MessageRecord[]): ModelMessage[] {
             const textParts = parts.filter((p) => p.type === "text");
             const toolParts = parts.filter((p) => p.type === "tool-invocation");
 
-            const content: Array<
-                | { type: "text"; text: string }
-                | { type: "tool-call"; toolCallId: string; toolName: string; args: Record<string, unknown> }
+            const content: Extract<
+                AssistantModelMessage["content"],
+                Array<unknown>
             > = [];
 
             for (const p of textParts) {
@@ -75,7 +101,7 @@ function toModelMessages(records: MessageRecord[]): ModelMessage[] {
                     type: "tool-call",
                     toolCallId: p.toolInvocationId,
                     toolName: p.toolName,
-                    args: p.args
+                    input: p.args
                 });
             }
 
@@ -94,7 +120,7 @@ function toModelMessages(records: MessageRecord[]): ModelMessage[] {
                         type: "tool-result" as const,
                         toolCallId: p.toolInvocationId,
                         toolName: p.toolName,
-                        result: p.result
+                        output: toToolResultOutput(p.result)
                     }))
                 });
             }
