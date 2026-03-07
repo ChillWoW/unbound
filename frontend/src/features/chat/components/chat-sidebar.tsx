@@ -1,17 +1,24 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import type { ConversationSummary } from "../types";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
     PlusIcon,
-    SignIn,
-    UserPlus,
+    SignInIcon,
+    UserPlusIcon,
     XIcon,
-    SidebarSimpleIcon
+    SidebarSimpleIcon,
+    DotsThreeVerticalIcon,
+    StarIcon,
+    PencilSimpleIcon,
+    TrashIcon,
+    GearSixIcon,
+    SignOutIcon
 } from "@phosphor-icons/react";
 import {
-    Button,
     Menu,
     MenuContent,
     MenuItem,
+    MenuSeparator,
     MenuTrigger
 } from "@/components/ui";
 import { useAuth } from "@/features/auth/use-auth";
@@ -32,6 +39,38 @@ interface ChatSidebarProps {
     /** Called when the toggle button is clicked on desktop */
     onToggleCollapse?: () => void;
 }
+
+type TimeGroup = "Today" | "Yesterday" | "This week" | "This month" | "Older";
+
+function getTimeGroup(dateStr: string): TimeGroup {
+    const now = new Date();
+    const date = new Date(dateStr);
+    const startOfToday = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate()
+    );
+    const startOfYesterday = new Date(startOfToday);
+    startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+    const startOfWeek = new Date(startOfToday);
+    startOfWeek.setDate(startOfWeek.getDate() - 7);
+    const startOfMonth = new Date(startOfToday);
+    startOfMonth.setDate(startOfMonth.getDate() - 30);
+
+    if (date >= startOfToday) return "Today";
+    if (date >= startOfYesterday) return "Yesterday";
+    if (date >= startOfWeek) return "This week";
+    if (date >= startOfMonth) return "This month";
+    return "Older";
+}
+
+const TIME_GROUP_ORDER: TimeGroup[] = [
+    "Today",
+    "Yesterday",
+    "This week",
+    "This month",
+    "Older"
+];
 
 function getDisplayName(
     name: string | null | undefined,
@@ -59,6 +98,19 @@ export function ChatSidebar({
     const { isAuthenticated, isLoading, logout, user } = useAuth();
     const navigate = useNavigate();
     const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+    const groupedConversations = useMemo(() => {
+        const groups = new Map<TimeGroup, ConversationSummary[]>();
+        for (const c of conversations) {
+            const group = getTimeGroup(c.lastMessageAt);
+            if (!groups.has(group)) groups.set(group, []);
+            groups.get(group)!.push(c);
+        }
+        return TIME_GROUP_ORDER.filter((g) => groups.has(g)).map((g) => ({
+            label: g,
+            items: groups.get(g)!
+        }));
+    }, [conversations]);
 
     const initials = getUserInitials(user?.name ?? user?.email);
     const displayName = getDisplayName(user?.name, user?.email);
@@ -139,30 +191,30 @@ export function ChatSidebar({
                 </button>
             </div>
 
-            <div className="p-2">
+            <div className="px-2 pb-2">
                 {collapsed ? (
                     <button
                         type="button"
                         onClick={handleNewChat}
-                        className="mx-auto flex size-8 items-center justify-center rounded-md text-dark-100 transition hover:bg-dark-600 hover:text-white"
+                        className="mx-auto flex size-8 items-center justify-center rounded-md text-dark-300 transition hover:bg-dark-700 hover:text-white"
                     >
                         <PlusIcon className="size-4" weight="bold" />
                     </button>
                 ) : (
-                    <Button
-                        variant="ghost"
-                        className="group w-full justify-start gap-2 text-dark-100 hover:text-white"
+                    <button
+                        type="button"
                         onClick={handleNewChat}
+                        className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-dark-200 transition hover:bg-dark-700 hover:text-white"
                     >
-                        <PlusIcon className="size-4" weight="bold" />
+                        <PlusIcon className="size-4 shrink-0" weight="bold" />
                         <span>New chat</span>
-                    </Button>
+                    </button>
                 )}
             </div>
 
             {!collapsed && (
                 <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-                    <div className="space-y-1">
+                    <div>
                         {isLoadingConversations ? (
                             <div className="px-3 py-2 text-sm text-dark-200">
                                 Loading conversations...
@@ -175,40 +227,94 @@ export function ChatSidebar({
                             </div>
                         ) : null}
 
-                        {conversations.map((conversation) => {
-                            const isActive =
-                                currentPath ===
-                                `/conversations/${conversation.id}`;
+                        {groupedConversations.map(({ label, items }) => (
+                            <div key={label} className="mb-3">
+                                <div className="px-2 py-2 text-xs font-medium text-dark-200">
+                                    {label}
+                                </div>
+                                <div className="space-y-0.5">
+                                    {items.map((conversation) => {
+                                        const isActive =
+                                            currentPath ===
+                                            `/conversations/${conversation.id}`;
 
-                            return (
-                                <Link
-                                    key={conversation.id}
-                                    to="/conversations/$conversationId"
-                                    params={{ conversationId: conversation.id }}
-                                    onClick={handleNavigate}
-                                    title={
-                                        collapsed
-                                            ? conversation.title
-                                            : undefined
-                                    }
-                                    className={cn(
-                                        "block rounded-md transition px-3 py-2 text-sm",
-                                        isActive
-                                            ? "bg-dark-600 text-white"
-                                            : "text-dark-100 hover:bg-dark-600 hover:text-white"
-                                    )}
-                                >
-                                    <div className="flex items-center gap-2">
-                                        <span className="min-w-0 flex-1 truncate">
-                                            {conversation.title}
-                                        </span>
-                                        {conversation.hasUnreadAssistantReply ? (
-                                            <span className="size-2 shrink-0 rounded-full bg-sky-400" />
-                                        ) : null}
-                                    </div>
-                                </Link>
-                            );
-                        })}
+                                        return (
+                                            <div
+                                                key={conversation.id}
+                                                className={cn(
+                                                    "group relative flex items-center rounded-md transition-colors",
+                                                    isActive
+                                                        ? "bg-dark-700 text-white"
+                                                        : "text-dark-200 hover:bg-dark-700 hover:text-white"
+                                                )}
+                                            >
+                                                <Link
+                                                    to="/conversations/$conversationId"
+                                                    params={{
+                                                        conversationId:
+                                                            conversation.id
+                                                    }}
+                                                    onClick={handleNavigate}
+                                                    className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-1.5 text-sm"
+                                                >
+                                                    <span className="min-w-0 flex-1 truncate text-inherit">
+                                                        {conversation.title}
+                                                    </span>
+                                                    {conversation.hasUnreadAssistantReply ? (
+                                                        <span className="size-1.5 shrink-0 rounded-full bg-sky-400" />
+                                                    ) : null}
+                                                </Link>
+
+                                                <Menu>
+                                                    <MenuTrigger
+                                                        className={cn(
+                                                            "mr-1 shrink-0 rounded-md p-1 text-dark-200 transition-all hover:bg-dark-600 hover:text-white focus:outline-none",
+                                                            isActive
+                                                                ? "opacity-100"
+                                                                : "opacity-0 group-hover:opacity-100"
+                                                        )}
+                                                        onClick={(e) =>
+                                                            e.preventDefault()
+                                                        }
+                                                    >
+                                                        <DotsThreeVerticalIcon
+                                                            className="size-4"
+                                                            weight="bold"
+                                                        />
+                                                    </MenuTrigger>
+                                                    <MenuContent
+                                                        side="right"
+                                                        align="start"
+                                                        sideOffset={4}
+                                                    >
+                                                        <MenuItem
+                                                            onClick={() => {}}
+                                                        >
+                                                            <StarIcon className="size-4" />
+                                                            Favorite
+                                                        </MenuItem>
+                                                        <MenuItem
+                                                            onClick={() => {}}
+                                                        >
+                                                            <PencilSimpleIcon className="size-4" />
+                                                            Rename
+                                                        </MenuItem>
+                                                        <MenuSeparator />
+                                                        <MenuItem
+                                                            onClick={() => {}}
+                                                            destructive
+                                                        >
+                                                            <TrashIcon className="size-4" />
+                                                            Delete
+                                                        </MenuItem>
+                                                    </MenuContent>
+                                                </Menu>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </nav>
             )}
@@ -253,12 +359,16 @@ export function ChatSidebar({
 
                         <MenuContent align="end" side="top">
                             <MenuItem onClick={handleNavigate}>
+                                <GearSixIcon className="size-4" />
                                 <Link to="/settings">Settings</Link>
                             </MenuItem>
+                            <MenuSeparator />
                             <MenuItem
                                 onClick={handleLogout}
                                 disabled={isLoggingOut}
+                                destructive
                             >
+                                <SignOutIcon className="size-4" />
                                 {isLoggingOut ? "Logging out..." : "Logout"}
                             </MenuItem>
                         </MenuContent>
@@ -271,7 +381,7 @@ export function ChatSidebar({
                             className="flex size-10 items-center justify-center rounded-lg text-dark-200 transition hover:bg-white/5 hover:text-white"
                             title="Login"
                         >
-                            <SignIn className="size-4" weight="bold" />
+                            <SignInIcon className="size-4" weight="bold" />
                         </Link>
                         <Link
                             to="/register"
@@ -279,7 +389,7 @@ export function ChatSidebar({
                             className="flex size-10 items-center justify-center rounded-lg bg-primary-50 text-dark-900 transition hover:bg-primary-300"
                             title="Register"
                         >
-                            <UserPlus className="size-4" weight="bold" />
+                            <UserPlusIcon className="size-4" weight="bold" />
                         </Link>
                     </div>
                 ) : (
@@ -287,18 +397,18 @@ export function ChatSidebar({
                         <Link
                             to="/login"
                             onClick={handleNavigate}
-                            className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-white transition hover:bg-white/5"
+                            className="inline-flex items-center justify-center gap-2 rounded-md border border-dark-400 px-2.5 py-1.5 text-sm text-white transition hover:bg-dark-600"
                         >
-                            <SignIn className="size-4" weight="bold" />
+                            <SignInIcon className="size-4" weight="bold" />
                             Login
                         </Link>
 
                         <Link
                             to="/register"
                             onClick={handleNavigate}
-                            className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-50 px-3 py-2 text-sm text-dark-900 transition hover:bg-primary-300"
+                            className="inline-flex items-center justify-center gap-2 rounded-md bg-primary-50 px-2.5 py-1.5 text-sm text-dark-900 transition hover:bg-primary-200"
                         >
-                            <UserPlus className="size-4" weight="bold" />
+                            <UserPlusIcon className="size-4" weight="bold" />
                             Register
                         </Link>
                     </div>
