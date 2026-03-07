@@ -236,6 +236,7 @@ interface ConversationThreadProps {
     isLoadingModels?: boolean;
     modelsError?: string | null;
     onModelChange: (modelId: string | null) => void;
+    onStop?: () => void;
     onSubmit: (value: string, attachments: ChatAttachment[]) => Promise<void> | void;
     selectedModelId: string | null;
 }
@@ -248,6 +249,7 @@ export function ConversationThread({
     isLoadingModels = false,
     modelsError = null,
     onModelChange,
+    onStop,
     selectedModelId,
     onSubmit
 }: ConversationThreadProps) {
@@ -346,6 +348,7 @@ export function ConversationThread({
                         modelsError={modelsError}
                         showContextBadge
                         placeholder="Send a message..."
+                        onStop={onStop}
                         onSubmit={onSubmit}
                         disabled={isSending}
                         isSubmitting={isSending}

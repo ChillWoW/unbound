@@ -114,7 +114,6 @@ function ModelInfoPopover({
                 className="max-w-[240px] p-0"
             >
                 <div className="flex flex-col">
-                    {/* Header */}
                     <div className="flex flex-col gap-1 px-3 pt-3 pb-2">
                         <div className="flex items-center gap-2">
                             {ProviderIcon && (
@@ -132,7 +131,6 @@ function ModelInfoPopover({
                         )}
                     </div>
 
-                    {/* Stats */}
                     {(model.contextLength || hasPricing) && (
                         <div className="flex flex-col gap-1.5 border-t border-dark-600 px-3 py-2.5">
                             {model.contextLength && (
@@ -155,7 +153,6 @@ function ModelInfoPopover({
                         </div>
                     )}
 
-                    {/* Modalities */}
                     {model.inputModalities.length > 0 && (
                         <div className="flex flex-col gap-1.5 border-t border-dark-600 px-3 py-2.5">
                             <span className="text-[11px] text-dark-300">
@@ -261,10 +258,10 @@ export function ModelSelector({
                                         >
                                             <div
                                                 className={cn(
-                                                    "flex w-full items-center gap-2 rounded-md px-2 py-1 text-xs text-dark-100 transition-colors cursor-pointer hover:bg-dark-600 hover:text-white",
+                                                    "flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs text-dark-100 transition-colors cursor-pointer hover:bg-dark-700 hover:text-white",
                                                     model.id ===
                                                         selectedModelId &&
-                                                        "bg-dark-600 text-white"
+                                                        "bg-dark-700 text-white"
                                                 )}
                                                 onClick={() => {
                                                     onModelSelected(model);
@@ -282,7 +279,7 @@ export function ModelSelector({
                                                 </div>
 
                                                 {model.free && (
-                                                    <div className="shrink-0 rounded-md bg-green-500/10 px-2 py-0.5 text-[11px] text-green-200">
+                                                    <div className="shrink-0 rounded-md bg-green-500/15 px-2 py-0.5 text-[11px] text-green-100">
                                                         Free
                                                     </div>
                                                 )}

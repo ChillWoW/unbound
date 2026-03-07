@@ -22,7 +22,8 @@ function ConversationPage() {
         markConversationRead,
         selectedModelId,
         setSelectedModelId,
-        sendMessage
+        sendMessage,
+        stopGeneration
     } = useChat();
     const conversation = getConversation(conversationId);
     const error = getConversationError(conversationId);
@@ -107,6 +108,7 @@ function ConversationPage() {
             isLoadingModels={isLoadingModels}
             modelsError={modelsError}
             onModelChange={setSelectedModelId}
+            onStop={() => stopGeneration(conversationId)}
             onSubmit={handleSubmit}
             selectedModelId={selectedModelId}
         />

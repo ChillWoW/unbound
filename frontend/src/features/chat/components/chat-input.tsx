@@ -5,7 +5,8 @@ import {
     PaperclipIcon,
     XIcon,
     FileTextIcon,
-    ImageIcon
+    ImageIcon,
+    StopIcon
 } from "@phosphor-icons/react";
 import { Button, Tooltip } from "@/components/ui";
 import { cn } from "@/lib/cn";
@@ -239,6 +240,7 @@ interface ChatInputProps {
     showContextBadge?: boolean;
     value?: string;
     onChange?: (value: string) => void;
+    onStop?: () => void;
     onSubmit?: (
         value: string,
         attachments: ChatAttachment[]
@@ -259,6 +261,7 @@ export function ChatInput({
     showContextBadge = false,
     value,
     onChange,
+    onStop,
     onSubmit,
     placeholder = "Ask anything, sketch an idea, or start a new thread...",
     selectedModelId = null
@@ -542,14 +545,27 @@ export function ChatInput({
                         </Button>
                     </Tooltip>
 
-                    <Button
-                        type="submit"
-                        variant="primary"
-                        disabled={disabled || isSubmitting || !hasContent}
-                        className="size-8 p-0"
-                    >
-                        <ArrowUpIcon className="size-4" weight="bold" />
-                    </Button>
+                    {isSubmitting && onStop ? (
+                        <Tooltip content="Stop generation">
+                            <Button
+                                type="button"
+                                variant="primary"
+                                className="size-8 p-0"
+                                onClick={onStop}
+                            >
+                                <StopIcon className="size-4" weight="fill" />
+                            </Button>
+                        </Tooltip>
+                    ) : (
+                        <Button
+                            type="submit"
+                            variant="primary"
+                            disabled={disabled || isSubmitting || !hasContent}
+                            className="size-8 p-0"
+                        >
+                            <ArrowUpIcon className="size-4" weight="bold" />
+                        </Button>
+                    )}
                 </div>
             </div>
         </form>

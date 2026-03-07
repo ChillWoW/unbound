@@ -46,6 +46,37 @@ function getSelectedModelStorageKey(userId: string) {
     return `unbound.chat.selected-model:${userId}`;
 }
 
+function getPartialMessageStorageKey(messageId: string) {
+    return `unbound.chat.partial-message:${messageId}`;
+}
+
+function savePartialMessage(messageId: string, parts: MessagePart[]) {
+    if (typeof window === "undefined") return;
+    try {
+        window.localStorage.setItem(
+            getPartialMessageStorageKey(messageId),
+            JSON.stringify(parts)
+        );
+    } catch {
+        // ignore storage errors
+    }
+}
+
+function loadPartialMessage(messageId: string): MessagePart[] | null {
+    if (typeof window === "undefined") return null;
+    try {
+        const raw = window.localStorage.getItem(getPartialMessageStorageKey(messageId));
+        return raw ? (JSON.parse(raw) as MessagePart[]) : null;
+    } catch {
+        return null;
+    }
+}
+
+function clearPartialMessage(messageId: string) {
+    if (typeof window === "undefined") return;
+    window.localStorage.removeItem(getPartialMessageStorageKey(messageId));
+}
+
 function readStoredSelectedModelId(userId: string): string | null {
     if (typeof window === "undefined") {
         return null;
@@ -96,6 +127,7 @@ interface ChatContextValue {
         attachments?: ChatAttachment[]
     ) => Promise<ConversationDetail>;
     setSelectedModelId: (modelId: string | null) => void;
+    stopGeneration: (conversationId: string) => void;
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -175,6 +207,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
         null
     );
     const selectedModelIdRef = useRef<string | null>(null);
+    const activeGenerationsRef = useRef<Map<string, AbortController>>(new Map());
 
     useEffect(() => {
         selectedModelIdRef.current = selectedModelId;
@@ -193,9 +226,15 @@ export function ChatProvider({ children }: PropsWithChildren) {
             });
 
             if ("messages" in conversation) {
+                const hydratedMessages = conversation.messages.map((m) => {
+                    if (m.role !== "assistant" || m.parts.length > 0) return m;
+                    const saved = loadPartialMessage(m.id);
+                    if (!saved) return m;
+                    return { ...m, status: "complete" as const, parts: saved };
+                });
                 setConversationDetails((current) => ({
                     ...current,
-                    [conversation.id]: conversation
+                    [conversation.id]: { ...conversation, messages: hydratedMessages }
                 }));
             }
         },
@@ -310,8 +349,19 @@ export function ChatProvider({ children }: PropsWithChildren) {
         void loadModels().catch(() => undefined);
     }, [isAuthenticated, isLoading, loadModels]);
 
+    const stopGeneration = useCallback((conversationId: string) => {
+        const controller = activeGenerationsRef.current.get(conversationId);
+        if (controller) {
+            controller.abort();
+            activeGenerationsRef.current.delete(conversationId);
+        }
+    }, []);
+
     const runGeneration = useCallback(
         async (conversationId: string, modelId: string) => {
+            const abortController = new AbortController();
+            activeGenerationsRef.current.set(conversationId, abortController);
+
             const optimisticId = `msg_optimistic_${Date.now()}`;
             const optimisticMessage: ConversationMessage = {
                 id: optimisticId,
@@ -334,10 +384,18 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 };
             });
 
-            const streamResponse = await chatApi.generateResponse(
-                conversationId,
-                modelId
-            );
+            let streamResponse: Response;
+            try {
+                streamResponse = await chatApi.generateResponse(
+                    conversationId,
+                    modelId,
+                    abortController.signal
+                );
+            } catch (error) {
+                activeGenerationsRef.current.delete(conversationId);
+                if (error instanceof Error && error.name === "AbortError") return;
+                throw error;
+            }
 
             if (!streamResponse.ok) {
                 let errorMessage = "Generation failed.";
@@ -476,7 +534,8 @@ export function ChatProvider({ children }: PropsWithChildren) {
                         };
                     });
                 },
-                onError() {
+                onError(error) {
+                    if (abortController.signal.aborted) return;
                     setConversationDetails((current) => {
                         const existing = current[conversationId];
                         if (!existing) return current;
@@ -493,10 +552,42 @@ export function ChatProvider({ children }: PropsWithChildren) {
                         };
                     });
                 }
+            }).catch((error: unknown) => {
+                if (!(error instanceof Error && error.name === "AbortError")) {
+                    throw error;
+                }
             });
+
+            activeGenerationsRef.current.delete(conversationId);
+
+            if (abortController.signal.aborted) {
+                const stoppedParts: MessagePart[] = [
+                    ...(accumulatedText ? [{ type: "text" as const, text: accumulatedText }] : []),
+                    ...toolParts
+                ];
+                savePartialMessage(realMessageId, stoppedParts);
+                setConversationDetails((current) => {
+                    const existing = current[conversationId];
+                    if (!existing) return current;
+                    return {
+                        ...current,
+                        [conversationId]: {
+                            ...existing,
+                            messages: existing.messages.map((m) =>
+                                m.id === realMessageId
+                                    ? { ...m, status: "complete", parts: stoppedParts }
+                                    : m
+                            )
+                        }
+                    };
+                });
+                return;
+            }
 
             const finalResponse =
                 await chatApi.getConversation(conversationId);
+            // Clear any stale partial save now that generation completed normally
+            clearPartialMessage(finalResponse.conversation.latestAssistantMessageId ?? "");
             upsertConversation(finalResponse.conversation);
         },
         [upsertConversation]
@@ -703,7 +794,8 @@ export function ChatProvider({ children }: PropsWithChildren) {
             modelsError,
             selectedModelId,
             sendMessage,
-            setSelectedModelId
+            setSelectedModelId,
+            stopGeneration
         }),
         [
             availableModels,
@@ -724,7 +816,8 @@ export function ChatProvider({ children }: PropsWithChildren) {
             modelsError,
             selectedModelId,
             sendMessage,
-            setSelectedModelId
+            setSelectedModelId,
+            stopGeneration
         ]
     );
 
