@@ -10,6 +10,11 @@ import {
     type MessageRecord
 } from "../conversations/conversations.types";
 import { tools } from "./ai.tools";
+import {
+    generationManager,
+    type GenerationEntry,
+    type SSEEvent
+} from "./generation-manager";
 
 function createMessageId(): string {
     return `msg_${randomBytes(10).toString("hex")}`;
@@ -108,15 +113,240 @@ function toModelMessages(records: MessageRecord[]): ModelMessage[] {
     return result;
 }
 
-interface SSEEvent {
-    type: string;
-    [key: string]: unknown;
-}
-
 function encodeSSE(event: SSEEvent): Uint8Array {
     return new TextEncoder().encode(
         `data: ${JSON.stringify(event)}\n\n`
     );
+}
+
+function createSubscriberStream(
+    generation: GenerationEntry,
+    isReconnect: boolean
+): Response {
+    const stream = new ReadableStream({
+        start(controller) {
+            controller.enqueue(
+                encodeSSE({
+                    type: "message-start",
+                    messageId: generation.messageId
+                })
+            );
+
+            if (isReconnect && (generation.accumulatedText || generation.toolParts.length > 0)) {
+                controller.enqueue(
+                    encodeSSE({
+                        type: "reconnect-state",
+                        text: generation.accumulatedText,
+                        toolParts: generation.toolParts
+                    })
+                );
+            }
+
+            if (generation.finished) {
+                controller.enqueue(encodeSSE({ type: "done" }));
+                controller.close();
+                return;
+            }
+
+            let closed = false;
+
+            const onEvent = (event: SSEEvent) => {
+                if (closed) return;
+                try {
+                    controller.enqueue(encodeSSE(event));
+                    if (event.type === "done") {
+                        closed = true;
+                        controller.close();
+                    }
+                } catch {
+                    closed = true;
+                    generation.emitter.off("event", onEvent);
+                }
+            };
+
+            generation.emitter.on("event", onEvent);
+        }
+    });
+
+    return new Response(stream, {
+        headers: {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            Connection: "keep-alive",
+            "X-Message-Id": generation.messageId
+        }
+    });
+}
+
+function startBackgroundGeneration(
+    generation: GenerationEntry,
+    modelMessages: ModelMessage[],
+    modelId: string,
+    apiKey: string,
+    generationStartedAt: string
+) {
+    const openrouter = createOpenRouter({ apiKey });
+    const assistantMessageId = generation.messageId;
+
+    const result = streamText({
+        model: openrouter(modelId),
+        messages: modelMessages,
+        tools,
+        stopWhen: stepCountIs(5),
+        onFinish: async ({ steps, finishReason }) => {
+            const finalParts: MessagePart[] = [];
+
+            for (const step of steps) {
+                const stepText = step.text;
+                const stepToolCalls = step.toolCalls ?? [];
+                const stepToolResults = step.toolResults ?? [];
+
+                for (const call of stepToolCalls) {
+                    const matchingResult = stepToolResults.find(
+                        (r: { toolCallId: string }) =>
+                            r.toolCallId === call.toolCallId
+                    );
+                    finalParts.push({
+                        type: "tool-invocation",
+                        toolInvocationId: call.toolCallId,
+                        toolName: call.toolName,
+                        args: (call as unknown as Record<string, unknown>)
+                            .input as Record<string, unknown>,
+                        state: matchingResult ? "result" : "call",
+                        result: matchingResult
+                            ? (
+                                  matchingResult as unknown as Record<
+                                      string,
+                                      unknown
+                                  >
+                              ).output
+                            : undefined
+                    });
+                }
+
+                if (stepText) {
+                    finalParts.push({ type: "text", text: stepText });
+                }
+            }
+
+            if (finalParts.length === 0) {
+                finalParts.push({ type: "text", text: "" });
+            }
+
+            const generationCompletedAt = new Date().toISOString();
+
+            await conversationsRepository.updateMessage(
+                assistantMessageId,
+                {
+                    parts: finalParts,
+                    status:
+                        finishReason === "error" ? "failed" : "complete",
+                    metadata: {
+                        model: modelId,
+                        generationStartedAt,
+                        generationCompletedAt
+                    }
+                }
+            );
+
+            generationManager.complete(generation.conversationId);
+        },
+        onError: async () => {
+            await conversationsRepository.updateMessage(
+                assistantMessageId,
+                {
+                    status: "failed",
+                    metadata: {
+                        model: modelId,
+                        generationStartedAt,
+                        generationCompletedAt: new Date().toISOString()
+                    }
+                }
+            );
+
+            generationManager.fail(generation.conversationId);
+        }
+    });
+
+    (async () => {
+        try {
+            for await (const chunk of result.fullStream) {
+                const event = mapChunkToEvent(chunk);
+                if (!event) continue;
+
+                if (event.type === "text-delta") {
+                    generation.accumulatedText += event.text as string;
+                } else if (event.type === "tool-call") {
+                    generation.toolParts.push({
+                        type: "tool-invocation",
+                        toolInvocationId: event.toolCallId as string,
+                        toolName: event.toolName as string,
+                        args: event.args as Record<string, unknown>,
+                        state: "call"
+                    });
+                } else if (event.type === "tool-result") {
+                    const idx = generation.toolParts.findIndex(
+                        (p) =>
+                            p.type === "tool-invocation" &&
+                            p.toolInvocationId === event.toolCallId
+                    );
+                    if (idx !== -1) {
+                        generation.toolParts[idx] = {
+                            ...generation.toolParts[idx],
+                            state: "result",
+                            result: event.result
+                        } as MessagePart;
+                    }
+                }
+
+                generation.emitter.emit("event", event);
+            }
+
+            generation.emitter.emit("event", { type: "done" });
+        } catch (error) {
+            generation.emitter.emit("event", {
+                type: "error",
+                error:
+                    error instanceof Error
+                        ? error.message
+                        : "Stream failed"
+            });
+            generation.emitter.emit("event", { type: "done" });
+        }
+    })();
+}
+
+function mapChunkToEvent(chunk: unknown): SSEEvent | null {
+    const c = chunk as Record<string, unknown>;
+    switch (c.type) {
+        case "text-delta":
+            return { type: "text-delta", text: c.text as string };
+
+        case "tool-call":
+            return {
+                type: "tool-call",
+                toolCallId: c.toolCallId as string,
+                toolName: c.toolName as string,
+                args: c.input as Record<string, unknown>
+            };
+
+        case "tool-result":
+            return {
+                type: "tool-result",
+                toolCallId: c.toolCallId as string,
+                toolName: c.toolName as string,
+                result: c.output
+            };
+
+        case "error":
+            return { type: "error", error: String(c.error) };
+
+        case "finish":
+            return { type: "finish", finishReason: c.finishReason as string };
+
+        default:
+            return null;
+    }
 }
 
 export const aiService = {
@@ -126,6 +356,13 @@ export const aiService = {
         modelId: string
     ): Promise<Response> {
         const user = await requireAuth(request);
+
+        if (generationManager.isActive(conversationId)) {
+            throw new ConversationError(
+                409,
+                "A generation is already in progress for this conversation."
+            );
+        }
 
         const apiKey =
             await settingsService.getDecryptedOpenRouterApiKeyForUser(user.id);
@@ -168,183 +405,45 @@ export const aiService = {
             }
         });
 
-        const openrouter = createOpenRouter({ apiKey });
+        const generation = generationManager.register(
+            conversationId,
+            user.id,
+            assistantMessageId
+        );
 
-        const result = streamText({
-            model: openrouter(modelId),
-            messages: modelMessages,
-            tools,
-            stopWhen: stepCountIs(5),
-            onFinish: async ({ steps, finishReason }) => {
-                const finalParts: MessagePart[] = [];
+        startBackgroundGeneration(
+            generation,
+            modelMessages,
+            modelId,
+            apiKey,
+            generationStartedAt
+        );
 
-                for (const step of steps) {
-                    const stepText = step.text;
-                    const stepToolCalls = step.toolCalls ?? [];
-                    const stepToolResults = step.toolResults ?? [];
+        return createSubscriberStream(generation, false);
+    },
 
-                    for (const call of stepToolCalls) {
-                        const matchingResult = stepToolResults.find(
-                            (r: { toolCallId: string }) =>
-                                r.toolCallId === call.toolCallId
-                        );
-                        finalParts.push({
-                            type: "tool-invocation",
-                            toolInvocationId: call.toolCallId,
-                            toolName: call.toolName,
-                            args: (call as unknown as Record<string, unknown>)
-                                .input as Record<string, unknown>,
-                            state: matchingResult ? "result" : "call",
-                            result: matchingResult
-                                ? (
-                                      matchingResult as unknown as Record<
-                                          string,
-                                          unknown
-                                      >
-                                  ).output
-                                : undefined
-                        });
-                    }
+    async subscribeToGeneration(
+        request: Request,
+        conversationId: string
+    ): Promise<Response> {
+        const user = await requireAuth(request);
 
-                    if (stepText) {
-                        finalParts.push({ type: "text", text: stepText });
-                    }
-                }
+        const conversation =
+            await conversationsRepository.findConversationByIdForUser(
+                user.id,
+                conversationId
+            );
 
-                if (finalParts.length === 0) {
-                    finalParts.push({ type: "text", text: "" });
-                }
+        if (!conversation) {
+            throw new ConversationError(404, "Conversation not found.");
+        }
 
-                const generationCompletedAt = new Date().toISOString();
+        const generation = generationManager.get(conversationId);
 
-                await conversationsRepository.updateMessage(
-                    assistantMessageId,
-                    {
-                        parts: finalParts,
-                        status:
-                            finishReason === "error" ? "failed" : "complete",
-                        metadata: {
-                            model: modelId,
-                            generationStartedAt,
-                            generationCompletedAt
-                        }
-                    }
-                );
-            },
-            onError: async () => {
-                await conversationsRepository.updateMessage(
-                    assistantMessageId,
-                    {
-                        status: "failed",
-                        metadata: {
-                            model: modelId,
-                            generationStartedAt,
-                            generationCompletedAt: new Date().toISOString()
-                        }
-                    }
-                );
-            }
-        });
+        if (!generation || generation.userId !== user.id) {
+            return Response.json({ generating: false });
+        }
 
-        const sseStream = new ReadableStream({
-            async start(controller) {
-                try {
-                    controller.enqueue(
-                        encodeSSE({
-                            type: "message-start",
-                            messageId: assistantMessageId
-                        })
-                    );
-
-                    for await (const chunk of result.fullStream) {
-                        switch (chunk.type) {
-                            case "text-delta":
-                                controller.enqueue(
-                                    encodeSSE({
-                                        type: "text-delta",
-                                        text: chunk.text
-                                    })
-                                );
-                                break;
-
-                            case "tool-call":
-                                controller.enqueue(
-                                    encodeSSE({
-                                        type: "tool-call",
-                                        toolCallId: chunk.toolCallId,
-                                        toolName: chunk.toolName,
-                                        args: (
-                                            chunk as unknown as Record<
-                                                string,
-                                                unknown
-                                            >
-                                        ).input
-                                    })
-                                );
-                                break;
-
-                            case "tool-result":
-                                controller.enqueue(
-                                    encodeSSE({
-                                        type: "tool-result",
-                                        toolCallId: chunk.toolCallId,
-                                        toolName: chunk.toolName,
-                                        result: (
-                                            chunk as unknown as Record<
-                                                string,
-                                                unknown
-                                            >
-                                        ).output
-                                    })
-                                );
-                                break;
-
-                            case "error":
-                                controller.enqueue(
-                                    encodeSSE({
-                                        type: "error",
-                                        error: String(chunk.error)
-                                    })
-                                );
-                                break;
-
-                            case "finish":
-                                controller.enqueue(
-                                    encodeSSE({
-                                        type: "finish",
-                                        finishReason: chunk.finishReason
-                                    })
-                                );
-                                break;
-                        }
-                    }
-
-                    controller.enqueue(
-                        encodeSSE({ type: "done" })
-                    );
-                } catch (error) {
-                    controller.enqueue(
-                        encodeSSE({
-                            type: "error",
-                            error:
-                                error instanceof Error
-                                    ? error.message
-                                    : "Stream failed"
-                        })
-                    );
-                } finally {
-                    controller.close();
-                }
-            }
-        });
-
-        return new Response(sseStream, {
-            headers: {
-                "Content-Type": "text/event-stream",
-                "Cache-Control": "no-cache",
-                Connection: "keep-alive",
-                "X-Message-Id": assistantMessageId
-            }
-        });
+        return createSubscriberStream(generation, true);
     }
 };

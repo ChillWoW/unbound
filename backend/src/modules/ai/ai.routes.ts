@@ -25,21 +25,38 @@ function handleAiError(error: unknown, set: { status?: number | string }) {
     throw error;
 }
 
-export const aiRoutes = new Elysia({ prefix: "/api/conversations" }).post(
-    "/:conversationId/generate",
-    async ({ body, params, request, set }) => {
-        try {
-            return await aiService.generateResponse(
-                request,
-                params.conversationId,
-                body.modelId
-            );
-        } catch (error) {
-            return handleAiError(error, set);
+export const aiRoutes = new Elysia({ prefix: "/api/conversations" })
+    .post(
+        "/:conversationId/generate",
+        async ({ body, params, request, set }) => {
+            try {
+                return await aiService.generateResponse(
+                    request,
+                    params.conversationId,
+                    body.modelId
+                );
+            } catch (error) {
+                return handleAiError(error, set);
+            }
+        },
+        {
+            body: generateBody,
+            params: conversationParams
         }
-    },
-    {
-        body: generateBody,
-        params: conversationParams
-    }
-);
+    )
+    .get(
+        "/:conversationId/generation",
+        async ({ params, request, set }) => {
+            try {
+                return await aiService.subscribeToGeneration(
+                    request,
+                    params.conversationId
+                );
+            } catch (error) {
+                return handleAiError(error, set);
+            }
+        },
+        {
+            params: conversationParams
+        }
+    );

@@ -1,3 +1,15 @@
+export interface ReconnectState {
+    text: string;
+    toolParts: Array<{
+        type: "tool-invocation";
+        toolInvocationId: string;
+        toolName: string;
+        args: Record<string, unknown>;
+        state: "call" | "result" | "error";
+        result?: unknown;
+    }>;
+}
+
 export interface StreamCallbacks {
     onMessageStart?: (messageId: string) => void;
     onTextDelta?: (text: string) => void;
@@ -13,6 +25,7 @@ export interface StreamCallbacks {
     }) => void;
     onFinish?: (finishReason: string) => void;
     onError?: (error: string) => void;
+    onReconnectState?: (state: ReconnectState) => void;
 }
 
 export async function parseAIStream(
@@ -87,6 +100,10 @@ export async function parseAIStream(
 
                     case "error":
                         callbacks.onError?.(event.error as string);
+                        break;
+
+                    case "reconnect-state":
+                        callbacks.onReconnectState?.(event as unknown as ReconnectState);
                         break;
 
                     case "done":

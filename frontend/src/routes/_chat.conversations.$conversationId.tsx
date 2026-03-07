@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useChat } from "@/features/chat/chat-context";
 import { ConversationThread } from "@/features/chat/components/conversation-thread";
@@ -10,6 +10,7 @@ export const Route = createFileRoute("/_chat/conversations/$conversationId")({
 function ConversationPage() {
     const { conversationId } = Route.useParams();
     const [submissionError, setSubmissionError] = useState<string | null>(null);
+    const reconnectAttemptedRef = useRef<Set<string>>(new Set());
     const {
         availableModels,
         getConversation,
@@ -20,6 +21,7 @@ function ConversationPage() {
         loadConversation,
         modelsError,
         markConversationRead,
+        reconnectToGeneration,
         selectedModelId,
         setSelectedModelId,
         sendMessage,
@@ -33,6 +35,21 @@ function ConversationPage() {
     useEffect(() => {
         void loadConversation(conversationId);
     }, [conversationId, loadConversation]);
+
+    useEffect(() => {
+        if (!conversation) return;
+        const lastMessage = conversation.messages.at(-1);
+        if (
+            !lastMessage ||
+            lastMessage.role !== "assistant" ||
+            lastMessage.status !== "pending"
+        ) {
+            return;
+        }
+        if (reconnectAttemptedRef.current.has(conversationId)) return;
+        reconnectAttemptedRef.current.add(conversationId);
+        void reconnectToGeneration(conversationId);
+    }, [conversation, conversationId, reconnectToGeneration]);
 
     useEffect(() => {
         if (

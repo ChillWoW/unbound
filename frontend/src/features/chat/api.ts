@@ -56,5 +56,16 @@ export const chatApi = {
                 body: { content, attachments }
             }
         );
+    },
+
+    subscribeToGeneration(conversationId: string, signal?: AbortSignal) {
+        return fetch(
+            `${API_BASE_URL}/api/conversations/${conversationId}/generation`,
+            {
+                method: "GET",
+                credentials: "include",
+                signal
+            }
+        );
     }
 };

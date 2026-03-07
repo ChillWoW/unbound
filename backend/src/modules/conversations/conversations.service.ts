@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { requireAuth } from "../../middleware/require-auth";
+import { generationManager } from "../ai/generation-manager";
 import { conversationsRepository } from "./conversations.repository";
 import {
     ConversationError,
@@ -49,6 +50,38 @@ function getReadStateMap(readStates: ConversationReadRecord[]) {
     );
 }
 
+const STALE_PENDING_THRESHOLD_MS = 5 * 60 * 1000;
+
+async function markStalePendingMessages(
+    messages: MessageRecord[],
+    conversationId: string
+) {
+    if (generationManager.isActive(conversationId)) return;
+
+    const now = Date.now();
+
+    for (const message of messages) {
+        if (message.role !== "assistant" || message.status !== "pending") continue;
+
+        const metadata = message.metadata as Record<string, unknown> | null;
+        const startedAt = metadata?.generationStartedAt;
+        if (typeof startedAt !== "string") continue;
+
+        const elapsed = now - new Date(startedAt).getTime();
+        if (elapsed <= STALE_PENDING_THRESHOLD_MS) continue;
+
+        await conversationsRepository.updateMessage(message.id, {
+            status: "failed",
+            metadata: {
+                ...(metadata ?? {}),
+                generationCompletedAt: new Date().toISOString(),
+                failureReason: "stale"
+            }
+        });
+        message.status = "failed";
+    }
+}
+
 async function getConversationDetailOrThrow(
     userId: string,
     conversationId: string
@@ -67,6 +100,8 @@ async function getConversationDetailOrThrow(
         conversationsRepository.listMessagesByConversationId(conversationId),
         conversationsRepository.findConversationRead(userId, conversationId)
     ]);
+
+    await markStalePendingMessages(messages, conversationId);
 
     return toConversationDetail({
         conversation,

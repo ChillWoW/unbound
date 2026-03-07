@@ -11,7 +11,7 @@ import {
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/features/auth/use-auth";
 import { chatApi } from "./api";
-import { parseAIStream } from "./utils/parse-ai-stream";
+import { parseAIStream, type ReconnectState } from "./utils/parse-ai-stream";
 import type { ChatAttachment } from "./components/chat-input";
 import type {
     ChatModel,
@@ -120,6 +120,7 @@ interface ChatContextValue {
         assistantMessageId: string
     ) => Promise<void>;
     modelsError: string | null;
+    reconnectToGeneration: (conversationId: string) => Promise<void>;
     selectedModelId: string | null;
     sendMessage: (
         conversationId: string,
@@ -583,6 +584,222 @@ export function ChatProvider({ children }: PropsWithChildren) {
         [upsertConversation]
     );
 
+    const reconnectToGeneration = useCallback(
+        async (conversationId: string) => {
+            if (activeGenerationsRef.current.has(conversationId)) return;
+
+            const abortController = new AbortController();
+            activeGenerationsRef.current.set(conversationId, abortController);
+            setConversationSending(conversationId, true);
+
+            try {
+                const response = await chatApi.subscribeToGeneration(
+                    conversationId,
+                    abortController.signal
+                );
+
+                const contentType = response.headers.get("content-type") ?? "";
+
+                if (!contentType.includes("text/event-stream")) {
+                    activeGenerationsRef.current.delete(conversationId);
+                    setConversationSending(conversationId, false);
+                    const reloaded = await chatApi.getConversation(conversationId);
+                    upsertConversation(reloaded.conversation);
+                    return;
+                }
+
+                const realMessageId = response.headers.get("x-message-id") ?? "";
+                let accumulatedText = "";
+                const toolParts: MessagePart[] = [];
+
+                await parseAIStream(response, {
+                    onMessageStart(messageId) {
+                        setConversationDetails((current) => {
+                            const existing = current[conversationId];
+                            if (!existing) return current;
+                            const hasMessage = existing.messages.some((m) => m.id === messageId);
+                            if (hasMessage) {
+                                return {
+                                    ...current,
+                                    [conversationId]: {
+                                        ...existing,
+                                        messages: existing.messages.map((m) =>
+                                            m.id === messageId
+                                                ? { ...m, status: "pending" as const }
+                                                : m
+                                        )
+                                    }
+                                };
+                            }
+                            return current;
+                        });
+                    },
+                    onReconnectState(state: ReconnectState) {
+                        accumulatedText = state.text;
+                        toolParts.length = 0;
+                        for (const tp of state.toolParts) {
+                            toolParts.push(tp);
+                        }
+                        const currentParts: MessagePart[] = [
+                            ...(accumulatedText
+                                ? [{ type: "text" as const, text: accumulatedText }]
+                                : []),
+                            ...toolParts
+                        ];
+                        const mid = realMessageId;
+                        setConversationDetails((current) => {
+                            const existing = current[conversationId];
+                            if (!existing) return current;
+                            return {
+                                ...current,
+                                [conversationId]: {
+                                    ...existing,
+                                    messages: existing.messages.map((m) =>
+                                        m.id === mid
+                                            ? { ...m, parts: currentParts }
+                                            : m
+                                    )
+                                }
+                            };
+                        });
+                    },
+                    onTextDelta(text) {
+                        accumulatedText += text;
+                        const currentText = accumulatedText;
+                        const mid = realMessageId;
+                        setConversationDetails((current) => {
+                            const existing = current[conversationId];
+                            if (!existing) return current;
+                            return {
+                                ...current,
+                                [conversationId]: {
+                                    ...existing,
+                                    messages: existing.messages.map((m) =>
+                                        m.id === mid
+                                            ? {
+                                                  ...m,
+                                                  parts: [
+                                                      {
+                                                          type: "text" as const,
+                                                          text: currentText
+                                                      },
+                                                      ...toolParts
+                                                  ]
+                                              }
+                                            : m
+                                    )
+                                }
+                            };
+                        });
+                    },
+                    onToolCall(toolCall) {
+                        toolParts.push({
+                            type: "tool-invocation",
+                            toolInvocationId: toolCall.toolCallId,
+                            toolName: toolCall.toolName,
+                            args: toolCall.args,
+                            state: "call"
+                        });
+                        const currentParts: MessagePart[] = [
+                            ...(accumulatedText
+                                ? [{ type: "text" as const, text: accumulatedText }]
+                                : []),
+                            ...toolParts
+                        ];
+                        const mid = realMessageId;
+                        setConversationDetails((current) => {
+                            const existing = current[conversationId];
+                            if (!existing) return current;
+                            return {
+                                ...current,
+                                [conversationId]: {
+                                    ...existing,
+                                    messages: existing.messages.map((m) =>
+                                        m.id === mid
+                                            ? { ...m, parts: currentParts }
+                                            : m
+                                    )
+                                }
+                            };
+                        });
+                    },
+                    onToolResult(toolResult) {
+                        const idx = toolParts.findIndex(
+                            (p) =>
+                                p.type === "tool-invocation" &&
+                                p.toolInvocationId === toolResult.toolCallId
+                        );
+                        if (idx !== -1) {
+                            toolParts[idx] = {
+                                ...toolParts[idx],
+                                state: "result",
+                                result: toolResult.result
+                            } as MessagePart;
+                        }
+                        const currentParts: MessagePart[] = [
+                            ...(accumulatedText
+                                ? [{ type: "text" as const, text: accumulatedText }]
+                                : []),
+                            ...toolParts
+                        ];
+                        const mid = realMessageId;
+                        setConversationDetails((current) => {
+                            const existing = current[conversationId];
+                            if (!existing) return current;
+                            return {
+                                ...current,
+                                [conversationId]: {
+                                    ...existing,
+                                    messages: existing.messages.map((m) =>
+                                        m.id === mid
+                                            ? { ...m, parts: currentParts }
+                                            : m
+                                    )
+                                }
+                            };
+                        });
+                    },
+                    onError() {
+                        if (abortController.signal.aborted) return;
+                        const mid = realMessageId;
+                        setConversationDetails((current) => {
+                            const existing = current[conversationId];
+                            if (!existing) return current;
+                            return {
+                                ...current,
+                                [conversationId]: {
+                                    ...existing,
+                                    messages: existing.messages.map((m) =>
+                                        m.id === mid
+                                            ? { ...m, status: "failed" }
+                                            : m
+                                    )
+                                }
+                            };
+                        });
+                    }
+                }).catch((error: unknown) => {
+                    if (!(error instanceof Error && error.name === "AbortError")) {
+                        throw error;
+                    }
+                });
+
+                activeGenerationsRef.current.delete(conversationId);
+
+                if (!abortController.signal.aborted) {
+                    const finalResponse = await chatApi.getConversation(conversationId);
+                    upsertConversation(finalResponse.conversation);
+                }
+            } catch {
+                // reconnection is best-effort
+            } finally {
+                activeGenerationsRef.current.delete(conversationId);
+                setConversationSending(conversationId, false);
+            }
+        },
+        [setConversationSending, upsertConversation]
+    );
+
     const createConversation = useCallback(
         async (prompt: string, attachments?: ChatAttachment[]) => {
             const modelId = selectedModelIdRef.current;
@@ -782,6 +999,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
             loadModels,
             markConversationRead,
             modelsError,
+            reconnectToGeneration,
             selectedModelId,
             sendMessage,
             setSelectedModelId,
@@ -804,6 +1022,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
             loadModels,
             markConversationRead,
             modelsError,
+            reconnectToGeneration,
             selectedModelId,
             sendMessage,
             setSelectedModelId,
