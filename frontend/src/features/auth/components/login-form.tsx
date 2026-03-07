@@ -48,60 +48,78 @@ export function LoginForm() {
     }
 
     return (
-        <div className="flex min-h-screen items-center justify-center">
-            <div className="flex flex-col gap-4 bg-dark-800 p-4 rounded-md w-full max-w-sm md:max-w-md shadow-md">
-                <h1 className="text-2xl font-bold text-center">
-                    Login to your account
-                </h1>
+        <div className="flex min-h-screen items-center justify-center bg-dark-900 px-4">
+            <div className="w-full max-w-sm">
+                <div className="mb-6 flex flex-col items-center gap-1">
+                    <img src="/logos/logo.svg" alt="Logo" className="size-16" />
+                    <h1 className="text-xl font-semibold text-white">
+                        Welcome back
+                    </h1>
+                    <p className="text-sm text-dark-300">
+                        Sign in to your account
+                    </p>
+                </div>
 
-                <form className="flex flex-col gap-2" onSubmit={handleSubmit}>
-                    <label className="flex flex-col gap-1">
-                        <span className="text-sm text-dark-50">Email</span>
-                        <Input
-                            autoComplete="email"
-                            className="bg-dark-600"
-                            placeholder="you@example.com"
-                            type="email"
-                            value={email}
-                            onChange={(event) => setEmail(event.target.value)}
-                        />
-                    </label>
-
-                    <label className="flex flex-col gap-1">
-                        <span className="text-sm text-dark-50">Password</span>
-                        <PasswordInput
-                            autoComplete="current-password"
-                            className="bg-dark-600"
-                            placeholder="Enter your password"
-                            value={password}
-                            onChange={(event) =>
-                                setPassword(event.target.value)
-                            }
-                        />
-                    </label>
-
-                    {error && (
-                        <div className="rounded-md border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
-                            {error}
-                        </div>
-                    )}
-
-                    <Button
-                        type="submit"
-                        variant="primary"
-                        className="w-full mt-2"
-                        disabled={isSubmitting}
+                <div className="rounded-md border border-dark-600 p-6">
+                    <form
+                        className="flex flex-col gap-4"
+                        onSubmit={handleSubmit}
                     >
-                        {isSubmitting ? "Signing in..." : "Login"}
-                    </Button>
+                        <label className="flex flex-col gap-1.5">
+                            <span className="text-xs font-semibold text-dark-200">
+                                Email
+                            </span>
+                            <Input
+                                autoComplete="email"
+                                placeholder="you@example.com"
+                                type="email"
+                                value={email}
+                                onChange={(event) =>
+                                    setEmail(event.target.value)
+                                }
+                            />
+                        </label>
 
+                        <label className="flex flex-col gap-1.5">
+                            <span className="text-xs font-semibold text-dark-200">
+                                Password
+                            </span>
+                            <PasswordInput
+                                autoComplete="current-password"
+                                placeholder="********"
+                                value={password}
+                                onChange={(event) =>
+                                    setPassword(event.target.value)
+                                }
+                            />
+                        </label>
+
+                        {error && (
+                            <div className="rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                                {error}
+                            </div>
+                        )}
+
+                        <Button
+                            type="submit"
+                            variant="primary"
+                            className="w-full"
+                            disabled={isSubmitting}
+                        >
+                            {isSubmitting ? "Signing in..." : "Sign in"}
+                        </Button>
+                    </form>
+                </div>
+
+                <p className="mt-4 text-center text-sm text-dark-400">
+                    Don't have an account?{" "}
                     <Link
                         to="/register"
-                        className="text-sm text-center text-dark-50 hover:text-dark-100"
+                        className="text-dark-200 hover:text-white transition-colors"
                     >
-                        Don't have an account? Register here
+                        Register
                     </Link>
-                </form>
+                </p>
             </div>
         </div>
     );
