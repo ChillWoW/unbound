@@ -2,10 +2,11 @@ import {
     Input,
     Popover,
     PopoverContent,
-    PopoverTrigger
+    PopoverTrigger,
+    Tooltip
 } from "@/components/ui";
 import type { ChatModel } from "../types";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
     MagnifyingGlassIcon,
     ChatTextIcon,
@@ -13,11 +14,21 @@ import {
     MicrophoneIcon,
     FilmStripIcon,
     FileIcon,
-    FunnelIcon,
     InfoIcon
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/cn";
-import { Arcee, Qwen, Stepfun, Minimax, Moonshot, XAI } from "@lobehub/icons";
+import {
+    Arcee,
+    Qwen,
+    Stepfun,
+    Minimax,
+    Moonshot,
+    XAI,
+    OpenAI,
+    Google,
+    Anthropic,
+    ZAI
+} from "@lobehub/icons";
 
 const ICONS: Record<string, React.ComponentType<any>> = {
     qwen: Qwen,
@@ -25,7 +36,11 @@ const ICONS: Record<string, React.ComponentType<any>> = {
     "arcee-ai": Arcee,
     minimax: Minimax,
     moonshot: Moonshot,
-    "x-ai": XAI
+    "x-ai": XAI,
+    openai: OpenAI,
+    google: Google,
+    anthropic: Anthropic,
+    zai: ZAI
 };
 
 function formatPricing(raw: string): string {
@@ -54,46 +69,12 @@ const MODALITY_ICONS: Record<
     file: { icon: FileIcon, label: "File" }
 };
 
-const CHEAP_PRICE_PER_TOKEN = 1 / 1_000_000;
-
-type ModelFilterKey =
-    | "free"
-    | "cheap"
-    | "text"
-    | "image"
-    | "audio"
-    | "video"
-    | "file";
-
-const FILTER_OPTIONS: Array<{ key: ModelFilterKey; label: string }> = [
-    { key: "free", label: "Free" },
-    { key: "cheap", label: "Cheap" },
-    { key: "text", label: "Text" },
-    { key: "image", label: "Image" }
-];
-
-function parsePricing(raw: string | null): number | null {
-    if (!raw) return null;
-    const value = Number.parseFloat(raw);
-    return Number.isFinite(value) ? value : null;
-}
-
-function modelMatchesFilter(model: ChatModel, filter: ModelFilterKey): boolean {
-    if (filter === "free") return Boolean(model.free);
-
-    if (filter === "cheap") {
-        const prices = [
-            parsePricing(model.promptPricing),
-            parsePricing(model.completionPricing)
-        ].filter((value): value is number => value !== null);
-
-        if (prices.length === 0) return false;
-        return Math.max(...prices) <= CHEAP_PRICE_PER_TOKEN;
-    }
-
-    return model.inputModalities.some(
-        (modality) => modality.toLowerCase() === filter
-    );
+function formatProviderName(provider: string): string {
+    return provider
+        .split(/[-_]/g)
+        .filter(Boolean)
+        .map((part) => part[0].toUpperCase() + part.slice(1))
+        .join(" ");
 }
 
 function ModalityBadge({ modality }: { modality: string }) {
@@ -104,8 +85,8 @@ function ModalityBadge({ modality }: { modality: string }) {
     const Icon = entry.icon;
 
     return (
-        <div className="flex items-center gap-1.5 rounded-md bg-dark-600 px-2 py-1">
-            <Icon className="size-3 text-dark-200" />
+        <div className="flex items-center gap-1.5 rounded-md bg-dark-700 border border-dark-500 px-2 py-1">
+            <Icon className="size-3 text-dark-100" />
             <span className="text-[11px] font-medium text-dark-100">
                 {entry.label}
             </span>
@@ -122,7 +103,7 @@ function InfoRow({
 }) {
     return (
         <div className="flex items-center justify-between gap-6">
-            <span className="text-[11px] text-dark-300">{label}</span>
+            <span className="text-[11px] text-dark-200">{label}</span>
             <span className="text-[11px] font-medium tabular-nums text-dark-50">
                 {children}
             </span>
@@ -146,7 +127,7 @@ function ModelInfoButton({ model }: { model: ChatModel }) {
     return (
         <Popover>
             <PopoverTrigger
-                className="inline-flex size-5 shrink-0 items-center justify-center rounded text-dark-400 transition-colors hover:bg-dark-600 hover:text-dark-100"
+                className="inline-flex size-5 shrink-0 items-center justify-center rounded-md text-dark-200 transition-colors hover:bg-dark-500 hover:text-white"
                 onClick={(e) => e.stopPropagation()}
             >
                 <InfoIcon className="size-3.5" />
@@ -155,14 +136,17 @@ function ModelInfoButton({ model }: { model: ChatModel }) {
             <PopoverContent
                 side="right"
                 align="start"
-                sideOffset={12}
-                className="max-w-[240px] p-0"
+                sideOffset={20}
+                className="min-w-[240px] p-0"
             >
                 <div className="flex flex-col">
                     <div className="flex flex-col gap-1 px-3 pt-3 pb-2">
                         <div className="flex items-center gap-2">
                             {ProviderIcon && (
-                                <ProviderIcon className="size-3.5 shrink-0 opacity-60" />
+                                <ProviderIcon
+                                    className="size-3.5 shrink-0 opacity-60"
+                                    title=""
+                                />
                             )}
                             <h3 className="text-xs font-semibold text-dark-50 leading-tight">
                                 {model.name}
@@ -177,7 +161,7 @@ function ModelInfoButton({ model }: { model: ChatModel }) {
                     </div>
 
                     {(model.contextLength || hasPricing) && (
-                        <div className="flex flex-col gap-1.5 border-t border-dark-600 px-3 py-2.5">
+                        <div className="flex flex-col gap-1 border-t border-dark-600 px-3 py-2">
                             {model.contextLength && (
                                 <InfoRow label="Context">
                                     {formatContextLength(model.contextLength)}
@@ -199,8 +183,8 @@ function ModelInfoButton({ model }: { model: ChatModel }) {
                     )}
 
                     {model.inputModalities.length > 0 && (
-                        <div className="flex flex-col gap-1.5 border-t border-dark-600 px-3 py-2.5">
-                            <span className="text-[11px] text-dark-300">
+                        <div className="flex flex-col gap-1 border-t border-dark-600 px-3 py-2">
+                            <span className="text-[11px] text-dark-200">
                                 Input modalities
                             </span>
                             <div className="flex flex-wrap gap-1">
@@ -229,8 +213,7 @@ export function ModelSelector({
 }) {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState("");
-    const [activeFilters, setActiveFilters] = useState<ModelFilterKey[]>([]);
-    const [filterOpen, setFilterOpen] = useState(false);
+    const [activeProvider, setActiveProvider] = useState<string | null>(null);
 
     const modelName = useMemo(() => {
         if (!selectedModelId) return "Select a model";
@@ -244,39 +227,51 @@ export function ModelSelector({
         ];
     }, [selectedModelId, models]);
 
+    const providers = useMemo(
+        () =>
+            Array.from(new Set(models.map((model) => model.provider))).sort(
+                (a, b) =>
+                    formatProviderName(a).localeCompare(formatProviderName(b))
+            ),
+        [models]
+    );
+
+    useEffect(() => {
+        if (providers.length === 0) {
+            setActiveProvider(null);
+            return;
+        }
+
+        setActiveProvider((current) => {
+            if (current && providers.includes(current)) return current;
+
+            const selectedProvider = selectedModelId
+                ? models.find((model) => model.id === selectedModelId)?.provider
+                : null;
+
+            if (selectedProvider && providers.includes(selectedProvider)) {
+                return selectedProvider;
+            }
+
+            return providers[0];
+        });
+    }, [providers, selectedModelId, models]);
+
     const filteredModels = useMemo(() => {
-        const scopedModels =
-            activeFilters.length === 0
-                ? models
-                : models.filter((model) =>
-                      activeFilters.every((filter) =>
-                          modelMatchesFilter(model, filter)
-                      )
-                  );
+        const scopedModels = activeProvider
+            ? models.filter((model) => model.provider === activeProvider)
+            : models;
 
         if (!search.trim()) return scopedModels;
         const q = search.toLowerCase();
-        return scopedModels.filter(
-            (m) =>
-                m.name.toLowerCase().includes(q) ||
-                m.provider.toLowerCase().includes(q)
-        );
-    }, [models, search, activeFilters]);
-
-    const toggleFilter = (filter: ModelFilterKey) => {
-        setActiveFilters((prev) =>
-            prev.includes(filter)
-                ? prev.filter((f) => f !== filter)
-                : [...prev, filter]
-        );
-    };
+        return scopedModels.filter((m) => m.name.toLowerCase().includes(q));
+    }, [models, search, activeProvider]);
 
     return (
         <Popover
             open={open}
             onOpenChange={(nextOpen) => {
                 setOpen(nextOpen);
-                if (!nextOpen) setFilterOpen(false);
             }}
         >
             <PopoverTrigger
@@ -286,12 +281,46 @@ export function ModelSelector({
                 )}
                 disabled={disabled}
             >
-                {ModelIcon && <ModelIcon className="size-4 opacity-50" />}
+                {ModelIcon && (
+                    <ModelIcon className="size-4 opacity-70" title="" />
+                )}
                 <span className="truncate">{modelName}</span>
             </PopoverTrigger>
 
-            <PopoverContent side="top" className="overflow-hidden p-0">
-                <div className="flex flex-col">
+            <PopoverContent
+                side="top"
+                className="flex h-72 w-[28rem] overflow-hidden p-0"
+            >
+                <div className="flex w-12 shrink-0 flex-col items-center gap-1 overflow-y-auto overflow-x-hidden hide-scrollbar border-r border-dark-600 bg-dark-900 p-2">
+                    {providers.map((provider) => {
+                        const ProviderIcon = ICONS[provider];
+                        const isActive = provider === activeProvider;
+
+                        return (
+                            <Tooltip
+                                key={provider}
+                                content={formatProviderName(provider)}
+                                side="right"
+                                delay={300}
+                            >
+                                <button
+                                    type="button"
+                                    className={cn(
+                                        "inline-flex size-8 shrink-0 items-center justify-center rounded-md transition-colors",
+                                        isActive
+                                            ? "bg-dark-800 text-white"
+                                            : "text-dark-200 hover:bg-dark-700 hover:text-white"
+                                    )}
+                                    onClick={() => setActiveProvider(provider)}
+                                >
+                                    <ProviderIcon className="size-4" title="" />
+                                </button>
+                            </Tooltip>
+                        );
+                    })}
+                </div>
+
+                <div className="flex min-w-0 flex-1 flex-col">
                     <Input
                         leftSection={
                             <MagnifyingGlassIcon
@@ -299,58 +328,19 @@ export function ModelSelector({
                                 weight="bold"
                             />
                         }
-                        rightSection={
-                            <button
-                                type="button"
-                                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-dark-200 transition-colors hover:bg-dark-600 hover:text-dark-50"
-                                onClick={() => setFilterOpen((v) => !v)}
-                            >
-                                <FunnelIcon
-                                    className="size-4"
-                                    weight={
-                                        activeFilters.length > 0
-                                            ? "fill"
-                                            : "regular"
-                                    }
-                                />
-                            </button>
-                        }
                         placeholder="Search models"
-                        className="rounded-none border-b border-dark-600"
+                        className="rounded-none border-b border-dark-600 py-1"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                     />
 
-                    {filterOpen && (
-                        <div className="flex flex-wrap gap-1 border-b border-dark-600 px-2 py-2">
-                            {FILTER_OPTIONS.map((filter) => {
-                                const active = activeFilters.includes(
-                                    filter.key
-                                );
-                                return (
-                                    <button
-                                        key={filter.key}
-                                        type="button"
-                                        className={cn(
-                                            "rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors",
-                                            active
-                                                ? "bg-dark-500 text-white"
-                                                : "bg-dark-700 text-dark-200 hover:bg-dark-600 hover:text-white"
-                                        )}
-                                        onClick={() => toggleFilter(filter.key)}
-                                    >
-                                        {filter.label}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    )}
-
-                    <div className="max-h-[300px] overflow-y-auto px-1 py-1">
+                    <div className="min-h-0 flex-1 overflow-y-auto px-1 py-1">
                         {filteredModels.length === 0 && (
-                            <p className="py-4 text-center text-xs text-dark-300">
-                                No models found
-                            </p>
+                            <div className="flex h-full items-center justify-center">
+                                <p className="text-center text-xs text-dark-200">
+                                    No models found
+                                </p>
+                            </div>
                         )}
 
                         <div className="flex flex-col gap-0.5">
@@ -361,9 +351,9 @@ export function ModelSelector({
                                     <div
                                         key={model.id}
                                         className={cn(
-                                            "flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs text-dark-100 transition-colors cursor-pointer hover:bg-dark-700 hover:text-white",
+                                            "flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-xs text-dark-100 transition-colors hover:bg-dark-600 hover:text-white",
                                             model.id === selectedModelId &&
-                                                "bg-dark-700 text-white"
+                                                "bg-dark-600 text-white"
                                         )}
                                         onClick={() => {
                                             onModelSelected(model);
@@ -372,7 +362,10 @@ export function ModelSelector({
                                     >
                                         <div className="flex min-w-0 flex-1 items-center gap-2">
                                             {ProviderIcon && (
-                                                <ProviderIcon className="size-3.5 shrink-0 opacity-50" />
+                                                <ProviderIcon
+                                                    className="size-3.5 shrink-0 opacity-50"
+                                                    title=""
+                                                />
                                             )}
                                             <span className="min-w-0 flex-1 truncate text-left">
                                                 {model.name}

@@ -260,7 +260,6 @@ export function ChatInput({
     isModelsLoading = false,
     isThinkingEnabled = false,
     models = [],
-    modelsError = null,
     onSelectedModelChange,
     onThinkingChange,
     showContextBadge = false,
@@ -290,12 +289,6 @@ export function ChatInput({
         : true;
     const isModelSelectDisabled =
         disabled || isSubmitting || isModelsLoading || models.length === 0;
-    const modelMessage = useMemo(() => {
-        if (modelsError) return modelsError;
-        if (isModelsLoading) return "Loading models...";
-        if (models.length === 0) return "No models available.";
-        return null;
-    }, [isModelsLoading, models.length, modelsError]);
 
     // ── Value helpers ────────────────────────────────────────────────────
 
@@ -534,12 +527,6 @@ export function ChatInput({
                             />
                         </Button>
                     </Tooltip>
-
-                    {modelMessage ? (
-                        <p className="truncate text-xs text-dark-300">
-                            {modelMessage}
-                        </p>
-                    ) : null}
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
