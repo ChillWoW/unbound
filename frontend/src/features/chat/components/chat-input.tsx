@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useCallback } from "react";
+import { useMemo, useRef, useState, useCallback, type ReactNode } from "react";
 import TextareaAutosize from "react-textarea-autosize";
 import {
     ArrowUpIcon,
@@ -232,7 +232,7 @@ function AttachmentChip({
 
 // ── Chat Input ───────────────────────────────────────────────────────────────
 
-interface ChatInputProps {
+export interface ChatInputProps {
     className?: string;
     conversationMessages?: ConversationMessage[];
     disabled?: boolean;
@@ -244,6 +244,7 @@ interface ChatInputProps {
     onSelectedModelChange?: (modelId: string | null) => void;
     onThinkingChange?: (enabled: boolean) => void;
     showContextBadge?: boolean;
+    toolbarSlot?: ReactNode;
     value?: string;
     onChange?: (value: string) => void;
     onStop?: () => void;
@@ -266,6 +267,7 @@ export function ChatInput({
     onSelectedModelChange,
     onThinkingChange,
     showContextBadge = false,
+    toolbarSlot,
     value,
     onChange,
     onStop,
@@ -372,7 +374,9 @@ export function ChatInput({
 
     // ── File input handler ───────────────────────────────────────────────
 
-    function handleImageInputChange(event: React.ChangeEvent<HTMLInputElement>) {
+    function handleImageInputChange(
+        event: React.ChangeEvent<HTMLInputElement>
+    ) {
         if (event.target.files && event.target.files.length > 0) {
             addFiles(event.target.files, "image");
         }
@@ -526,6 +530,7 @@ export function ChatInput({
                             onThinkingChange={onThinkingChange}
                         />
                     </div>
+                    {toolbarSlot}
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
@@ -589,7 +594,10 @@ export function ChatInput({
                                 }
                                 onClick={() => fileInputRef.current?.click()}
                             >
-                                <PaperclipIcon className="size-4" weight="bold" />
+                                <PaperclipIcon
+                                    className="size-4"
+                                    weight="bold"
+                                />
                             </Button>
                         </Tooltip>
                     )}

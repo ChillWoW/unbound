@@ -5,7 +5,9 @@ import {
     CaretRightIcon,
     CopyIcon,
     CheckIcon,
-    ClockIcon
+    ClockIcon,
+    ListChecksIcon,
+    ChatTeardropTextIcon
 } from "@phosphor-icons/react";
 import { Button, Tooltip, ImageViewer } from "@/components/ui";
 import { cn } from "@/lib/cn";
@@ -18,7 +20,8 @@ import type {
     ReasoningMessagePart,
     ToolInvocationPart
 } from "../types";
-import { ChatInput, type ChatAttachment } from "./chat-input";
+import { type ChatAttachment } from "./chat-input";
+import { InputDock } from "./input-dock";
 import { MarkdownRenderer } from "@/components/markdown/markdown-renderer";
 
 function getMessageText(parts: MessagePart[]) {
@@ -537,7 +540,18 @@ export function ConversationThread({
                 </div>
             </div>
 
-            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-dark-900 via-dark-900/90 to-transparent px-4 pb-4">
+            <div className="absolute bottom-0 left-0 right-0 px-4 pb-4">
+                <div
+                    className="absolute bottom-0 left-0 right-0 h-48 pointer-events-none"
+                    style={{
+                        maskImage:
+                            "linear-gradient(to top, black 60%, transparent 100%)",
+                        WebkitMaskImage:
+                            "linear-gradient(to top, black 60%, transparent 100%)",
+                        backgroundColor: "var(--color-dark-900)"
+                    }}
+                />
+
                 <div className="mx-auto max-w-3xl">
                     {error ? (
                         <div className="mb-3 rounded-xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
@@ -549,7 +563,7 @@ export function ConversationThread({
                         <Button
                             type="button"
                             className={cn(
-                                "h-7 px-2.5 text-xs transition-opacity text-dark-50 bg-dark-800 border border-dark-500",
+                                "h-7 px-2.5 text-xs transition-opacity text-dark-50 bg-dark-800 border border-dark-500 relative z-10",
                                 !isAtBottom && conversation.messages.length > 0
                                     ? "opacity-100"
                                     : "pointer-events-none opacity-0"
@@ -566,7 +580,7 @@ export function ConversationThread({
                         </Button>
                     </div>
 
-                    <ChatInput
+                    <InputDock
                         models={availableModels}
                         selectedModelId={selectedModelId}
                         onSelectedModelChange={onModelChange}
@@ -581,6 +595,59 @@ export function ConversationThread({
                         disabled={isSending}
                         isSubmitting={isSending}
                         conversationMessages={conversation.messages}
+                        panels={[
+                            {
+                                id: "todos",
+                                label: "Todos",
+                                icon: (
+                                    <ListChecksIcon
+                                        className="size-4"
+                                        weight="bold"
+                                    />
+                                ),
+                                content: (
+                                    <div className="p-4">
+                                        <p className="text-sm font-medium text-white mb-3">
+                                            Todo list
+                                        </p>
+                                        <ul className="space-y-2 text-sm text-dark-200">
+                                            <li className="flex items-center gap-2">
+                                                <span className="size-3 rounded-sm border border-dark-400 inline-block shrink-0" />{" "}
+                                                Build the dock panel
+                                            </li>
+                                            <li className="flex items-center gap-2">
+                                                <span className="size-3 rounded-sm border border-dark-400 inline-block shrink-0" />{" "}
+                                                Add real todo items here
+                                            </li>
+                                            <li className="flex items-center gap-2">
+                                                <span className="size-3 rounded-sm border border-dark-400 inline-block shrink-0" />{" "}
+                                                Connect to backend
+                                            </li>
+                                        </ul>
+                                    </div>
+                                )
+                            },
+                            {
+                                id: "questions",
+                                label: "Tool questions",
+                                icon: (
+                                    <ChatTeardropTextIcon
+                                        className="size-4"
+                                        weight="bold"
+                                    />
+                                ),
+                                content: (
+                                    <div className="p-4">
+                                        <p className="text-sm font-medium text-white mb-3">
+                                            Pending questions
+                                        </p>
+                                        <p className="text-sm text-dark-300">
+                                            No questions from tools right now.
+                                        </p>
+                                    </div>
+                                )
+                            }
+                        ]}
                     />
                 </div>
             </div>
