@@ -39,6 +39,25 @@ function formatTime(isoString: string): string {
     }
 }
 
+function formatDuration(startIso: string, endIso: string): string | null {
+    try {
+        const start = new Date(startIso).getTime();
+        const end = new Date(endIso).getTime();
+
+        if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) {
+            return null;
+        }
+
+        const totalSeconds = Math.max(0, Math.round((end - start) / 1000));
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+
+        return `${minutes}m ${seconds}s`;
+    } catch {
+        return null;
+    }
+}
+
 function getModelDisplayName(
     modelId: string,
     availableModels: ChatModel[]
@@ -160,7 +179,7 @@ function CopyButton({ text }: { text: string }) {
     );
 }
 
-function MessageMetadataDisplay({
+function AssistantMessageMetadataDisplay({
     metadata,
     availableModels
 }: {
@@ -172,30 +191,55 @@ function MessageMetadataDisplay({
     const model = metadata.model
         ? getModelDisplayName(metadata.model, availableModels)
         : null;
-    const time = metadata.generationStartedAt
-        ? formatTime(metadata.generationStartedAt)
+    const duration =
+        metadata.generationStartedAt && metadata.generationCompletedAt
+            ? formatDuration(
+                  metadata.generationStartedAt,
+                  metadata.generationCompletedAt
+              )
         : null;
     const usedThinking = metadata.thinkingEnabled === true;
 
-    if (!model && !time && !usedThinking) return null;
+    if (!model && !duration && !usedThinking) return null;
 
     return (
         <div className="flex items-center gap-2 text-[11px] text-dark-300">
             {model && <span>{model}</span>}
-            {model && (usedThinking || time) && <span>-</span>}
+            {model && (usedThinking || duration) && <span>-</span>}
             {usedThinking && (
                 <span className="flex items-center gap-1">
                     <BrainIcon className="size-3" weight="fill" />
                     Thinking
                 </span>
             )}
-            {usedThinking && time && <span>-</span>}
-            {time && (
+            {usedThinking && duration && <span>-</span>}
+            {duration && (
                 <span className="flex items-center gap-1">
                     <ClockIcon className="size-3" weight="bold" />
-                    {time}
+                    {duration}
                 </span>
             )}
+        </div>
+    );
+}
+
+function UserMessageMetadataDisplay({
+    metadata,
+    createdAt
+}: {
+    metadata: MessageMetadata | null;
+    createdAt: string;
+}) {
+    const sentAt =
+        typeof metadata?.sentAt === "string" ? metadata.sentAt : createdAt;
+    const time = formatTime(sentAt);
+
+    if (!time) return null;
+
+    return (
+        <div className="flex items-center gap-1 text-[11px] text-dark-300">
+            <ClockIcon className="size-3" weight="bold" />
+            <span>{time}</span>
         </div>
     );
 }
@@ -272,7 +316,7 @@ function AssistantMessage({
                 {message.status === "complete" && text && (
                     <CopyButton text={text} />
                 )}
-                <MessageMetadataDisplay
+                <AssistantMessageMetadataDisplay
                     metadata={message.metadata}
                     availableModels={availableModels}
                 />
@@ -353,29 +397,38 @@ export function ConversationThread({
                                     key={message.id}
                                     className="flex justify-end"
                                 >
-                                    <div className="max-w-[80%] rounded-md bg-dark-800 border border-dark-600 px-3 py-0.5 space-y-2">
-                                        {images.length > 0 && (
-                                            <div className="flex flex-wrap gap-2">
-                                                {images.map((img, i) => (
-                                                    <ImageViewer
-                                                        key={i}
-                                                        src={`data:${img.mimeType};base64,${img.data}`}
-                                                        alt="attachment"
-                                                        imgClassName="max-h-48 w-auto max-w-full"
-                                                    />
-                                                ))}
-                                            </div>
-                                        )}
-                                        {text && (
-                                            <p className="whitespace-pre-wrap text-sm leading-7 text-white">
-                                                {text}
-                                            </p>
-                                        )}
-                                        {!text && images.length === 0 && (
-                                            <p className="whitespace-pre-wrap text-sm leading-7 text-white">
-                                                Unsupported message part.
-                                            </p>
-                                        )}
+                                    <div className="max-w-[80%]">
+                                        <div className="rounded-md border border-dark-600 bg-dark-800 px-3 py-0.5 space-y-2">
+                                            {images.length > 0 && (
+                                                <div className="flex flex-wrap gap-2">
+                                                    {images.map((img, i) => (
+                                                        <ImageViewer
+                                                            key={i}
+                                                            src={`data:${img.mimeType};base64,${img.data}`}
+                                                            alt="attachment"
+                                                            imgClassName="max-h-48 w-auto max-w-full"
+                                                        />
+                                                    ))}
+                                                </div>
+                                            )}
+                                            {text && (
+                                                <p className="whitespace-pre-wrap text-sm leading-7 text-white">
+                                                    {text}
+                                                </p>
+                                            )}
+                                            {!text && images.length === 0 && (
+                                                <p className="whitespace-pre-wrap text-sm leading-7 text-white">
+                                                    Unsupported message part.
+                                                </p>
+                                            )}
+                                        </div>
+                                        <div className="mt-1.5 flex items-center justify-end gap-2">
+                                            {text && <CopyButton text={text} />}
+                                            <UserMessageMetadataDisplay
+                                                metadata={message.metadata}
+                                                createdAt={message.createdAt}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             );

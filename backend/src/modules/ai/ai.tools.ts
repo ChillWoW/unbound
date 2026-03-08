@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 export const tools = {
+    /* Template
     getCurrentTime: tool({
         description: "Get the current date and time for a given timezone",
         inputSchema: z.object({
@@ -18,5 +19,5 @@ export const tools = {
                 timeStyle: "long"
             });
         }
-    })
+    })*/
 };

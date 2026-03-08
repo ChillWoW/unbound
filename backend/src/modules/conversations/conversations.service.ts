@@ -181,7 +181,10 @@ export const conversationsService = {
                 messageId: createCustomId("msg"),
                 messageRole: "user",
                 messageParts,
-                messageStatus: "complete"
+                messageStatus: "complete",
+                messageMetadata: {
+                    sentAt: new Date().toISOString()
+                }
             });
 
         return getConversationDetailOrThrow(user.id, conversation.id);
@@ -208,7 +211,10 @@ export const conversationsService = {
             messageId: createCustomId("msg"),
             messageRole: "user",
             messageParts: createMessageParts(input.content, input.attachments),
-            messageStatus: "complete"
+            messageStatus: "complete",
+            messageMetadata: {
+                sentAt: new Date().toISOString()
+            }
         });
 
         return getConversationDetailOrThrow(user.id, conversationId);

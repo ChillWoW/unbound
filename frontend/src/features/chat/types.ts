@@ -33,6 +33,7 @@ export type MessageRole = "user" | "assistant" | "system" | "tool";
 export type MessageStatus = "pending" | "complete" | "failed";
 
 export interface MessageMetadata {
+    sentAt?: string;
     model?: string;
     thinkingEnabled?: boolean;
     generationStartedAt?: string;
