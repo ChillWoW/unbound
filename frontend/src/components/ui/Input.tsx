@@ -3,7 +3,7 @@ import {
     Input as Base,
     type InputProps as BaseInputProps
 } from "@base-ui/react";
-import { Eye, EyeOff } from "lucide-react";
+import { EyeIcon, EyeSlashIcon } from "@phosphor-icons/react";
 import { cn } from "@/lib/cn";
 
 interface InputProps extends BaseInputProps {
@@ -76,9 +76,9 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
                         tabIndex={-1}
                     >
                         {showPassword ? (
-                            <EyeOff className="size-4" />
+                            <EyeSlashIcon className="size-4" />
                         ) : (
-                            <Eye className="size-4" />
+                            <EyeIcon className="size-4" />
                         )}
                     </button>
                 }

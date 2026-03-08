@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Select as Base } from "@base-ui/react";
-import { Check, ChevronsUpDownIcon } from "lucide-react";
+import { CheckIcon, CaretDownIcon } from "@phosphor-icons/react";
 import { cn } from "@/lib/cn";
 
 const Select = Base.Root;
@@ -35,7 +35,7 @@ const SelectTrigger = React.forwardRef<
         {children}
 
         <Base.Icon className="size-3.5 text-dark-200 shrink-0">
-            <ChevronsUpDownIcon className="size-3.5" />
+            <CaretDownIcon className="size-3.5" />
         </Base.Icon>
     </Base.Trigger>
 ));
@@ -121,7 +121,7 @@ const SelectItem = React.forwardRef<
         <Base.ItemText>{children}</Base.ItemText>
         <span className="absolute right-2 flex h-3.5 w-3.5 items-center justify-center">
             <Base.ItemIndicator>
-                <Check className="size-4" />
+                <CheckIcon className="size-4" />
             </Base.ItemIndicator>
         </span>
     </Base.Item>

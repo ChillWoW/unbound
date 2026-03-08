@@ -1,7 +1,7 @@
 import { Checkbox as Base } from "@base-ui/react";
 import { cn } from "@/lib/cn";
 import { forwardRef, useCallback } from "react";
-import { CheckIcon, MinusIcon } from "lucide-react";
+import { CheckIcon, MinusIcon } from "@phosphor-icons/react";
 
 interface CheckboxProps {
     checked?: boolean;
