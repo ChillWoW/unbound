@@ -697,49 +697,66 @@ export function ChatSidebar({
                             </MenuContent>
                         </Menu>
                     ) : collapsed ? (
-                        <div className="flex flex-col items-center gap-2">
-                            <Link
-                                to="/login"
-                                onClick={handleNavigate}
-                                className="flex size-10 items-center justify-center rounded-lg text-dark-200 transition hover:bg-white/5 hover:text-dark-50"
-                                title="Login"
+                        <div
+                            className={cn(
+                                "flex flex-col items-center justify-center gap-2"
+                            )}
+                        >
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    navigate({ to: "/login" });
+                                    handleNavigate();
+                                }}
+                                className="size-8 p-0"
                             >
                                 <SignInIcon className="size-4" weight="bold" />
-                            </Link>
-                            <Link
-                                to="/register"
-                                onClick={handleNavigate}
-                                className="flex size-10 items-center justify-center rounded-lg bg-primary-50 text-dark-900 transition hover:bg-primary-300"
-                                title="Register"
+                            </Button>
+                            <Button
+                                variant="primary"
+                                onClick={() => {
+                                    navigate({ to: "/register" });
+                                    handleNavigate();
+                                }}
+                                className="size-8 p-0"
                             >
                                 <UserPlusIcon
                                     className="size-4"
                                     weight="bold"
                                 />
-                            </Link>
+                            </Button>
                         </div>
                     ) : (
                         <div className="grid grid-cols-2 gap-2">
-                            <Link
-                                to="/login"
-                                onClick={handleNavigate}
-                                className="inline-flex items-center justify-center gap-2 rounded-md border border-dark-400 px-2.5 py-1.5 text-sm text-white transition hover:bg-dark-600"
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    navigate({ to: "/login" });
+                                    handleNavigate();
+                                }}
+                                className="size-8 p-0 w-full"
                             >
-                                <SignInIcon className="size-4" weight="bold" />
+                                <SignInIcon
+                                    className="size-4 mr-2"
+                                    weight="bold"
+                                />
                                 Login
-                            </Link>
+                            </Button>
 
-                            <Link
-                                to="/register"
-                                onClick={handleNavigate}
-                                className="inline-flex items-center justify-center gap-2 rounded-md bg-primary-50 px-2.5 py-1.5 text-sm text-dark-900 transition hover:bg-primary-200"
+                            <Button
+                                variant="primary"
+                                onClick={() => {
+                                    navigate({ to: "/register" });
+                                    handleNavigate();
+                                }}
+                                className="size-8 p-0 w-full"
                             >
                                 <UserPlusIcon
-                                    className="size-4"
+                                    className="size-4 mr-2"
                                     weight="bold"
                                 />
                                 Register
-                            </Link>
+                            </Button>
                         </div>
                     )}
                 </div>

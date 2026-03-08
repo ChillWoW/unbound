@@ -20,7 +20,7 @@ export function CodeBlock({ language, children }: CodeBlockProps) {
     }, [children]);
 
     return (
-        <div className="my-3 overflow-hidden rounded-lg border border-dark-600">
+        <div className="my-3 overflow-hidden rounded-md border border-dark-600 bg-dark-900">
             <div className="flex items-center justify-between border-b border-dark-600 px-3 py-1.5">
                 {language && (
                     <span className="text-[11px] font-medium text-dark-200 tracking-wide">
@@ -30,7 +30,7 @@ export function CodeBlock({ language, children }: CodeBlockProps) {
                 <button
                     type="button"
                     onClick={handleCopy}
-                    className="ml-auto flex items-center gap-1.5 rounded px-2 py-0.5 text-[11px] text-dark-300 transition-colors hover:bg-dark-700 hover:text-white"
+                    className="ml-auto flex items-center gap-1.5 rounded px-2 py-0.5 text-[11px] text-dark-200 transition-colors hover:bg-dark-700 hover:text-dark-50"
                 >
                     {copied ? (
                         <>
@@ -55,7 +55,9 @@ export function CodeBlock({ language, children }: CodeBlockProps) {
                     fontSize: "13px",
                     lineHeight: "1.5"
                 }}
-                codeTagProps={{ style: { fontFamily: '"Geist Mono", monospace' } }}
+                codeTagProps={{
+                    style: { fontFamily: '"Geist Mono", monospace' }
+                }}
             >
                 {children}
             </SyntaxHighlighter>

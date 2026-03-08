@@ -41,7 +41,7 @@ const components: Components = {
 
         return (
             <code
-                className="rounded bg-dark-700 px-1 py-0.5 text-[13px] font-mono text-primary-300"
+                className="rounded bg-dark-800 px-1 py-0.5 text-[13px] font-mono text-dark-50"
                 {...props}
             >
                 {children}
@@ -116,7 +116,7 @@ const components: Components = {
                 href={href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-primary-400 underline hover:text-primary-200"
+                className="text-primary-300 underline hover:text-primary-400"
             >
                 {children}
             </a>
@@ -176,9 +176,6 @@ export function MarkdownRenderer({
             >
                 {displayContent}
             </ReactMarkdown>
-            {isStreaming && (
-                <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-primary-400 align-middle" />
-            )}
         </div>
     );
 }

@@ -24,7 +24,7 @@ export function ImageViewer({ src, alt, imgClassName }: ImageViewerProps) {
 
     return (
         <>
-            <span className="group relative my-3 inline-block max-w-full">
+            <span className="group relative inline-block max-w-full">
                 <img
                     src={src}
                     alt={alt}
@@ -52,7 +52,7 @@ export function ImageViewer({ src, alt, imgClassName }: ImageViewerProps) {
                     <button
                         type="button"
                         onClick={close}
-                        className="absolute right-4 top-4 flex items-center justify-center rounded-full bg-dark-700 p-2 text-dark-100 transition-colors hover:bg-dark-600 hover:text-white"
+                        className="absolute right-4 top-4 flex items-center justify-center rounded-full bg-dark-800 p-2 text-dark-200 transition-colors hover:bg-dark-700 hover:text-dark-50"
                         aria-label="Close"
                     >
                         <XIcon className="size-5" />
@@ -60,7 +60,7 @@ export function ImageViewer({ src, alt, imgClassName }: ImageViewerProps) {
                     <img
                         src={src}
                         alt={alt}
-                        className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
+                        className="max-h-full max-w-full rounded-md object-contain shadow-2xl"
                         onClick={(e) => e.stopPropagation()}
                     />
                 </div>
