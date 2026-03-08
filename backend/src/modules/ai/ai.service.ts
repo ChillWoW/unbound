@@ -12,6 +12,7 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { requireAuth } from "../../middleware/require-auth";
 import { settingsService } from "../settings/settings.service";
 import { conversationsRepository } from "../conversations/conversations.repository";
+import { todosRepository } from "../todos/todos.repository";
 import {
     ConversationError,
     type MessagePart,
@@ -160,11 +161,38 @@ function buildSystemPrompt(now = new Date()): string {
     return [
         "You are a helpful assistant named Unbound for this app.",
         "You have access to multiple tools to help you answer questions and complete tasks.",
+        "When tracking work with todo tools: keep exactly one in_progress item at a time, mark items completed immediately when done, and before your final response leave no stale in_progress items.",
         "Use these runtime facts as source of truth when answering time-sensitive questions:",
         `- Current datetime (ISO UTC): ${isoDateTime}`,
         `- Current datetime (UTC, human): ${utcDate}`,
         `- Server timezone: ${serverTimezone}`
     ].join("\n");
+}
+
+function hasMeaningfulAssistantOutput(parts: MessagePart[]): boolean {
+    return parts.some(
+        (part) =>
+            (part.type === "text" || part.type === "reasoning") &&
+            part.text.trim().length > 0
+    );
+}
+
+async function reconcileLingeringInProgressTodos(conversationId: string) {
+    const todos = await todosRepository.listByConversationId(conversationId);
+    const inProgressTodos = todos.filter((todo) => todo.status === "in_progress");
+
+    if (inProgressTodos.length === 0) {
+        return;
+    }
+
+    for (const todo of inProgressTodos) {
+        await todosRepository.updateStatus(conversationId, todo.id, "completed");
+    }
+
+    logger.info("Auto-completed lingering in_progress todos", {
+        conversationId,
+        updatedCount: inProgressTodos.length
+    });
 }
 
 function encodeSSE(event: SSEEvent): Uint8Array {
@@ -392,6 +420,22 @@ function startBackgroundGeneration(
                     generationCompletedAt
                 }
             });
+
+            if (status === "complete" && hasMeaningfulAssistantOutput(finalParts)) {
+                try {
+                    await reconcileLingeringInProgressTodos(
+                        generation.conversationId
+                    );
+                } catch (error) {
+                    logger.warn("Todo reconciliation failed", {
+                        conversationId: generation.conversationId,
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : String(error)
+                    });
+                }
+            }
 
             generationManager.complete(generation.conversationId);
         },

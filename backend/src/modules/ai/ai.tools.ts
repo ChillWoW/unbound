@@ -20,7 +20,7 @@ export function createTools(conversationId: string, userId: string) {
     return {
         todoWrite: tool({
             description:
-                "Create or update todos for the current conversation. Use merge=true to update existing todos by id and add new ones. Use merge=false to replace the entire list. Each todo needs a unique id (use a short slug like 'setup-db'), content, and status.",
+                "Create or update todos for the current conversation. Use merge=true to update existing todos by id and add new ones. Use merge=false to replace the entire list. Keep exactly one task in_progress, and mark tasks completed as soon as they are done.",
             inputSchema: z.object({
                 todos: z
                     .array(
@@ -76,7 +76,7 @@ export function createTools(conversationId: string, userId: string) {
 
         todoSetStatus: tool({
             description:
-                "Update the status of a single todo item. Use this for quick status changes without rewriting the whole list.",
+                "Update the status of a single todo item. Use this for quick status changes without rewriting the whole list. Before finalizing your response, avoid leaving stale in_progress tasks.",
             inputSchema: z.object({
                 todoId: z.string().describe("The id of the todo to update"),
                 status: z.enum([
