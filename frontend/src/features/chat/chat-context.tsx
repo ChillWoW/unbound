@@ -516,15 +516,9 @@ export function ChatProvider({ children }: PropsWithChildren) {
             }
 
             let realMessageId = optimisticId;
-            let accumulatedText = "";
-            let accumulatedReasoning = "";
-            const toolParts: MessagePart[] = [];
+            const streamParts: MessagePart[] = [];
 
-            const buildParts = (): MessagePart[] => [
-                ...(accumulatedReasoning ? [{ type: "reasoning" as const, text: accumulatedReasoning }] : []),
-                ...(accumulatedText ? [{ type: "text" as const, text: accumulatedText }] : []),
-                ...toolParts
-            ];
+            const buildParts = (): MessagePart[] => [...streamParts];
 
             await parseAIStream(streamResponse, {
                 onMessageStart(messageId) {
@@ -546,7 +540,12 @@ export function ChatProvider({ children }: PropsWithChildren) {
                     });
                 },
                 onReasoning(text) {
-                    accumulatedReasoning += text;
+                    const lastPart = streamParts[streamParts.length - 1];
+                    if (lastPart?.type === "reasoning") {
+                        streamParts[streamParts.length - 1] = { type: "reasoning", text: lastPart.text + text };
+                    } else {
+                        streamParts.push({ type: "reasoning", text });
+                    }
                     const currentParts = buildParts();
                     setConversationDetails((current) => {
                         const existing = current[conversationId];
@@ -565,7 +564,12 @@ export function ChatProvider({ children }: PropsWithChildren) {
                     });
                 },
                 onTextDelta(text) {
-                    accumulatedText += text;
+                    const lastPart = streamParts[streamParts.length - 1];
+                    if (lastPart?.type === "text") {
+                        streamParts[streamParts.length - 1] = { type: "text", text: lastPart.text + text };
+                    } else {
+                        streamParts.push({ type: "text", text });
+                    }
                     const currentParts = buildParts();
                     setConversationDetails((current) => {
                         const existing = current[conversationId];
@@ -584,7 +588,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
                     });
                 },
                 onToolCall(toolCall) {
-                    upsertToolInvocationPart(toolParts, {
+                    upsertToolInvocationPart(streamParts, {
                         type: "tool-invocation",
                         toolInvocationId: toolCall.toolCallId,
                         toolName: toolCall.toolName,
@@ -609,7 +613,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
                     });
                 },
                 onToolResult(toolResult) {
-                    applyToolResult(toolParts, toolResult);
+                    applyToolResult(streamParts, toolResult);
                     const currentParts = buildParts();
                     setConversationDetails((current) => {
                         const existing = current[conversationId];
