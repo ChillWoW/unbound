@@ -206,7 +206,7 @@ function ConversationActionsMenu({
         <Menu open={isOpen} onOpenChange={setIsOpen}>
             <MenuTrigger
                 className={cn(
-                    "mr-1 shrink-0 rounded-md p-1 text-dark-200 transition-all hover:bg-dark-600 hover:text-white focus:outline-none",
+                    "mr-1 shrink-0 rounded-md p-1 text-dark-200 transition-all hover:bg-dark-600 hover:text-dark-50 focus:outline-none",
                     isActive
                         ? "opacity-100"
                         : "opacity-0 group-hover:opacity-100"
@@ -343,8 +343,8 @@ function ConversationListItem({
             className={cn(
                 "group relative flex items-center rounded-md transition-colors",
                 isActive
-                    ? "bg-dark-700 text-white"
-                    : "text-dark-100 hover:bg-dark-700 hover:text-white"
+                    ? "bg-dark-700 text-dark-50"
+                    : "text-dark-100 hover:bg-dark-700 hover:text-dark-50"
             )}
         >
             <Link
@@ -353,13 +353,13 @@ function ConversationListItem({
                     conversationId: conversation.id
                 }}
                 onClick={onNavigate}
-                className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-1.5 text-sm"
+                className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-1.5 text-sm"
             >
                 <span className="min-w-0 flex-1 truncate text-inherit">
                     {conversation.title}
                 </span>
                 {conversation.hasUnreadAssistantReply ? (
-                    <span className="size-1.5 shrink-0 rounded-full bg-sky-400" />
+                    <span className="size-1.5 shrink-0 rounded-full bg-primary-400" />
                 ) : null}
             </Link>
 
@@ -492,7 +492,7 @@ export function ChatSidebar({
         <>
             <aside
                 className={cn(
-                    "flex h-full flex-col border-r border-dark-600 bg-dark-800 text-white transition-[width] duration-200 ease-out",
+                    "flex h-full flex-col border-r border-dark-600 bg-dark-900 text-white transition-[width] duration-200 ease-out",
                     collapsed ? "w-14" : "w-full",
                     className
                 )}
@@ -519,7 +519,7 @@ export function ChatSidebar({
                         type="button"
                         onClick={handleToggle}
                         className={cn(
-                            "inline-flex shrink-0 items-center justify-center rounded-md text-dark-100 transition hover:bg-dark-600 hover:text-white",
+                            "inline-flex shrink-0 items-center justify-center rounded-md text-dark-100 transition hover:bg-dark-700 hover:text-white",
                             collapsed ? "mx-auto size-8" : "size-8"
                         )}
                     >
@@ -701,7 +701,7 @@ export function ChatSidebar({
                             <Link
                                 to="/login"
                                 onClick={handleNavigate}
-                                className="flex size-10 items-center justify-center rounded-lg text-dark-200 transition hover:bg-white/5 hover:text-white"
+                                className="flex size-10 items-center justify-center rounded-lg text-dark-200 transition hover:bg-white/5 hover:text-dark-50"
                                 title="Login"
                             >
                                 <SignInIcon className="size-4" weight="bold" />

@@ -132,11 +132,11 @@ export function RegisterForm() {
                     </form>
                 </div>
 
-                <p className="mt-4 text-center text-sm text-dark-400">
+                <p className="mt-4 text-center text-sm text-dark-200">
                     Already have an account?{" "}
                     <Link
                         to="/login"
-                        className="text-dark-200 hover:text-white transition-colors"
+                        className="text-dark-100 hover:text-white transition-colors"
                     >
                         Sign in
                     </Link>

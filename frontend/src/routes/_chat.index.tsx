@@ -70,25 +70,41 @@ function HomePage() {
     return (
         <main className="flex h-full items-center justify-center px-4">
             <div className="flex flex-col gap-8 items-center w-full max-w-xl">
-                <p className="text-2xl font-semibold">{title}</p>
+                <p className="text-2xl font-semibold animate-fade-in animate-duration-500 animate-ease-out">
+                    {title}
+                </p>
 
-                {error && <p className="text-sm text-red-500">{error}</p>}
+                {error && (
+                    <p className="text-sm text-red-500 animate-fade-in animate-duration-200">
+                        {error}
+                    </p>
+                )}
 
-                <ChatInput
-                    disabled={isLoading || isCreatingConversation || !isAuthenticated}
-                    isSubmitting={isCreatingConversation}
-                    isModelsLoading={isLoadingModels}
-                    isThinkingEnabled={isThinkingEnabled}
-                    models={availableModels}
-                    modelsError={modelsError}
-                    selectedModelId={selectedModelId}
-                    onSelectedModelChange={setSelectedModelId}
-                    onThinkingChange={setThinkingEnabled}
-                    value={draft}
-                    onChange={setDraft}
-                    onSubmit={handleSubmit}
-                    placeholder={isAuthenticated ? "Message Unbound..." : "Sign in to start chatting..."}
-                />
+                <div className="w-full animate-fade-up animate-duration-500 animate-delay-150 animate-ease-out">
+                    <ChatInput
+                        disabled={
+                            isLoading ||
+                            isCreatingConversation ||
+                            !isAuthenticated
+                        }
+                        isSubmitting={isCreatingConversation}
+                        isModelsLoading={isLoadingModels}
+                        isThinkingEnabled={isThinkingEnabled}
+                        models={availableModels}
+                        modelsError={modelsError}
+                        selectedModelId={selectedModelId}
+                        onSelectedModelChange={setSelectedModelId}
+                        onThinkingChange={setThinkingEnabled}
+                        value={draft}
+                        onChange={setDraft}
+                        onSubmit={handleSubmit}
+                        placeholder={
+                            isAuthenticated
+                                ? "Message Unbound..."
+                                : "Sign in to start chatting..."
+                        }
+                    />
+                </div>
             </div>
         </main>
     );

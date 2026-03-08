@@ -1,5 +1,5 @@
 import { useEffect, useState, type PropsWithChildren } from "react";
-import { useRouterState } from "@tanstack/react-router";
+import { useRouterState, type RouterState } from "@tanstack/react-router";
 import { SidebarSimpleIcon } from "@phosphor-icons/react";
 import { cn } from "@/lib/cn";
 import { ChatSidebar } from "./chat-sidebar";
@@ -7,7 +7,7 @@ import { Button } from "@/components/ui";
 
 export function ChatShell({ children }: PropsWithChildren) {
     const pathname = useRouterState({
-        select: (state) => state.location.pathname
+        select: (state: RouterState) => state.location.pathname
     });
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
     const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(false);
@@ -37,7 +37,7 @@ export function ChatShell({ children }: PropsWithChildren) {
     }, [isMobileSidebarOpen]);
 
     return (
-        <div className="flex h-screen overflow-hidden bg-dark-900 text-white">
+        <div className="flex h-screen overflow-hidden bg-dark-950 text-white">
             <div
                 className={cn(
                     "hidden shrink-0 transition-[width] duration-200 ease-out lg:block",
@@ -90,7 +90,7 @@ export function ChatShell({ children }: PropsWithChildren) {
                 <header className="sticky top-0 z-20 flex items-center md:hidden p-2">
                     <Button
                         variant="ghost"
-                        className="text-dark-100"
+                        className="text-dark-100 hover:text-dark-50"
                         onClick={() => setIsMobileSidebarOpen(true)}
                     >
                         <SidebarSimpleIcon className="size-5" weight="bold" />

@@ -96,7 +96,7 @@ export function InputDock({
             >
                 <div
                     className={cn(
-                        "rounded-t-md border border-b-0 border-dark-600 bg-dark-800 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
+                        "rounded-t-md border border-b-0 border-dark-600 bg-dark-850 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
                         isOpen
                             ? "opacity-100 translate-y-0"
                             : "opacity-0 translate-y-2 pointer-events-none"
@@ -120,12 +120,7 @@ export function InputDock({
             </div>
 
             {hasTodos && (
-                <div
-                    className={cn(
-                        "relative z-10 mx-2 overflow-hidden rounded-t-md border border-b-0 border-dark-600 bg-dark-800",
-                        isOpen && "border-t-0 rounded-t-none"
-                    )}
-                >
+                <div className="relative z-10 mx-2 overflow-hidden rounded-t-md border border-b-0 border-dark-600 bg-dark-850">
                     <TodoPanel todos={todos} />
                 </div>
             )}

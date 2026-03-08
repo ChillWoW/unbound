@@ -4,6 +4,8 @@
 @plugin "tailwind-scrollbar";
 
 @theme {
+    --breakpoint-3xl: 120rem;
+
     --color-dark-50: #c9c9c9;
     --color-dark-100: #b8b8b8;
     --color-dark-200: #828282;
@@ -13,6 +15,7 @@
     --color-dark-600: #2e2e2e;
     --color-dark-700: #242424;
     --color-dark-800: #1f1f1f;
+    --color-dark-850: #1a1a1a;
     --color-dark-900: #141414;
     --color-dark-950: #0d0d0d;
 

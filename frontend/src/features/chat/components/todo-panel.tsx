@@ -151,7 +151,7 @@ export function TodoPanel({ todos }: TodoPanelProps) {
             <button
                 type="button"
                 onClick={() => setExpanded((prev) => !prev)}
-                className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left transition-colors hover:bg-dark-700"
+                className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left transition-colors hover:bg-dark-800"
             >
                 <ListChecksIcon
                     className="size-4 shrink-0 text-dark-200"
@@ -182,7 +182,7 @@ export function TodoPanel({ todos }: TodoPanelProps) {
                 <div className="flex items-center gap-2">
                     <div
                         className={cn(
-                            "relative h-1 overflow-hidden rounded-full bg-dark-600 transition-all duration-250 ease-out",
+                            "relative h-1 overflow-hidden rounded-full bg-dark-600 transition-all duration-300 ease-out",
                             expanded
                                 ? "w-0 opacity-0 scale-x-75"
                                 : "w-16 md:w-24 opacity-100 scale-x-100"
@@ -209,7 +209,7 @@ export function TodoPanel({ todos }: TodoPanelProps) {
                 style={{ height: expanded ? measuredHeight : 0 }}
             >
                 <div ref={expandedRef}>
-                    <div className="h-0.5 w-full overflow-hidden rounded-full bg-dark-600">
+                    <div className="h-px w-full overflow-hidden rounded-full bg-dark-600">
                         <div
                             className="h-full rounded-full bg-primary-400 transition-all duration-500"
                             style={{ width: `${progressPercent}%` }}

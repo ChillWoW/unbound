@@ -111,11 +111,11 @@ export function LoginForm() {
                     </form>
                 </div>
 
-                <p className="mt-4 text-center text-sm text-dark-400">
+                <p className="mt-4 text-center text-sm text-dark-200">
                     Don't have an account?{" "}
                     <Link
                         to="/register"
-                        className="text-dark-200 hover:text-white transition-colors"
+                        className="text-dark-100 hover:text-white transition-colors"
                     >
                         Register
                     </Link>

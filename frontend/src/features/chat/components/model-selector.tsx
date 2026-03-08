@@ -223,9 +223,8 @@ export function ModelSelector({
     const [activeProvider, setActiveProvider] = useState<string | null>(null);
     const [selectedModalities, setSelectedModalities] = useState<string[]>([]);
 
-    const modelName = useMemo(() => {
-        if (!selectedModelId) return "Select a model";
-        return models.find((model) => model.id === selectedModelId)?.name;
+    const selectedModel = useMemo(() => {
+        return models.find((model) => model.id === selectedModelId);
     }, [selectedModelId, models]);
 
     const ModelIcon = useMemo(() => {
@@ -351,15 +350,22 @@ export function ModelSelector({
         >
             <PopoverTrigger
                 className={cn(
-                    "inline-flex h-8 max-w-48 cursor-pointer items-center gap-2 rounded-md px-3 text-xs outline-none transition-colors hover:bg-dark-600 focus:outline-none focus-visible:outline-none focus-visible:ring-0",
-                    selectedModelId ? "text-dark-50" : "text-dark-100"
+                    "inline-flex h-8 max-w-48 cursor-pointer items-center gap-2.5 rounded-md px-2.5 text-xs outline-none transition-colors hover:bg-dark-700 focus:outline-none focus-visible:outline-none focus-visible:ring-0 text-dark-100 hover:text-dark-50"
                 )}
                 disabled={disabled}
             >
                 {ModelIcon && (
                     <ModelIcon className="size-4 opacity-70" title="" />
                 )}
-                <span className="truncate">{modelName}</span>
+                <span className="truncate">
+                    {selectedModel?.name ?? "Select a model"}
+                </span>
+
+                {selectedModel?.free && (
+                    <div className="shrink-0 rounded-md bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-100">
+                        Free
+                    </div>
+                )}
             </PopoverTrigger>
 
             <PopoverContent
@@ -367,7 +373,7 @@ export function ModelSelector({
                 className="flex h-96 w-[28rem] flex-col overflow-hidden p-0"
             >
                 <div className="flex min-h-0 flex-1">
-                    <div className="flex w-12 shrink-0 flex-col items-center gap-1 overflow-y-auto overflow-x-hidden hide-scrollbar border-r border-dark-600 bg-dark-950 p-2">
+                    <div className="flex shrink-0 flex-col items-center gap-1 overflow-y-auto overflow-x-hidden hide-scrollbar border-r border-dark-600 bg-dark-900 p-2">
                         {providers.map((provider) => {
                             const ProviderIcon = ICONS[provider];
                             const isActive = provider === activeProvider;
@@ -376,7 +382,7 @@ export function ModelSelector({
                             return (
                                 <Tooltip
                                     key={provider}
-                                    content={`${formatProviderName(provider)}${isEnabled ? "" : " (No matching models)"}`}
+                                    content={formatProviderName(provider)}
                                     side="right"
                                     delay={300}
                                 >
@@ -386,10 +392,10 @@ export function ModelSelector({
                                         className={cn(
                                             "inline-flex size-8 shrink-0 items-center justify-center rounded-md transition-colors",
                                             isActive
-                                                ? "bg-dark-800 text-white"
-                                                : "text-dark-200 hover:bg-dark-800 hover:text-white",
+                                                ? "bg-dark-800 text-dark-50"
+                                                : "text-dark-200 hover:bg-dark-800 hover:text-dark-50",
                                             !isEnabled &&
-                                                "cursor-not-allowed opacity-35 hover:bg-transparent hover:text-dark-200"
+                                                "cursor-not-allowed opacity-40 hover:bg-transparent hover:text-dark-200"
                                         )}
                                         onClick={() =>
                                             setActiveProvider(provider)
@@ -448,7 +454,7 @@ export function ModelSelector({
                                                     0 && (
                                                     <button
                                                         type="button"
-                                                        className="text-[11px] text-dark-200 transition-colors hover:text-white"
+                                                        className="text-[11px] text-dark-200 transition-colors hover:text-dark-50"
                                                         onClick={() =>
                                                             setSelectedModalities(
                                                                 []
@@ -484,8 +490,8 @@ export function ModelSelector({
                                                                 className={cn(
                                                                     "flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-xs transition-colors",
                                                                     isSelected
-                                                                        ? "bg-dark-700 text-white"
-                                                                        : "text-dark-100 hover:bg-dark-700 hover:text-white"
+                                                                        ? "bg-dark-700 text-dark-50"
+                                                                        : "text-dark-100 hover:bg-dark-700 hover:text-dark-50"
                                                                 )}
                                                                 onClick={() =>
                                                                     toggleModality(
@@ -521,7 +527,7 @@ export function ModelSelector({
                             onChange={(e) => setSearch(e.target.value)}
                         />
 
-                        <div className="min-h-0 flex-1 overflow-y-auto px-1 py-1">
+                        <div className="min-h-0 flex-1 overflow-y-auto p-1">
                             {filteredModels.length === 0 && (
                                 <div className="flex h-full items-center justify-center">
                                     <p className="text-center text-xs text-dark-200">
@@ -538,19 +544,19 @@ export function ModelSelector({
                                         <div
                                             key={model.id}
                                             className={cn(
-                                                "flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-xs text-dark-100 transition-colors hover:bg-dark-600 hover:text-white",
+                                                "flex w-full cursor-pointer items-center gap-2.5 rounded-md px-3 py-1.5 text-xs text-dark-100 transition-colors hover:bg-dark-600 hover:text-white",
                                                 model.id === selectedModelId &&
-                                                    "bg-dark-600 text-white"
+                                                    "bg-dark-600 text-dark-50"
                                             )}
                                             onClick={() => {
                                                 onModelSelected(model);
                                                 setOpen(false);
                                             }}
                                         >
-                                            <div className="flex min-w-0 flex-1 items-center gap-2">
+                                            <div className="flex min-w-0 flex-1 items-center gap-2.5">
                                                 {ProviderIcon && (
                                                     <ProviderIcon
-                                                        className="size-3.5 shrink-0 opacity-50"
+                                                        className="size-3.5 shrink-0 opacity-70"
                                                         title=""
                                                     />
                                                 )}
@@ -560,7 +566,7 @@ export function ModelSelector({
                                             </div>
 
                                             {model.free && (
-                                                <div className="shrink-0 rounded-md bg-green-500/15 px-2 py-0.5 text-[11px] text-green-100">
+                                                <div className="shrink-0 rounded-md bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-100">
                                                     Free
                                                 </div>
                                             )}
@@ -579,7 +585,9 @@ export function ModelSelector({
                         type="button"
                         className={cn(
                             "flex w-full shrink-0 items-center gap-2 border-t border-dark-600 px-3 py-2 text-xs transition-colors hover:bg-dark-700",
-                            isThinkingEnabled ? "text-white" : "text-dark-100"
+                            isThinkingEnabled
+                                ? "text-dark-50"
+                                : "text-dark-200 hover:text-dark-50"
                         )}
                         onClick={() => onThinkingChange(!isThinkingEnabled)}
                     >

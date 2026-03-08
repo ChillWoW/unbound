@@ -126,12 +126,14 @@ function ReasoningDisplay({
             <button
                 type="button"
                 onClick={() => setExpanded(!expanded)}
-                className="flex items-center gap-1.5 text-xs"
+                className="flex items-center gap-1 text-xs"
             >
                 <span
                     className={cn(
-                        "font-medium",
-                        isStreaming ? "wave-text" : "text-dark-200"
+                        "font-medium transition-colors",
+                        isStreaming
+                            ? "wave-text"
+                            : "text-dark-200 hover:text-dark-50"
                     )}
                 >
                     Thinking
@@ -150,7 +152,7 @@ function ReasoningDisplay({
                         ref={reasoningScrollRef}
                         className="max-h-72 overflow-y-auto"
                     >
-                        <p className="whitespace-pre-wrap text-xs leading-5 text-dark-200">
+                        <p className="whitespace-pre-wrap text-xs leading-5 text-dark-300">
                             {part.text}
                         </p>
                     </div>
@@ -178,8 +180,10 @@ function ToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
             <div className="my-1.5">
                 <span
                     className={cn(
-                        "text-xs font-medium",
-                        isPending ? "wave-text" : "text-dark-300"
+                        "text-xs font-medium transition-colors",
+                        isPending
+                            ? "wave-text"
+                            : "text-dark-200 hover:text-dark-50"
                     )}
                 >
                     {label}
@@ -197,22 +201,24 @@ function ToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
             >
                 <span
                     className={cn(
-                        "font-medium",
-                        isPending ? "wave-text" : "text-dark-300"
+                        "font-medium transition-colors",
+                        isPending
+                            ? "wave-text"
+                            : "text-dark-200 hover:text-dark-50"
                     )}
                 >
                     {label}
                 </span>
                 <CaretRightIcon
                     className={cn(
-                        "size-3 text-dark-300 transition-transform",
+                        "size-2.5 text-dark-200 transition-transform",
                         expanded && "rotate-90"
                     )}
                     weight="bold"
                 />
             </button>
             {expanded && hasOutput && (
-                <pre className="mt-2 overflow-x-auto rounded bg-dark-900 p-2 text-xs text-dark-100">
+                <pre className="mt-2 overflow-x-auto rounded bg-dark-900 p-2 text-xs text-dark-300">
                     {typeof part.result === "string"
                         ? part.result
                         : JSON.stringify(part.result, null, 2)}
@@ -238,7 +244,7 @@ function CopyButton({ text }: { text: string }) {
             <button
                 type="button"
                 onClick={handleCopy}
-                className="flex size-7 items-center justify-center rounded-md text-dark-300 transition-colors hover:bg-dark-800 hover:text-white"
+                className="flex size-7 items-center justify-center rounded-md text-dark-300 transition-colors hover:bg-dark-700 hover:text-dark-50"
             >
                 {copied ? (
                     <CheckIcon className="size-3.5" weight="bold" />
@@ -278,14 +284,14 @@ function AssistantMessageMetadataDisplay({
             {model && <span>{model}</span>}
             {model && (usedThinking || duration) && <span>-</span>}
             {usedThinking && (
-                <span className="flex items-center gap-1">
+                <span className="flex items-center gap-1.5">
                     <BrainIcon className="size-3" weight="fill" />
                     Thinking
                 </span>
             )}
             {usedThinking && duration && <span>-</span>}
             {duration && (
-                <span className="flex items-center gap-1">
+                <span className="flex items-center gap-1.5">
                     <ClockIcon className="size-3" weight="bold" />
                     {duration}
                 </span>
@@ -308,7 +314,7 @@ function UserMessageMetadataDisplay({
     if (!time) return null;
 
     return (
-        <div className="flex items-center gap-1 text-[11px] text-dark-300">
+        <div className="flex items-center gap-1.5 text-[11px] text-dark-300">
             <ClockIcon className="size-3" weight="bold" />
             <span>{time}</span>
         </div>
@@ -318,19 +324,48 @@ function UserMessageMetadataDisplay({
 function formatGenerationError(raw: string | undefined): string {
     if (!raw) return "Generation failed. Please try again.";
     const lower = raw.toLowerCase();
-    if (lower.includes("api key") || lower.includes("unauthorized") || lower.includes("401"))
+    if (
+        lower.includes("api key") ||
+        lower.includes("unauthorized") ||
+        lower.includes("401")
+    )
         return "Invalid or missing API key. Check your OpenRouter key in settings.";
-    if (lower.includes("rate limit") || lower.includes("rate-limit") || lower.includes("rate limited") || lower.includes("rate-limited") || lower.includes("429"))
+    if (
+        lower.includes("rate limit") ||
+        lower.includes("rate-limit") ||
+        lower.includes("rate limited") ||
+        lower.includes("rate-limited") ||
+        lower.includes("429")
+    )
         return "Rate limit reached. Wait a moment, then try again.";
-    if (lower.includes("quota") || lower.includes("insufficient") || lower.includes("credits") || lower.includes("balance"))
+    if (
+        lower.includes("quota") ||
+        lower.includes("insufficient") ||
+        lower.includes("credits") ||
+        lower.includes("balance")
+    )
         return "Insufficient credits or quota on your OpenRouter account.";
-    if (lower.includes("context length") || lower.includes("too long") || lower.includes("maximum context"))
+    if (
+        lower.includes("context length") ||
+        lower.includes("too long") ||
+        lower.includes("maximum context")
+    )
         return "The conversation is too long for this model. Start a new conversation or switch to a model with a larger context window.";
-    if (lower.includes("model") && (lower.includes("not found") || lower.includes("unavailable") || lower.includes("404")))
+    if (
+        lower.includes("model") &&
+        (lower.includes("not found") ||
+            lower.includes("unavailable") ||
+            lower.includes("404"))
+    )
         return "The selected model is unavailable. Try a different model.";
     if (lower.includes("timeout") || lower.includes("timed out"))
         return "The request timed out. Please try again.";
-    if (lower.includes("no response body") || lower.includes("fetch") || lower.includes("network") || lower.includes("connection"))
+    if (
+        lower.includes("no response body") ||
+        lower.includes("fetch") ||
+        lower.includes("network") ||
+        lower.includes("connection")
+    )
         return "Connection failed. Check your internet and try again.";
     return "Generation failed. Please try again.";
 }
@@ -393,12 +428,20 @@ function AssistantMessage({
 
             {message.status === "failed" && (
                 <div className="mt-2 flex items-start gap-1.5 text-xs text-red-400">
-                    <WarningCircleIcon className="mt-px size-3.5 shrink-0" weight="fill" />
-                    <span>{formatGenerationError(message.metadata?.errorMessage ?? message.errorMessage)}</span>
+                    <WarningCircleIcon
+                        className="mt-px size-3.5 shrink-0"
+                        weight="fill"
+                    />
+                    <span>
+                        {formatGenerationError(
+                            message.metadata?.errorMessage ??
+                                message.errorMessage
+                        )}
+                    </span>
                 </div>
             )}
 
-            <div className="mt-1.5 flex items-center gap-2">
+            <div className="mt-1.5 flex items-center gap-1.5">
                 {message.status === "complete" && text && (
                     <CopyButton text={text} />
                 )}
@@ -533,9 +576,9 @@ export function ConversationThread({
         <section className="relative h-full">
             <div
                 ref={scrollRef}
-                className="h-full overflow-y-auto px-4 pt-6 pb-48"
+                className="h-full overflow-y-auto px-4 pt-6 pb-56"
             >
-                <div className="mx-auto max-w-3xl space-y-5">
+                <div className="mx-auto max-w-3xl 3xl:max-w-4xl space-y-5">
                     {conversation.messages.map((message) => {
                         if (message.role === "user") {
                             const text = getMessageText(message.parts);
@@ -548,9 +591,9 @@ export function ConversationThread({
                                     key={message.id}
                                     className="flex justify-end"
                                 >
-                                    <div className="max-w-[80%]">
+                                    <div className="max-w-[75%]">
                                         {images.length > 0 && (
-                                            <div className="flex flex-wrap justify-end gap-2 mb-1.5">
+                                            <div className="flex flex-wrap justify-end gap-2.5 mb-1">
                                                 {images.map((img, i) => (
                                                     <ImageViewer
                                                         key={i}
@@ -562,15 +605,15 @@ export function ConversationThread({
                                             </div>
                                         )}
                                         {text && (
-                                            <div className="rounded-md border border-dark-500 bg-dark-800 px-3 py-0.5">
-                                                <p className="whitespace-pre-wrap text-sm leading-7 text-white">
+                                            <div className="rounded-md border border-dark-600 bg-dark-850 px-3 py-0.5">
+                                                <p className="whitespace-pre-wrap text-sm leading-6 text-dark-50">
                                                     {text}
                                                 </p>
                                             </div>
                                         )}
                                         {!text && images.length === 0 && (
-                                            <div className="rounded-md border border-dark-500 bg-dark-800 px-3 py-0.5">
-                                                <p className="whitespace-pre-wrap text-sm leading-7 text-white">
+                                            <div className="rounded-md border border-dark-600 bg-dark-850 px-3 py-0.5">
+                                                <p className="whitespace-pre-wrap text-sm leading-6 text-dark-50">
                                                     Unsupported message part.
                                                 </p>
                                             </div>
@@ -606,11 +649,11 @@ export function ConversationThread({
                             "linear-gradient(to top, black 60%, transparent 100%)",
                         WebkitMaskImage:
                             "linear-gradient(to top, black 60%, transparent 100%)",
-                        backgroundColor: "var(--color-dark-900)"
+                        backgroundColor: "var(--color-dark-950)"
                     }}
                 />
 
-                <div className="mx-auto max-w-3xl">
+                <div className="mx-auto max-w-3xl 3xl:max-w-4xl">
                     {error ? (
                         <div className="mb-3 rounded-xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
                             {error}
@@ -621,7 +664,7 @@ export function ConversationThread({
                         <Button
                             type="button"
                             className={cn(
-                                "h-7 px-2.5 text-xs transition-opacity text-dark-50 bg-dark-800 border border-dark-500 relative z-10",
+                                "h-7 px-2.5 text-xs transition-opacity text-dark-50 bg-dark-850 border border-dark-600 relative z-10",
                                 !isAtBottom && conversation.messages.length > 0
                                     ? "opacity-100"
                                     : "pointer-events-none opacity-0"

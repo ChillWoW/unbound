@@ -114,7 +114,7 @@ function ContextWindowMeter({
             ? "text-red-400"
             : ratio > 0.7
               ? "text-amber-400"
-              : "text-primary-500";
+              : "text-primary-400";
 
     const usedFormatted =
         estimatedTokenCount >= 1000
@@ -144,7 +144,7 @@ function ContextWindowMeter({
                         fill="none"
                         stroke="currentColor"
                         strokeWidth={strokeWidth}
-                        className="text-dark-700"
+                        className="text-dark-600"
                     />
                     <circle
                         cx={size / 2}
@@ -175,7 +175,7 @@ function AttachmentChip({
     disabled: boolean;
 }) {
     return (
-        <div className="group flex items-center gap-1.5 rounded-lg bg-dark-700 pr-1 pl-1 py-1 max-w-48">
+        <div className="group flex items-center gap-1.5 rounded-md bg-dark-700 pr-1 pl-1 py-1 max-w-48">
             {attachment.type === "image" && attachment.preview ? (
                 <img
                     src={attachment.preview}
@@ -428,10 +428,10 @@ export function ChatInput({
     return (
         <form
             className={cn(
-                "w-full rounded-md border bg-dark-800 backdrop-blur-xl transition-colors",
+                "w-full rounded-md border bg-dark-850 backdrop-blur-xl transition-colors",
                 isDragOver
                     ? "border-primary-500 ring-1 ring-primary-500/30"
-                    : "border-dark-600",
+                    : "border-dark-600 focus-within:border-dark-500",
                 className
             )}
             onSubmit={handleSubmit}
@@ -439,7 +439,6 @@ export function ChatInput({
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
         >
-            {/* Attachment previews */}
             {attachments.length > 0 && (
                 <div className="flex flex-wrap gap-2 px-3 pt-3">
                     {attachments.map((attachment) => (
@@ -453,12 +452,10 @@ export function ChatInput({
                 </div>
             )}
 
-            {/* File error */}
             {fileError && (
                 <p className="px-3 pt-2 text-xs text-red-400">{fileError}</p>
             )}
 
-            {/* Textarea */}
             <div className="px-3 pt-3">
                 <TextareaAutosize
                     className="w-full resize-none bg-transparent text-sm text-white outline-none placeholder:text-dark-200"
@@ -499,7 +496,6 @@ export function ChatInput({
                 />
             </div>
 
-            {/* Toolbar */}
             <div className="flex items-center justify-between gap-4 px-2 pb-2 pt-1">
                 <div className="flex min-w-0 items-center gap-2">
                     <div className="min-w-0">
@@ -552,7 +548,7 @@ export function ChatInput({
                             <Button
                                 type="button"
                                 variant="ghost"
-                                className="size-8 p-0 text-dark-200 hover:text-white"
+                                className="size-8 p-0 text-dark-200 hover:text-dark-50 hover:bg-dark-700"
                                 disabled={
                                     disabled ||
                                     isSubmitting ||
@@ -570,7 +566,7 @@ export function ChatInput({
                             <Button
                                 type="button"
                                 variant="ghost"
-                                className="size-8 p-0 text-dark-200 hover:text-white"
+                                className="size-8 p-0 text-dark-200 hover:text-dark-50 hover:bg-dark-700"
                                 disabled={
                                     disabled ||
                                     isSubmitting ||
