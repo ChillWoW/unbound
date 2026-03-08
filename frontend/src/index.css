@@ -127,19 +127,19 @@ body {
 ::selection {
     background-color: color-mix(
         in srgb,
-        var(--color-primary-100) 60%,
+        var(--color-dark-400) 70%,
         transparent
     );
-    color: var(--color-dark-600);
+    color: var(--color-dark-50);
 }
 
 ::-moz-selection {
     background-color: color-mix(
         in srgb,
-        var(--color-primary-100) 60%,
+        var(--color-dark-400) 70%,
         transparent
     );
-    color: var(--color-dark-600);
+    color: var(--color-dark-50);
 }
 
 @keyframes wave-shimmer {

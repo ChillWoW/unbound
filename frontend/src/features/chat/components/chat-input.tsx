@@ -456,7 +456,7 @@ export function ChatInput({
                     className="w-full resize-none bg-transparent text-sm text-white outline-none placeholder:text-dark-200"
                     minRows={1}
                     maxRows={8}
-                    disabled={disabled || isSubmitting}
+                    disabled={disabled}
                     placeholder={placeholder}
                     value={draft}
                     onChange={(event) => updateValue(event.target.value)}
