@@ -13,7 +13,7 @@ const attachmentSchema = t.Object({
 });
 
 const messageBody = t.Object({
-    content: t.String({ maxLength: 12000 }),
+    content: t.String({ maxLength: 32000 }),
     attachments: t.Optional(t.Array(attachmentSchema, { maxItems: 10 }))
 });
 
