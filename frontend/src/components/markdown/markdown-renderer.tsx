@@ -11,6 +11,21 @@ interface MarkdownRendererProps {
     isStreaming?: boolean;
 }
 
+function normalizeStreamingMarkdown(content: string, isStreaming?: boolean) {
+    if (!isStreaming || content.length === 0) {
+        return content;
+    }
+
+    const fenceMatches = content.match(/```/g);
+    const fenceCount = fenceMatches?.length ?? 0;
+
+    if (fenceCount % 2 === 0) {
+        return content;
+    }
+
+    return `${content}\n\n\`\`\``;
+}
+
 const components: Components = {
     code({ className, children, ...props }) {
         const match = /language-(\w+)/.exec(className || "");
@@ -150,6 +165,8 @@ export function MarkdownRenderer({
     content,
     isStreaming
 }: MarkdownRendererProps) {
+    const displayContent = normalizeStreamingMarkdown(content, isStreaming);
+
     return (
         <div className="min-w-0">
             <ReactMarkdown
@@ -157,7 +174,7 @@ export function MarkdownRenderer({
                 rehypePlugins={[rehypeKatex]}
                 components={components}
             >
-                {content}
+                {displayContent}
             </ReactMarkdown>
             {isStreaming && (
                 <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-primary-400 align-middle" />
