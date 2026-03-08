@@ -584,7 +584,7 @@ export function ModelSelector({
                         onClick={() => onThinkingChange(!isThinkingEnabled)}
                     >
                         <BrainIcon
-                            className="size-3.5"
+                            className="size-4"
                             weight={isThinkingEnabled ? "fill" : "bold"}
                         />
                         <span>Thinking</span>
