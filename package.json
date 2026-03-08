@@ -1,18 +1,18 @@
 {
     "name": "unbound",
-    "private": true,
     "packageManager": "bun@1.3.10",
-    "workspaces": [
-        "frontend",
-        "backend"
-    ],
+    "private": true,
     "scripts": {
         "dev": "turbo dev",
         "build": "turbo build",
         "lint": "turbo lint",
         "check": "turbo check"
     },
+    "workspaces": [
+        "frontend",
+        "backend"
+    ],
     "devDependencies": {
-        "turbo": "latest"
+        "turbo": "^2.8.14"
     }
 }
