@@ -25,7 +25,8 @@ import {
     Modal,
     ModalContent,
     ModalDescription,
-    ModalTitle
+    ModalTitle,
+    Tooltip
 } from "@/components/ui";
 import { useAuth } from "@/features/auth/use-auth";
 import { cn } from "@/lib/cn";
@@ -509,7 +510,7 @@ export function ChatSidebar({
                             alt="Logo"
                             className="size-10 shrink-0"
                         />
-                        <span className="whitespace-nowrap text-sm font-semibold text-white">
+                        <span className="whitespace-nowrap text-sm font-semibold text-dark-50">
                             Unbound
                         </span>
                     </div>
@@ -540,18 +541,20 @@ export function ChatSidebar({
 
                 <div className="px-2 pb-2">
                     {collapsed ? (
-                        <button
-                            type="button"
-                            onClick={handleNewChat}
-                            className="mx-auto flex size-8 items-center justify-center rounded-md text-dark-300 transition hover:bg-dark-700 hover:text-white"
-                        >
-                            <PlusIcon className="size-4" weight="bold" />
-                        </button>
+                        <Tooltip content="New chat" side="right">
+                            <button
+                                type="button"
+                                onClick={handleNewChat}
+                                className="mx-auto flex size-8 items-center justify-center rounded-md text-dark-100 transition hover:bg-dark-700 hover:text-white"
+                            >
+                                <PlusIcon className="size-4" weight="bold" />
+                            </button>
+                        </Tooltip>
                     ) : (
                         <button
                             type="button"
                             onClick={handleNewChat}
-                            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-dark-200 transition hover:bg-dark-700 hover:text-white"
+                            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-dark-100 transition hover:bg-dark-700 hover:text-white"
                         >
                             <PlusIcon
                                 className="size-4 shrink-0"
@@ -661,7 +664,7 @@ export function ChatSidebar({
 
                                     {!collapsed && (
                                         <div className="min-w-0 flex-1 text-left">
-                                            <div className="truncate text-sm text-white">
+                                            <div className="truncate text-sm text-dark-50">
                                                 {displayName}
                                             </div>
                                             <div className="truncate text-xs text-dark-200">
