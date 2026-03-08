@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+    BrainIcon,
     CaretRightIcon,
     CopyIcon,
     CheckIcon,
@@ -174,13 +175,21 @@ function MessageMetadataDisplay({
     const time = metadata.generationStartedAt
         ? formatTime(metadata.generationStartedAt)
         : null;
+    const usedThinking = metadata.thinkingEnabled === true;
 
-    if (!model && !time) return null;
+    if (!model && !time && !usedThinking) return null;
 
     return (
         <div className="flex items-center gap-2 text-[11px] text-dark-300">
             {model && <span>{model}</span>}
-            {model && time && <span>-</span>}
+            {model && (usedThinking || time) && <span>-</span>}
+            {usedThinking && (
+                <span className="flex items-center gap-1">
+                    <BrainIcon className="size-3" weight="fill" />
+                    Thinking
+                </span>
+            )}
+            {usedThinking && time && <span>-</span>}
             {time && (
                 <span className="flex items-center gap-1">
                     <ClockIcon className="size-3" weight="bold" />

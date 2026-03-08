@@ -353,6 +353,7 @@ function startBackgroundGeneration(
                 status: finishReason === "error" ? "failed" : "complete",
                 metadata: {
                     model: modelId,
+                    thinkingEnabled: thinking,
                     generationStartedAt,
                     generationCompletedAt
                 }
@@ -365,6 +366,7 @@ function startBackgroundGeneration(
                 status: "failed",
                 metadata: {
                     model: modelId,
+                    thinkingEnabled: thinking,
                     generationStartedAt,
                     generationCompletedAt: new Date().toISOString()
                 }
@@ -522,6 +524,7 @@ export const aiService = {
             messageStatus: "pending",
             messageMetadata: {
                 model: modelId,
+                thinkingEnabled: thinking,
                 generationStartedAt
             }
         });

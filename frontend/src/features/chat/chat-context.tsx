@@ -452,7 +452,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 parts: [],
                 status: "pending",
                 createdAt: new Date().toISOString(),
-                metadata: { model: modelId }
+                metadata: { model: modelId, thinkingEnabled: thinking }
             };
 
             setConversationDetails((current) => {

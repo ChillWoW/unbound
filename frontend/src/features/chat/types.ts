@@ -34,6 +34,7 @@ export type MessageStatus = "pending" | "complete" | "failed";
 
 export interface MessageMetadata {
     model?: string;
+    thinkingEnabled?: boolean;
     generationStartedAt?: string;
     generationCompletedAt?: string;
     [key: string]: unknown;
