@@ -6,7 +6,6 @@ import {
     type ReactNode
 } from "react";
 import { cn } from "@/lib/cn";
-import { Button, Tooltip } from "@/components/ui";
 import { ChatInput, type ChatInputProps } from "./chat-input";
 
 export interface DockPanel {
@@ -48,19 +47,6 @@ export function InputDock({
         }
     }
 
-    function togglePanel(id: string) {
-        clearClosingTimeout();
-
-        setActivePanelId((prev) => {
-            if (prev === id) {
-                return null;
-            }
-
-            setRenderedPanelId(id);
-            return id;
-        });
-    }
-
     useLayoutEffect(() => {
         if (activePanelId) {
             setRenderedPanelId(activePanelId);
@@ -96,37 +82,6 @@ export function InputDock({
         return clearClosingTimeout;
     }, [isOpen, renderedPanelId]);
 
-    const panelToggles =
-        panels.length > 0 ? (
-            <div className="flex items-center gap-0.5">
-                {panels.map((panel) => {
-                    const isActive = activePanelId === panel.id;
-
-                    return (
-                        <Tooltip
-                            key={panel.id}
-                            content={panel.label}
-                            side="top"
-                        >
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                className={cn(
-                                    "size-8 p-0 transition-colors",
-                                    isActive
-                                        ? "text-primary-400 bg-primary-500/10 hover:bg-primary-500/15 hover:text-primary-300"
-                                        : "text-dark-200 hover:text-white"
-                                )}
-                                onClick={() => togglePanel(panel.id)}
-                            >
-                                {panel.icon}
-                            </Button>
-                        </Tooltip>
-                    );
-                })}
-            </div>
-        ) : null;
-
     return (
         <div className="flex flex-col">
             <div
@@ -159,11 +114,7 @@ export function InputDock({
                 </div>
             </div>
 
-            <ChatInput
-                {...chatInputProps}
-                toolbarSlot={panelToggles}
-                className={className}
-            />
+            <ChatInput {...chatInputProps} className={className} />
         </div>
     );
 }
