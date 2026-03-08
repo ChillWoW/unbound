@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+    ArrowDownIcon,
     BrainIcon,
     CaretRightIcon,
     CopyIcon,
     CheckIcon,
     ClockIcon
 } from "@phosphor-icons/react";
-import { Tooltip, ImageViewer } from "@/components/ui";
+import { Button, Tooltip, ImageViewer } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type {
     ChatModel,
@@ -197,7 +198,7 @@ function AssistantMessageMetadataDisplay({
                   metadata.generationStartedAt,
                   metadata.generationCompletedAt
               )
-        : null;
+            : null;
     const usedThinking = metadata.thinkingEnabled === true;
 
     if (!model && !duration && !usedThinking) return null;
@@ -357,8 +358,48 @@ export function ConversationThread({
     selectedModelId,
     onSubmit
 }: ConversationThreadProps) {
+    const BOTTOM_SCROLL_THRESHOLD = 48;
+    const RETURN_TO_BOTTOM_THRESHOLD = 16;
     const scrollRef = useRef<HTMLDivElement>(null);
     const lastMessageCountRef = useRef(0);
+    const scrollRafRef = useRef<number | null>(null);
+    const atBottomRef = useRef(true);
+    const [isAtBottom, setIsAtBottom] = useState(true);
+
+    const updateAtBottom = useCallback(() => {
+        const el = scrollRef.current;
+        if (!el) return;
+
+        const distanceFromBottom =
+            el.scrollHeight - el.scrollTop - el.clientHeight;
+        const nextIsAtBottom = atBottomRef.current
+            ? distanceFromBottom <= BOTTOM_SCROLL_THRESHOLD
+            : distanceFromBottom <= RETURN_TO_BOTTOM_THRESHOLD;
+
+        atBottomRef.current = nextIsAtBottom;
+
+        // Only trigger a re-render when the value actually changes
+        setIsAtBottom((prev) =>
+            prev === nextIsAtBottom ? prev : nextIsAtBottom
+        );
+    }, []);
+
+    const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
+        const el = scrollRef.current;
+        if (!el) return;
+
+        el.scrollTo({
+            top: el.scrollHeight,
+            behavior
+        });
+
+        atBottomRef.current = true;
+        setIsAtBottom(true);
+    }, []);
+
+    useEffect(() => {
+        scrollToBottom();
+    }, [conversation.id, scrollToBottom]);
 
     useEffect(() => {
         const el = scrollRef.current;
@@ -371,12 +412,34 @@ export function ConversationThread({
             lastMessage?.role === "assistant" &&
             lastMessage?.status === "pending";
 
-        if (isNewMessage || isAssistantStreaming) {
-            el.scrollTop = el.scrollHeight;
+        if ((isNewMessage || isAssistantStreaming) && atBottomRef.current) {
+            scrollToBottom();
         }
 
         lastMessageCountRef.current = messageCount;
-    });
+    }, [conversation.messages, scrollToBottom]);
+
+    useEffect(() => {
+        const el = scrollRef.current;
+        if (!el) return;
+
+        const onScroll = () => {
+            if (scrollRafRef.current) return;
+            scrollRafRef.current = requestAnimationFrame(() => {
+                updateAtBottom();
+                scrollRafRef.current = null;
+            });
+        };
+
+        el.addEventListener("scroll", onScroll, { passive: true });
+        return () => {
+            el.removeEventListener("scroll", onScroll);
+            if (scrollRafRef.current) {
+                cancelAnimationFrame(scrollRafRef.current);
+                scrollRafRef.current = null;
+            }
+        };
+    }, [updateAtBottom]);
 
     return (
         <section className="relative h-full">
@@ -452,6 +515,28 @@ export function ConversationThread({
                             {error}
                         </div>
                     ) : null}
+
+                    <div className="mb-2 flex h-7 justify-end">
+                        <Button
+                            type="button"
+                            variant="default"
+                            className={cn(
+                                "h-7 px-2.5 text-xs transition-opacity",
+                                !isAtBottom && conversation.messages.length > 0
+                                    ? "opacity-100"
+                                    : "pointer-events-none opacity-0"
+                            )}
+                            tabIndex={
+                                !isAtBottom && conversation.messages.length > 0
+                                    ? 0
+                                    : -1
+                            }
+                            onClick={() => scrollToBottom("smooth")}
+                        >
+                            <ArrowDownIcon className="size-3.5" weight="bold" />
+                            Jump to latest message
+                        </Button>
+                    </div>
 
                     <ChatInput
                         models={availableModels}
