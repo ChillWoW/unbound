@@ -51,12 +51,7 @@ const ICONS: Record<string, React.ComponentType<any>> = {
 
 const ALWAYS_VISIBLE_PROVIDERS = ["openai", "anthropic", "google"];
 
-const SOURCE_TO_PROVIDER: Record<ProviderType, string> = {
-    openrouter: "openrouter",
-    openai: "openai",
-    anthropic: "anthropic",
-    google: "google"
-};
+const DIRECT_API_PROVIDERS = new Set<string>(["openai", "anthropic", "google"]);
 
 function formatPricing(raw: string): string {
     const perToken = parseFloat(raw);
@@ -328,13 +323,8 @@ export function ModelSelector({
     const isProviderConfigured = useCallback(
         (provider: string) => {
             if (providerHasModels[provider]) return true;
-            const matchingSource = Object.entries(SOURCE_TO_PROVIDER).find(
-                ([, p]) => p === provider
-            );
-            if (matchingSource) {
-                return configuredProviderSet.has(
-                    matchingSource[0] as ProviderType
-                );
+            if (DIRECT_API_PROVIDERS.has(provider)) {
+                return configuredProviderSet.has(provider as ProviderType);
             }
             return configuredProviderSet.has("openrouter");
         },

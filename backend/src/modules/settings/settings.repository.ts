@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db } from "../../db/client";
 import { userSettings } from "../../db/schema";
-import type { ProviderType } from "../ai/provider-factory";
+import type { ProviderType } from "../../lib/provider-registry";
 import { getCiphertextField, getPreviewField } from "./settings.types";
 
 export const settingsRepository = {

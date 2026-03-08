@@ -8,40 +8,46 @@ import {
     type ModelSummary
 } from "./models.types";
 import { DEFAULT_CONTEXT_LENGTH } from "../ai/token-estimator";
-import type { ProviderType } from "../ai/provider-factory";
+import { DIRECT_PROVIDERS } from "../../lib/provider-registry";
 
 const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
+const MAX_CACHE_ENTRIES = 100;
 
-let cachedModels: ModelSummary[] | null = null;
-let cacheTimestamp = 0;
-
-function updateCache(models: ModelSummary[]) {
-    cachedModels = models;
-    cacheTimestamp = Date.now();
+interface CacheEntry {
+    models: ModelSummary[];
+    timestamp: number;
 }
 
-function getCachedContextLength(modelId: string): number | null {
-    if (!cachedModels || Date.now() - cacheTimestamp > CACHE_TTL_MS) {
+const userCache = new Map<string, CacheEntry>();
+
+function updateCache(userId: string | null, models: ModelSummary[]) {
+    if (!userId) return;
+    if (userCache.size >= MAX_CACHE_ENTRIES) {
+        userCache.clear();
+    }
+    userCache.set(userId, { models, timestamp: Date.now() });
+}
+
+function getCachedContextLength(
+    userId: string,
+    modelId: string
+): number | null {
+    const entry = userCache.get(userId);
+    if (!entry || Date.now() - entry.timestamp > CACHE_TTL_MS) {
         return null;
     }
 
-    const model = cachedModels.find((m) => m.id === modelId);
+    const model = entry.models.find((m) => m.id === modelId);
     return model?.contextLength ?? null;
 }
-
-const DIRECT_PROVIDERS: Exclude<ProviderType, "openrouter">[] = [
-    "openai",
-    "anthropic",
-    "google"
-];
 
 export const modelsService = {
     async listModels(request: Request) {
         const user = await authService.getCurrentUser(request);
         const allModels: ModelSummary[] = [];
-        const configuredProviders: ProviderType[] = [];
+        const configuredProviders: string[] = [];
 
         let openrouterKey: string | null = null;
 
@@ -104,24 +110,30 @@ export const modelsService = {
         }
 
         if (user) {
-            for (const provider of DIRECT_PROVIDERS) {
-                const key = await settingsService.getDecryptedApiKeyForUser(
-                    user.id,
-                    provider
-                );
+            const directResults = await Promise.all(
+                DIRECT_PROVIDERS.map(async (provider) => {
+                    const key =
+                        await settingsService.getDecryptedApiKeyForUser(
+                            user.id,
+                            provider
+                        );
+                    return { provider, hasKey: !!key };
+                })
+            );
 
-                if (key) {
+            for (const { provider, hasKey } of directResults) {
+                if (hasKey) {
                     configuredProviders.push(provider);
                     allModels.push(...getDirectProviderModels(provider));
                 }
             }
         }
 
-        updateCache(allModels);
+        updateCache(user?.id ?? null, allModels);
         return { models: allModels, configuredProviders };
     },
 
-    getModelContextLength(modelId: string): number {
-        return getCachedContextLength(modelId) ?? DEFAULT_CONTEXT_LENGTH;
+    getModelContextLength(userId: string, modelId: string): number {
+        return getCachedContextLength(userId, modelId) ?? DEFAULT_CONTEXT_LENGTH;
     }
 };

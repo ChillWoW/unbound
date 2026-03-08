@@ -2,19 +2,7 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
-
-export const PROVIDER_TYPES = [
-    "openrouter",
-    "openai",
-    "anthropic",
-    "google"
-] as const;
-
-export type ProviderType = (typeof PROVIDER_TYPES)[number];
-
-export function isValidProvider(value: string): value is ProviderType {
-    return PROVIDER_TYPES.includes(value as ProviderType);
-}
+import type { ProviderType } from "../../lib/provider-registry";
 
 export function createModelInstance(
     provider: ProviderType,

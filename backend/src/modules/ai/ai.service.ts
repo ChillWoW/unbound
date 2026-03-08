@@ -9,11 +9,8 @@ import {
     type UserModelMessage
 } from "ai";
 import { requireAuth } from "../../middleware/require-auth";
-import {
-    createModelInstance,
-    isValidProvider,
-    type ProviderType
-} from "./provider-factory";
+import { createModelInstance } from "./provider-factory";
+import { isValidProvider, type ProviderType } from "../../lib/provider-registry";
 import { settingsService } from "../settings/settings.service";
 import { conversationsRepository } from "../conversations/conversations.repository";
 import { todosRepository } from "../todos/todos.repository";
@@ -765,7 +762,7 @@ export const aiService = {
                 buildSystemPrompt(),
                 {
                     modelContextLength:
-                        modelsService.getModelContextLength(modelId),
+                        modelsService.getModelContextLength(user.id, modelId),
                     thinking
                 },
                 toModelMessages

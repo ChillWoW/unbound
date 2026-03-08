@@ -1,13 +1,13 @@
 import { env } from "../../config/env";
 import { requireAuth } from "../../middleware/require-auth";
 import { decryptText, encryptText } from "../../lib/encryption";
+import { PROVIDER_LABELS, type ProviderType } from "../../lib/provider-registry";
 import { settingsRepository } from "./settings.repository";
 import {
     SettingsError,
     getCiphertextField,
     toUserSettingsSummary
 } from "./settings.types";
-import type { ProviderType } from "../ai/provider-factory";
 
 function normalizeApiKey(value: string, providerLabel: string): string {
     const normalized = value.trim();
@@ -41,13 +41,6 @@ function createKeyPreview(value: string): string {
     const lastFour = value.slice(-4);
     return `********${lastFour}`;
 }
-
-const PROVIDER_LABELS: Record<ProviderType, string> = {
-    openrouter: "OpenRouter",
-    openai: "OpenAI",
-    anthropic: "Anthropic",
-    google: "Google"
-};
 
 export const settingsService = {
     async getSettings(request: Request) {
@@ -105,27 +98,5 @@ export const settingsService = {
         }
 
         return decryptText(ciphertext, env.settingsEncryptionKey);
-    },
-
-    async getConfiguredProviders(userId: string): Promise<ProviderType[]> {
-        const settings = await settingsRepository.findByUserId(userId);
-        if (!settings) return [];
-
-        const configured: ProviderType[] = [];
-        const providers: ProviderType[] = [
-            "openrouter",
-            "openai",
-            "anthropic",
-            "google"
-        ];
-
-        for (const provider of providers) {
-            const field = getCiphertextField(provider);
-            if (settings[field]) {
-                configured.push(provider);
-            }
-        }
-
-        return configured;
     }
 };

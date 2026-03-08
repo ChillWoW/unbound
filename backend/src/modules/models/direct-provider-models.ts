@@ -1,4 +1,4 @@
-import type { ProviderType } from "../ai/provider-factory";
+import type { ProviderType } from "../../lib/provider-registry";
 import type { ModelSummary } from "./models.types";
 
 interface DirectModelDefinition {

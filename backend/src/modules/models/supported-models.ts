@@ -1,5 +1,4 @@
 import type { ModelSummary } from "./models.types";
-import type { ProviderType } from "../ai/provider-factory";
 
 interface SupportedModelDefinition {
     id: string;
@@ -150,7 +149,7 @@ const anthropicModels: SupportedModelDefinition[] = [
         name: "Claude Opus 4.6",
         provider: "anthropic",
         description:
-            "Anthropic's strongest model for coding and long-running profressional tasks"
+            "Anthropic's strongest model for coding and long-running professional tasks"
     }
 ];
 

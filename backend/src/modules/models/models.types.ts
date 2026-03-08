@@ -1,9 +1,10 @@
-import type { ProviderType } from "../ai/provider-factory";
+import type { ProviderType } from "../../lib/provider-registry";
+import { AppError } from "../../lib/app-error";
 
 export interface ModelSummary {
     id: string;
     name: string;
-    provider?: string;
+    provider: string;
     source: ProviderType;
     description: string | null;
     contextLength: number | null;
@@ -33,15 +34,7 @@ interface OpenRouterModelsResponse {
     data?: unknown;
 }
 
-export class ModelsError extends Error {
-    readonly status: number;
-
-    constructor(status: number, message: string) {
-        super(message);
-        this.name = "ModelsError";
-        this.status = status;
-    }
-}
+export { AppError as ModelsError };
 
 function toStringOrNull(value: unknown): string | null {
     if (typeof value !== "string") {
@@ -86,6 +79,7 @@ function toModelSummary(value: unknown): ModelSummary | null {
     return {
         id,
         name: toStringOrNull(model.name) ?? id,
+        provider: "",
         source: "openrouter",
         description: toStringOrNull(model.description),
         contextLength: toNumberOrNull(model.context_length),
@@ -98,7 +92,7 @@ function toModelSummary(value: unknown): ModelSummary | null {
 
 export function normalizeModelsResponse(payload: unknown): ModelSummary[] {
     if (!payload || typeof payload !== "object") {
-        throw new ModelsError(
+        throw new AppError(
             502,
             "OpenRouter returned an invalid models payload."
         );
@@ -107,7 +101,7 @@ export function normalizeModelsResponse(payload: unknown): ModelSummary[] {
     const response = payload as OpenRouterModelsResponse;
 
     if (!Array.isArray(response.data)) {
-        throw new ModelsError(
+        throw new AppError(
             502,
             "OpenRouter returned an invalid models payload."
         );

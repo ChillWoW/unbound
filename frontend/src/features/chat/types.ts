@@ -78,7 +78,7 @@ export interface ConversationDetail extends ConversationSummary {
     messages: ConversationMessage[];
 }
 
-export type ProviderType = "openrouter" | "openai" | "anthropic" | "google";
+export type { ProviderType } from "@/lib/provider-types";
 
 export interface ChatModel {
     id: string;

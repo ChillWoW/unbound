@@ -2,7 +2,7 @@ import { Elysia, t } from "elysia";
 import { UnauthorizedError } from "../../middleware/require-auth";
 import { settingsService } from "./settings.service";
 import { SettingsError } from "./settings.types";
-import { isValidProvider } from "../ai/provider-factory";
+import { isValidProvider } from "../../lib/provider-registry";
 
 const providerKeyBody = t.Object({
     apiKey: t.String({ minLength: 1, maxLength: 500 })

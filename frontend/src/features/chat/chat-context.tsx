@@ -82,27 +82,51 @@ function clearPartialMessage(messageId: string) {
     window.localStorage.removeItem(getPartialMessageStorageKey(messageId));
 }
 
-function readStoredSelectedModelId(userId: string): string | null {
-    if (typeof window === "undefined") {
-        return null;
-    }
-
-    return window.localStorage.getItem(getSelectedModelStorageKey(userId));
+interface StoredModelSelection {
+    modelId: string;
+    source: ProviderType;
 }
 
-function writeStoredSelectedModelId(userId: string, modelId: string | null) {
-    if (typeof window === "undefined") {
-        return;
+function readStoredModelSelection(
+    userId: string
+): StoredModelSelection | null {
+    if (typeof window === "undefined") return null;
+
+    const raw = window.localStorage.getItem(
+        getSelectedModelStorageKey(userId)
+    );
+    if (!raw) return null;
+
+    try {
+        const parsed = JSON.parse(raw);
+        if (
+            parsed &&
+            typeof parsed.modelId === "string" &&
+            typeof parsed.source === "string"
+        ) {
+            return parsed as StoredModelSelection;
+        }
+    } catch {
+        // backward compat: old format stored a plain modelId string
     }
+
+    return { modelId: raw, source: "openrouter" };
+}
+
+function writeStoredModelSelection(
+    userId: string,
+    selection: StoredModelSelection | null
+) {
+    if (typeof window === "undefined") return;
 
     const key = getSelectedModelStorageKey(userId);
 
-    if (!modelId) {
+    if (!selection) {
         window.localStorage.removeItem(key);
         return;
     }
 
-    window.localStorage.setItem(key, modelId);
+    window.localStorage.setItem(key, JSON.stringify(selection));
 }
 
 interface ChatContextValue {
@@ -143,7 +167,10 @@ interface ChatContextValue {
         prompt: string,
         attachments?: ChatAttachment[]
     ) => Promise<ConversationDetail>;
-    setSelectedModelId: (modelId: string | null) => void;
+    setSelectedModelId: (
+        modelId: string | null,
+        source?: ProviderType
+    ) => void;
     setThinkingEnabled: (enabled: boolean) => void;
     stopGeneration: (conversationId: string) => void;
     toggleFavoriteConversation: (
@@ -307,6 +334,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
         null
     );
     const selectedModelIdRef = useRef<string | null>(null);
+    const selectedModelSourceRef = useRef<ProviderType | null>(null);
     const availableModelsRef = useRef<ChatModel[]>([]);
     const [isThinkingEnabled, setIsThinkingEnabled] = useState(
         () => localStorage.getItem("thinking-enabled") === "true"
@@ -406,31 +434,49 @@ export function ChatProvider({ children }: PropsWithChildren) {
 
         try {
             const response = await chatApi.listModels();
-            const storedModelId = user
-                ? readStoredSelectedModelId(user.id)
+            const stored = user
+                ? readStoredModelSelection(user.id)
                 : null;
-            const currentSelectedModelId = selectedModelIdRef.current;
-            const nextSelectedModelId =
-                currentSelectedModelId &&
-                response.models.some(
-                    (model) => model.id === currentSelectedModelId
-                )
-                    ? currentSelectedModelId
-                    : storedModelId &&
-                        response.models.some(
-                            (model) => model.id === storedModelId
-                        )
-                      ? storedModelId
-                      : (response.models[0]?.id ?? null);
+            const currentId = selectedModelIdRef.current;
+
+            let nextId: string | null = null;
+            let nextSource: ProviderType | null = null;
+
+            if (
+                currentId &&
+                response.models.some((m) => m.id === currentId)
+            ) {
+                nextId = currentId;
+                nextSource =
+                    selectedModelSourceRef.current ??
+                    (response.models.find((m) => m.id === currentId)?.source ??
+                        null);
+            } else if (
+                stored &&
+                response.models.some((m) => m.id === stored.modelId)
+            ) {
+                nextId = stored.modelId;
+                nextSource = stored.source;
+            } else if (response.models.length > 0) {
+                nextId = response.models[0].id;
+                nextSource = response.models[0].source;
+            }
 
             setAvailableModels(response.models);
             setConfiguredProviders(response.configuredProviders ?? []);
-            setSelectedModelIdState(nextSelectedModelId);
-            if (user) writeStoredSelectedModelId(user.id, nextSelectedModelId);
+            setSelectedModelIdState(nextId);
+            selectedModelSourceRef.current = nextSource;
+            if (user && nextId && nextSource) {
+                writeStoredModelSelection(user.id, {
+                    modelId: nextId,
+                    source: nextSource
+                });
+            }
         } catch (error) {
             setAvailableModels([]);
             setConfiguredProviders([]);
             setSelectedModelIdState(null);
+            selectedModelSourceRef.current = null;
             setModelsError(getErrorMessage(error));
             throw error;
         } finally {
@@ -967,10 +1013,11 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 throw new Error("No model selected.");
             }
 
-            const selectedModel = availableModelsRef.current.find(
-                (m) => m.id === modelId
-            );
-            const provider = selectedModel?.source ?? "openrouter";
+            const provider =
+                selectedModelSourceRef.current ??
+                availableModelsRef.current.find((m) => m.id === modelId)
+                    ?.source ??
+                "openrouter";
 
             setIsCreatingConversation(true);
 
@@ -1075,10 +1122,11 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 throw new Error("No model selected.");
             }
 
-            const selectedModel = availableModelsRef.current.find(
-                (m) => m.id === modelId
-            );
-            const provider = selectedModel?.source ?? "openrouter";
+            const provider =
+                selectedModelSourceRef.current ??
+                availableModelsRef.current.find((m) => m.id === modelId)
+                    ?.source ??
+                "openrouter";
 
             setConversationSending(conversationId, true);
 
@@ -1237,14 +1285,17 @@ export function ChatProvider({ children }: PropsWithChildren) {
     );
 
     const setSelectedModelId = useCallback(
-        (modelId: string | null) => {
+        (modelId: string | null, source?: ProviderType) => {
             setSelectedModelIdState(modelId);
+            selectedModelSourceRef.current = source ?? null;
 
-            if (!user) {
-                return;
+            if (!user) return;
+
+            if (modelId && source) {
+                writeStoredModelSelection(user.id, { modelId, source });
+            } else {
+                writeStoredModelSelection(user.id, null);
             }
-
-            writeStoredSelectedModelId(user.id, modelId);
         },
         [user]
     );

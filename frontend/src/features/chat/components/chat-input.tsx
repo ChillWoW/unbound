@@ -237,7 +237,10 @@ export interface ChatInputProps {
     isThinkingEnabled?: boolean;
     models?: ChatModel[];
     modelsError?: string | null;
-    onSelectedModelChange?: (modelId: string | null) => void;
+    onSelectedModelChange?: (
+        modelId: string | null,
+        source?: ProviderType
+    ) => void;
     onThinkingChange?: (enabled: boolean) => void;
     showContextBadge?: boolean;
     toolbarSlot?: ReactNode;
@@ -517,7 +520,10 @@ export function ChatInput({
                             models={models}
                             configuredProviders={configuredProviders}
                             onModelSelected={(model) =>
-                                onSelectedModelChange?.(model.id)
+                                onSelectedModelChange?.(
+                                    model.id,
+                                    model.source
+                                )
                             }
                             disabled={isModelSelectDisabled}
                             isThinkingEnabled={isThinkingEnabled}

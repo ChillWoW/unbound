@@ -1,6 +1,7 @@
 import type { InferSelectModel } from "drizzle-orm";
 import { userSettings } from "../../db/schema";
-import type { ProviderType } from "../ai/provider-factory";
+import type { ProviderType } from "../../lib/provider-registry";
+import { AppError } from "../../lib/app-error";
 
 export type UserSettingsRecord = InferSelectModel<typeof userSettings>;
 
@@ -14,15 +15,7 @@ export interface UserSettingsSummary {
     providers: Record<ProviderType, ProviderKeyStatus>;
 }
 
-export class SettingsError extends Error {
-    readonly status: number;
-
-    constructor(status: number, message: string) {
-        super(message);
-        this.name = "SettingsError";
-        this.status = status;
-    }
-}
+export { AppError as SettingsError };
 
 const CIPHERTEXT_FIELDS = {
     openrouter: "openrouterApiKeyCiphertext",

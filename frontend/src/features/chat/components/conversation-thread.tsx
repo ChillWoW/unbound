@@ -544,7 +544,7 @@ interface ConversationThreadProps {
     isLoadingModels?: boolean;
     isThinkingEnabled?: boolean;
     modelsError?: string | null;
-    onModelChange: (modelId: string | null) => void;
+    onModelChange: (modelId: string | null, source?: ProviderType) => void;
     onStop?: () => void;
     onSubmit: (
         value: string,

@@ -1,4 +1,4 @@
-export type ProviderType = "openrouter" | "openai" | "anthropic" | "google";
+export type { ProviderType } from "@/lib/provider-types";
 
 export interface ProviderKeyStatus {
     configured: boolean;
