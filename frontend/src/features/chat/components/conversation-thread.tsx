@@ -5,7 +5,8 @@ import {
     CaretRightIcon,
     CopyIcon,
     CheckIcon,
-    ClockIcon
+    ClockIcon,
+    WarningCircleIcon
 } from "@phosphor-icons/react";
 import { Button, Tooltip, ImageViewer } from "@/components/ui";
 import { cn } from "@/lib/cn";
@@ -314,6 +315,26 @@ function UserMessageMetadataDisplay({
     );
 }
 
+function formatGenerationError(raw: string | undefined): string {
+    if (!raw) return "Generation failed. Please try again.";
+    const lower = raw.toLowerCase();
+    if (lower.includes("api key") || lower.includes("unauthorized") || lower.includes("401"))
+        return "Invalid or missing API key. Check your OpenRouter key in settings.";
+    if (lower.includes("rate limit") || lower.includes("rate-limit") || lower.includes("rate limited") || lower.includes("rate-limited") || lower.includes("429"))
+        return "Rate limit reached. Wait a moment, then try again.";
+    if (lower.includes("quota") || lower.includes("insufficient") || lower.includes("credits") || lower.includes("balance"))
+        return "Insufficient credits or quota on your OpenRouter account.";
+    if (lower.includes("context length") || lower.includes("too long") || lower.includes("maximum context"))
+        return "The conversation is too long for this model. Start a new conversation or switch to a model with a larger context window.";
+    if (lower.includes("model") && (lower.includes("not found") || lower.includes("unavailable") || lower.includes("404")))
+        return "The selected model is unavailable. Try a different model.";
+    if (lower.includes("timeout") || lower.includes("timed out"))
+        return "The request timed out. Please try again.";
+    if (lower.includes("no response body") || lower.includes("fetch") || lower.includes("network") || lower.includes("connection"))
+        return "Connection failed. Check your internet and try again.";
+    return "Generation failed. Please try again.";
+}
+
 function StreamingIndicator() {
     return (
         <div className="py-1">
@@ -371,7 +392,10 @@ function AssistantMessage({
             {isWaiting && <StreamingIndicator />}
 
             {message.status === "failed" && (
-                <p className="mt-1 text-xs text-red-400">Generation failed.</p>
+                <div className="mt-2 flex items-start gap-1.5 text-xs text-red-400">
+                    <WarningCircleIcon className="mt-px size-3.5 shrink-0" weight="fill" />
+                    <span>{formatGenerationError(message.metadata?.errorMessage ?? message.errorMessage)}</span>
+                </div>
             )}
 
             <div className="mt-1.5 flex items-center gap-2">

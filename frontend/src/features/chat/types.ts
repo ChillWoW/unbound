@@ -45,6 +45,7 @@ export interface MessageMetadata {
     thinkingEnabled?: boolean;
     generationStartedAt?: string;
     generationCompletedAt?: string;
+    errorMessage?: string;
     [key: string]: unknown;
 }
 
@@ -53,6 +54,7 @@ export interface ConversationMessage {
     role: MessageRole;
     parts: MessagePart[];
     status: MessageStatus;
+    errorMessage?: string;
     createdAt: string;
     metadata: MessageMetadata | null;
 }

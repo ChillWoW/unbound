@@ -642,7 +642,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
                         }));
                     }
                 },
-                onError(_error) {
+                onError(error) {
                     if (abortController.signal.aborted) return;
                     setConversationDetails((current) => {
                         const existing = current[conversationId];
@@ -653,7 +653,11 @@ export function ChatProvider({ children }: PropsWithChildren) {
                                 ...existing,
                                 messages: existing.messages.map((m) =>
                                     m.id === realMessageId
-                                        ? { ...m, status: "failed" }
+                                        ? {
+                                              ...m,
+                                              status: "failed",
+                                              errorMessage: error
+                                          }
                                         : m
                                 )
                             }

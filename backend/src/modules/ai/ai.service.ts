@@ -23,6 +23,7 @@ import {
     type GenerationEntry,
     type SSEEvent
 } from "./generation-manager";
+import { logger } from "../../lib/logger";
 
 function createMessageId(): string {
     return `msg_${randomBytes(10).toString("hex")}`;
@@ -306,6 +307,14 @@ function startBackgroundGeneration(
     const openrouter = createOpenRouter({ apiKey });
     const assistantMessageId = generation.messageId;
 
+    logger.info("Generation started", {
+        conversationId: generation.conversationId,
+        messageId: assistantMessageId,
+        modelId,
+        thinking,
+        messageCount: modelMessages.length
+    });
+
     const result = streamText({
         model: openrouter(modelId),
         messages: modelMessages,
@@ -356,10 +365,24 @@ function startBackgroundGeneration(
             }
 
             const generationCompletedAt = new Date().toISOString();
+            const durationMs =
+                new Date(generationCompletedAt).getTime() -
+                new Date(generationStartedAt).getTime();
+            const status = finishReason === "error" ? "failed" : "complete";
+
+            logger.info("Generation finished", {
+                conversationId: generation.conversationId,
+                messageId: assistantMessageId,
+                modelId,
+                finishReason,
+                status,
+                steps: steps.length,
+                durationMs
+            });
 
             await conversationsRepository.updateMessage(assistantMessageId, {
                 parts: finalParts,
-                status: finishReason === "error" ? "failed" : "complete",
+                status,
                 metadata: {
                     model: modelId,
                     thinkingEnabled: thinking,
@@ -370,18 +393,36 @@ function startBackgroundGeneration(
 
             generationManager.complete(generation.conversationId);
         },
-        onError: async () => {
+        onError: async (event: { error: unknown }) => {
+            const generationCompletedAt = new Date().toISOString();
+            const durationMs =
+                new Date(generationCompletedAt).getTime() -
+                new Date(generationStartedAt).getTime();
+            const errorMessage =
+                event.error instanceof Error
+                    ? event.error.message
+                    : String(event.error);
+
+            logger.error("Generation failed (onError)", {
+                conversationId: generation.conversationId,
+                messageId: assistantMessageId,
+                modelId,
+                error: errorMessage,
+                durationMs
+            });
+
             await conversationsRepository.updateMessage(assistantMessageId, {
                 status: "failed",
                 metadata: {
                     model: modelId,
                     thinkingEnabled: thinking,
                     generationStartedAt,
-                    generationCompletedAt: new Date().toISOString()
+                    generationCompletedAt,
+                    errorMessage
                 }
             });
 
-            generationManager.fail(generation.conversationId);
+            generationManager.fail(generation.conversationId, errorMessage);
         }
     });
 
@@ -396,6 +437,12 @@ function startBackgroundGeneration(
                 } else if (event.type === "reasoning" && thinking) {
                     generation.accumulatedReasoning += event.text as string;
                 } else if (event.type === "tool-call") {
+                    logger.debug("Tool call", {
+                        conversationId: generation.conversationId,
+                        toolName: event.toolName,
+                        toolCallId: event.toolCallId,
+                        args: event.args
+                    });
                     upsertToolInvocationPart(generation.toolParts, {
                         type: "tool-invocation",
                         toolInvocationId: event.toolCallId as string,
@@ -404,6 +451,11 @@ function startBackgroundGeneration(
                         state: "call"
                     });
                 } else if (event.type === "tool-result") {
+                    logger.debug("Tool result", {
+                        conversationId: generation.conversationId,
+                        toolName: event.toolName,
+                        toolCallId: event.toolCallId
+                    });
                     applyToolResult(generation.toolParts, {
                         toolCallId: event.toolCallId as string,
                         toolName: event.toolName as string,
@@ -418,6 +470,11 @@ function startBackgroundGeneration(
 
             generation.emitter.emit("event", { type: "done" });
         } catch (error) {
+            logger.error("Stream loop error", {
+                conversationId: generation.conversationId,
+                messageId: assistantMessageId,
+                error: error instanceof Error ? error.message : String(error)
+            });
             generation.emitter.emit("event", {
                 type: "error",
                 error: error instanceof Error ? error.message : "Stream failed"
@@ -496,6 +553,7 @@ export const aiService = {
             await settingsService.getDecryptedOpenRouterApiKeyForUser(user.id);
 
         if (!apiKey) {
+            logger.warn("Generation rejected: no API key", { conversationId, userId: user.id });
             throw new ConversationError(
                 400,
                 "Add your OpenRouter API key in settings to use AI features."

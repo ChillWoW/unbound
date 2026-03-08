@@ -39,6 +39,7 @@ const nodeEnv = process.env.NODE_ENV ?? "development";
 export const env = {
     nodeEnv,
     isProduction: nodeEnv === "production",
+    debug: process.env.DEBUG === "true",
     port: getNumberEnv("PORT", 1234),
     corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:3500",
     databaseUrl: getRequiredEnv("DATABASE_URL"),
