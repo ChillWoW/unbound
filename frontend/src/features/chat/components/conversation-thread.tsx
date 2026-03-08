@@ -773,7 +773,6 @@ export function ConversationThread({
                         placeholder="Send a message..."
                         {...(onStop && { onStop })}
                         onSubmit={onSubmit}
-                        disabled={isSending}
                         isSubmitting={isSending}
                         conversationMessages={conversation.messages}
                         todos={todos}

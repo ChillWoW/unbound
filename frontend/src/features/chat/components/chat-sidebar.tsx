@@ -582,8 +582,11 @@ export function ChatSidebar({
 
                             {favoriteConversations.length > 0 ? (
                                 <div className="mb-3">
-                                    <div className="px-2 py-2 text-xs font-medium text-dark-200">
-                                        Favorites
+                                    <div className="flex items-center gap-0.5">
+                                        <div className="px-2 py-2 text-xs font-medium text-dark-200">
+                                            Favorites
+                                        </div>
+                                        <div className="w-full h-px bg-dark-600" />
                                     </div>
                                     <div className="space-y-0.5">
                                         {favoriteConversations.map(
@@ -611,8 +614,11 @@ export function ChatSidebar({
 
                             {groupedConversations.map(({ label, items }) => (
                                 <div key={label} className="mb-3">
-                                    <div className="px-2 py-2 text-xs font-medium text-dark-200">
-                                        {label}
+                                    <div className="flex items-center gap-0.5">
+                                        <div className="px-2 py-2 text-xs font-medium text-dark-200">
+                                            {label}
+                                        </div>
+                                        <div className="w-full h-px bg-dark-600" />
                                     </div>
                                     <div className="space-y-0.5">
                                         {items.map((conversation) => (

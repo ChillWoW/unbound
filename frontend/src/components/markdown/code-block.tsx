@@ -21,7 +21,7 @@ export function CodeBlock({ language, children }: CodeBlockProps) {
 
     return (
         <div className="my-3 overflow-hidden rounded-md border border-dark-600 bg-dark-900">
-            <div className="flex items-center justify-between border-b border-dark-600 px-3 py-1.5">
+            <div className="flex items-center justify-between border-b border-dark-600 px-3 h-8">
                 {language && (
                     <span className="text-[11px] font-medium text-dark-200 tracking-wide">
                         {language?.charAt(0).toUpperCase() + language?.slice(1)}
@@ -30,7 +30,7 @@ export function CodeBlock({ language, children }: CodeBlockProps) {
                 <button
                     type="button"
                     onClick={handleCopy}
-                    className="ml-auto flex items-center gap-1.5 rounded px-2 py-0.5 text-[11px] text-dark-200 transition-colors hover:bg-dark-700 hover:text-dark-50"
+                    className="ml-auto flex items-center gap-1.5 rounded px-2 h-6 text-[11px] text-dark-200 transition-colors hover:bg-dark-700 hover:text-dark-50"
                 >
                     {copied ? (
                         <>
