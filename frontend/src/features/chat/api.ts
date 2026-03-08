@@ -89,6 +89,12 @@ export const chatApi = {
         );
     },
 
+    stopGeneration(conversationId: string) {
+        return api.delete<{ stopped: boolean }>(
+            `/api/conversations/${conversationId}/generation`
+        );
+    },
+
     listTodos(conversationId: string) {
         return api.get<{ todos: TodoItem[] }>(
             `/api/conversations/${conversationId}/todos`

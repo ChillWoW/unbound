@@ -11,6 +11,7 @@ export interface GenerationEntry {
     userId: string;
     messageId: string;
     emitter: EventEmitter;
+    abortController: AbortController;
     finished: boolean;
     accumulatedText: string;
     accumulatedReasoning: string;
@@ -32,6 +33,7 @@ class GenerationManager {
             userId,
             messageId,
             emitter: new EventEmitter(),
+            abortController: new AbortController(),
             finished: false,
             accumulatedText: "",
             accumulatedReasoning: "",
@@ -50,6 +52,12 @@ class GenerationManager {
     isActive(conversationId: string): boolean {
         const entry = this.active.get(conversationId);
         return !!entry && !entry.finished;
+    }
+
+    stop(conversationId: string) {
+        const entry = this.active.get(conversationId);
+        if (!entry) return;
+        entry.abortController.abort();
     }
 
     complete(conversationId: string) {

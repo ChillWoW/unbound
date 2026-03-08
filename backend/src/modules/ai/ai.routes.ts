@@ -2,6 +2,8 @@ import { Elysia, t } from "elysia";
 import { UnauthorizedError } from "../../middleware/require-auth";
 import { ConversationError } from "../conversations/conversations.types";
 import { aiService } from "./ai.service";
+import { generationManager } from "./generation-manager";
+import { requireAuth } from "../../middleware/require-auth";
 
 const conversationParams = t.Object({
     conversationId: t.String({ minLength: 1, maxLength: 64 })
@@ -54,6 +56,24 @@ export const aiRoutes = new Elysia({ prefix: "/api/conversations" })
                     request,
                     params.conversationId
                 );
+            } catch (error) {
+                return handleAiError(error, set);
+            }
+        },
+        {
+            params: conversationParams
+        }
+    )
+    .delete(
+        "/:conversationId/generation",
+        async ({ params, request, set }) => {
+            try {
+                const user = await requireAuth(request);
+                const generation = generationManager.get(params.conversationId);
+                if (generation && generation.userId === user.id) {
+                    generationManager.stop(params.conversationId);
+                }
+                return { stopped: true };
             } catch (error) {
                 return handleAiError(error, set);
             }

@@ -459,6 +459,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
             controller.abort();
             activeGenerationsRef.current.delete(conversationId);
         }
+        void chatApi.stopGeneration(conversationId).catch(() => {});
     }, []);
 
     const runGeneration = useCallback(

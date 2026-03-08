@@ -320,7 +320,9 @@ function startBackgroundGeneration(
         messages: modelMessages,
         tools,
         stopWhen: stepCountIs(5),
+        abortSignal: generation.abortController.signal,
         onFinish: async ({ steps, finishReason }) => {
+            if (generation.abortController.signal.aborted) return;
             const finalParts: MessagePart[] = [];
 
             for (const step of steps) {
@@ -394,6 +396,7 @@ function startBackgroundGeneration(
             generationManager.complete(generation.conversationId);
         },
         onError: async (event: { error: unknown }) => {
+            if (generation.abortController.signal.aborted) return;
             const generationCompletedAt = new Date().toISOString();
             const durationMs =
                 new Date(generationCompletedAt).getTime() -
@@ -470,6 +473,45 @@ function startBackgroundGeneration(
 
             generation.emitter.emit("event", { type: "done" });
         } catch (error) {
+            const isAbort =
+                (error instanceof Error && error.name === "AbortError") ||
+                generation.abortController.signal.aborted;
+
+            if (isAbort) {
+                logger.info("Generation stopped by user", {
+                    conversationId: generation.conversationId,
+                    messageId: assistantMessageId
+                });
+
+                const stoppedParts: MessagePart[] = [];
+                if (thinking && generation.accumulatedReasoning) {
+                    stoppedParts.push({ type: "reasoning", text: generation.accumulatedReasoning });
+                }
+                for (const tp of generation.toolParts) {
+                    stoppedParts.push(tp);
+                }
+                if (generation.accumulatedText) {
+                    stoppedParts.push({ type: "text", text: generation.accumulatedText });
+                }
+                if (stoppedParts.length === 0) {
+                    stoppedParts.push({ type: "text", text: "" });
+                }
+
+                await conversationsRepository.updateMessage(assistantMessageId, {
+                    parts: stoppedParts,
+                    status: "complete",
+                    metadata: {
+                        model: modelId,
+                        thinkingEnabled: thinking,
+                        generationStartedAt,
+                        generationCompletedAt: new Date().toISOString()
+                    }
+                });
+
+                generationManager.complete(generation.conversationId);
+                return;
+            }
+
             logger.error("Stream loop error", {
                 conversationId: generation.conversationId,
                 messageId: assistantMessageId,
