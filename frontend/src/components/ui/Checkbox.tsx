@@ -1,6 +1,6 @@
 import { Checkbox as Base } from "@base-ui/react";
 import { cn } from "@/lib/cn";
-import { forwardRef, useCallback } from "react";
+import { forwardRef, useCallback, type ReactNode } from "react";
 import { CheckIcon, MinusIcon } from "@phosphor-icons/react";
 
 interface CheckboxProps {
@@ -9,8 +9,10 @@ interface CheckboxProps {
     indeterminate?: boolean;
     onChange?: (checked: boolean) => void;
     disabled?: boolean;
+    icon?: ReactNode;
     label?: string;
     className?: string;
+    alwaysShowIcon?: boolean;
 }
 
 export const Checkbox = forwardRef<HTMLButtonElement, CheckboxProps>(
@@ -21,8 +23,10 @@ export const Checkbox = forwardRef<HTMLButtonElement, CheckboxProps>(
             indeterminate = false,
             onChange,
             disabled = false,
+            icon,
             label,
             className,
+            alwaysShowIcon = false,
             ...props
         },
         ref
@@ -51,9 +55,19 @@ export const Checkbox = forwardRef<HTMLButtonElement, CheckboxProps>(
                 )}
                 {...props}
             >
-                <Base.Indicator className="text-dark-900 flex items-center justify-center">
+                <Base.Indicator
+                    keepMounted={alwaysShowIcon}
+                    className={cn(
+                        "text-dark-900 flex items-center justify-center",
+                        alwaysShowIcon
+                            ? "opacity-100"
+                            : "data-[hidden]:opacity-0"
+                    )}
+                >
                     {indeterminate ? (
                         <MinusIcon className="size-3.5" />
+                    ) : icon ? (
+                        icon
                     ) : (
                         <CheckIcon className="size-3.5" />
                     )}
