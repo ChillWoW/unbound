@@ -13,6 +13,18 @@ import { cn } from "@/lib/cn";
 import type { ChatModel, ConversationMessage } from "../types";
 import { ModelSelector } from "./model-selector";
 
+const IMAGE_MIME_TYPES: Record<string, true> = {
+    "image/png": true,
+    "image/jpeg": true,
+    "image/gif": true,
+    "image/webp": true,
+    "image/svg+xml": true
+};
+
+const FILE_MIME_TYPES: Record<string, true> = {
+    "application/pdf": true
+};
+
 function estimateTokens(messages: ConversationMessage[]): number {
     let chars = 0;
     for (const msg of messages) {
@@ -35,20 +47,12 @@ function estimateTokens(messages: ConversationMessage[]): number {
 export interface ChatAttachment {
     id: string;
     file: File;
-    preview: string | null; // object URL for images, null for PDFs
-    type: "image" | "pdf";
+    preview: string | null; // object URL for images, null for files
+    type: "image" | "file";
 }
 
-const ACCEPTED_TYPES: Record<string, "image" | "pdf"> = {
-    "image/png": "image",
-    "image/jpeg": "image",
-    "image/gif": "image",
-    "image/webp": "image",
-    "image/svg+xml": "image",
-    "application/pdf": "pdf"
-};
-
-const ACCEPT_STRING = Object.keys(ACCEPTED_TYPES).join(",");
+const IMAGE_ACCEPT_STRING = Object.keys(IMAGE_MIME_TYPES).join(",");
+const FILE_ACCEPT_STRING = Object.keys(FILE_MIME_TYPES).join(",");
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
 const MAX_ATTACHMENTS = 10;
 
@@ -185,7 +189,7 @@ function AttachmentChip({
                 />
             ) : (
                 <div className="flex size-8 shrink-0 items-center justify-center rounded bg-dark-600">
-                    {attachment.type === "pdf" ? (
+                    {attachment.type === "file" ? (
                         <FileTextIcon
                             className="size-4 text-dark-200"
                             weight="bold"
@@ -272,6 +276,7 @@ export function ChatInput({
     const [internalValue, setInternalValue] = useState("");
     const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
     const [fileError, setFileError] = useState<string | null>(null);
+    const imageInputRef = useRef<HTMLInputElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const isControlled = value !== undefined;
@@ -286,6 +291,9 @@ export function ChatInput({
     const supportsImages = selectedModel
         ? selectedModel.inputModalities.includes("image")
         : true;
+    const supportsFiles = selectedModel
+        ? selectedModel.inputModalities.includes("file")
+        : false;
     const isModelSelectDisabled =
         disabled || isSubmitting || isModelsLoading || models.length === 0;
 
@@ -299,7 +307,7 @@ export function ChatInput({
     // ── Attachment helpers ───────────────────────────────────────────────
 
     const addFiles = useCallback(
-        (files: FileList | File[]) => {
+        (files: FileList | File[], kind: "image" | "file") => {
             setFileError(null);
             const incoming = Array.from(files);
             const remaining = MAX_ATTACHMENTS - attachments.length;
@@ -311,14 +319,14 @@ export function ChatInput({
                 return;
             }
 
+            const allowedTypes =
+                kind === "image" ? IMAGE_MIME_TYPES : FILE_MIME_TYPES;
             const toAdd: ChatAttachment[] = [];
 
             for (const file of incoming.slice(0, remaining)) {
-                const kind = ACCEPTED_TYPES[file.type];
-
-                if (!kind) {
+                if (!allowedTypes[file.type]) {
                     setFileError(
-                        `"${file.name}" is not a supported file type. Use images or PDFs.`
+                        `"${file.name}" is not a supported file type.`
                     );
                     continue;
                 }
@@ -364,11 +372,17 @@ export function ChatInput({
 
     // ── File input handler ───────────────────────────────────────────────
 
-    function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    function handleImageInputChange(event: React.ChangeEvent<HTMLInputElement>) {
         if (event.target.files && event.target.files.length > 0) {
-            addFiles(event.target.files);
+            addFiles(event.target.files, "image");
         }
-        // Reset so the same file can be re-selected
+        event.target.value = "";
+    }
+
+    function handleFileInputChange(event: React.ChangeEvent<HTMLInputElement>) {
+        if (event.target.files && event.target.files.length > 0) {
+            addFiles(event.target.files, "file");
+        }
         event.target.value = "";
     }
 
@@ -390,7 +404,13 @@ export function ChatInput({
         event.preventDefault();
         setIsDragOver(false);
         if (!disabled && !isSubmitting && event.dataTransfer.files.length > 0) {
-            addFiles(event.dataTransfer.files);
+            const files = Array.from(event.dataTransfer.files);
+            const imageFiles = files.filter((f) => IMAGE_MIME_TYPES[f.type]);
+            const fileFiles = files.filter((f) => FILE_MIME_TYPES[f.type]);
+            if (supportsImages && imageFiles.length > 0)
+                addFiles(imageFiles, "image");
+            if (supportsFiles && fileFiles.length > 0)
+                addFiles(fileFiles, "file");
         }
     }
 
@@ -470,17 +490,23 @@ export function ChatInput({
                         const items = event.clipboardData?.items;
                         if (!items) return;
 
-                        const files: File[] = [];
+                        const imageFiles: File[] = [];
+                        const fileFiles: File[] = [];
                         for (const item of Array.from(items)) {
                             if (item.kind === "file") {
                                 const file = item.getAsFile();
-                                if (file) files.push(file);
+                                if (!file) continue;
+                                if (IMAGE_MIME_TYPES[file.type])
+                                    imageFiles.push(file);
+                                else if (FILE_MIME_TYPES[file.type])
+                                    fileFiles.push(file);
                             }
                         }
 
-                        if (files.length > 0) {
-                            addFiles(files);
-                        }
+                        if (supportsImages && imageFiles.length > 0)
+                            addFiles(imageFiles, "image");
+                        if (supportsFiles && fileFiles.length > 0)
+                            addFiles(fileFiles, "file");
                     }}
                 />
             </div>
@@ -513,37 +539,60 @@ export function ChatInput({
                     ) : null}
 
                     <input
-                        ref={fileInputRef}
+                        ref={imageInputRef}
                         type="file"
-                        accept={ACCEPT_STRING}
+                        accept={IMAGE_ACCEPT_STRING}
                         multiple
                         className="hidden"
-                        onChange={handleFileChange}
+                        onChange={handleImageInputChange}
                         disabled={disabled || isSubmitting}
                     />
 
-                    <Tooltip
-                        content={
-                            supportsImages
-                                ? "Attach images or PDFs"
-                                : "This model doesn't support image attachments"
-                        }
-                    >
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            className="size-8 p-0 text-dark-200 hover:text-white"
-                            disabled={
-                                disabled ||
-                                isSubmitting ||
-                                !supportsImages ||
-                                attachments.length >= MAX_ATTACHMENTS
-                            }
-                            onClick={() => fileInputRef.current?.click()}
-                        >
-                            <PaperclipIcon className="size-4" weight="bold" />
-                        </Button>
-                    </Tooltip>
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept={FILE_ACCEPT_STRING}
+                        multiple
+                        className="hidden"
+                        onChange={handleFileInputChange}
+                        disabled={disabled || isSubmitting}
+                    />
+
+                    {supportsImages && (
+                        <Tooltip content="Attach images">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                className="size-8 p-0 text-dark-200 hover:text-white"
+                                disabled={
+                                    disabled ||
+                                    isSubmitting ||
+                                    attachments.length >= MAX_ATTACHMENTS
+                                }
+                                onClick={() => imageInputRef.current?.click()}
+                            >
+                                <ImageIcon className="size-4" weight="bold" />
+                            </Button>
+                        </Tooltip>
+                    )}
+
+                    {supportsFiles && (
+                        <Tooltip content="Attach files">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                className="size-8 p-0 text-dark-200 hover:text-white"
+                                disabled={
+                                    disabled ||
+                                    isSubmitting ||
+                                    attachments.length >= MAX_ATTACHMENTS
+                                }
+                                onClick={() => fileInputRef.current?.click()}
+                            >
+                                <PaperclipIcon className="size-4" weight="bold" />
+                            </Button>
+                        </Tooltip>
+                    )}
 
                     {isSubmitting && onStop ? (
                         <Tooltip content="Stop generation">

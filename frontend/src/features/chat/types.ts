@@ -9,6 +9,12 @@ export interface ImageMessagePart {
     mimeType: string;
 }
 
+export interface FileMessagePart {
+    type: "file";
+    data: string; // base64
+    mimeType: string;
+}
+
 export interface ToolInvocationPart {
     type: "tool-invocation";
     toolInvocationId: string;
@@ -26,6 +32,7 @@ export interface ReasoningMessagePart {
 export type MessagePart =
     | TextMessagePart
     | ImageMessagePart
+    | FileMessagePart
     | ToolInvocationPart
     | ReasoningMessagePart;
 

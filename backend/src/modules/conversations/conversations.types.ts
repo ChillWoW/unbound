@@ -19,6 +19,12 @@ export interface ImageMessagePart {
     mimeType: string;
 }
 
+export interface FileMessagePart {
+    type: "file";
+    data: string; // base64
+    mimeType: string;
+}
+
 export interface ToolInvocationPart {
     type: "tool-invocation";
     toolInvocationId: string;
@@ -36,8 +42,17 @@ export interface ReasoningMessagePart {
 export type MessagePart =
     | TextMessagePart
     | ImageMessagePart
+    | FileMessagePart
     | ToolInvocationPart
     | ReasoningMessagePart;
+
+const IMAGE_MIME_TYPES = new Set([
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
+    "image/svg+xml"
+]);
 
 export interface ConversationMessage {
     id: string;
@@ -107,7 +122,11 @@ export function createMessageParts(
     }
 
     for (const att of attachments ?? []) {
-        parts.push({ type: "image", data: att.data, mimeType: att.mimeType });
+        if (IMAGE_MIME_TYPES.has(att.mimeType)) {
+            parts.push({ type: "image", data: att.data, mimeType: att.mimeType });
+        } else {
+            parts.push({ type: "file", data: att.data, mimeType: att.mimeType });
+        }
     }
 
     if (parts.length === 0) {

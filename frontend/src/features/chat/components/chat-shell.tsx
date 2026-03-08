@@ -76,7 +76,7 @@ export function ChatShell({ children }: PropsWithChildren) {
                     isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
                 )}
             >
-                <div className="flex h-full flex-col shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
+                <div className="flex h-full flex-col">
                     <ChatSidebar
                         currentPath={pathname}
                         isMobile

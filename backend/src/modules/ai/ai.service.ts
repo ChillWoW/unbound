@@ -50,9 +50,11 @@ function toModelMessages(records: MessageRecord[]): ModelMessage[] {
         const parts = record.parts as MessagePart[];
 
         if (role === "user") {
-            const imageParts = parts.filter((p) => p.type === "image");
+            const hasMediaParts = parts.some(
+                (p) => p.type === "image" || p.type === "file"
+            );
 
-            if (imageParts.length === 0) {
+            if (!hasMediaParts) {
                 const text = parts
                     .filter((p) => p.type === "text")
                     .map((p) => p.text)
@@ -74,6 +76,12 @@ function toModelMessages(records: MessageRecord[]): ModelMessage[] {
                         content.push({
                             type: "image",
                             image: p.data,
+                            mediaType: p.mimeType
+                        });
+                    } else if (p.type === "file") {
+                        content.push({
+                            type: "file",
+                            data: p.data,
                             mediaType: p.mimeType
                         });
                     }
