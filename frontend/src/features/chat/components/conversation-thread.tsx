@@ -332,51 +332,43 @@ function AssistantMessage({
     availableModels: ChatModel[];
 }) {
     const text = getMessageText(message.parts);
-    const toolParts = message.parts.filter(
-        (p): p is ToolInvocationPart => p.type === "tool-invocation"
-    );
-    const reasoningParts = message.parts.filter(
-        (p): p is ReasoningMessagePart => p.type === "reasoning"
-    );
-    const isStreaming = message.status === "pending" && text.length > 0;
-    const isReasoningStreaming =
-        message.status === "pending" &&
-        reasoningParts.length > 0 &&
-        text.length === 0;
-    const isWaiting =
-        message.status === "pending" &&
-        text.length === 0 &&
-        toolParts.length === 0 &&
-        reasoningParts.length === 0;
+    const isPending = message.status === "pending";
+    const hasText = message.parts.some((p) => p.type === "text");
+    const isWaiting = isPending && message.parts.length === 0;
 
     return (
         <div className="group w-full">
-            {reasoningParts.map((part, i) => (
-                <ReasoningDisplay
-                    key={`reasoning-${i}`}
-                    part={part}
-                    isStreaming={isReasoningStreaming}
-                />
-            ))}
-
-            {toolParts.map((part) => (
-                <ToolInvocationDisplay
-                    key={part.toolInvocationId}
-                    part={part}
-                />
-            ))}
-
-            {(text || isWaiting) && (
-                <div>
-                    {text && (
-                        <MarkdownRenderer
-                            content={text}
-                            isStreaming={isStreaming}
+            {message.parts.map((part, i) => {
+                if (part.type === "reasoning") {
+                    return (
+                        <ReasoningDisplay
+                            key={`reasoning-${i}`}
+                            part={part}
+                            isStreaming={isPending && !hasText}
                         />
-                    )}
-                    {isWaiting && <StreamingIndicator />}
-                </div>
-            )}
+                    );
+                }
+                if (part.type === "tool-invocation") {
+                    return (
+                        <ToolInvocationDisplay
+                            key={part.toolInvocationId}
+                            part={part}
+                        />
+                    );
+                }
+                if (part.type === "text") {
+                    return (
+                        <MarkdownRenderer
+                            key={`text-${i}`}
+                            content={part.text}
+                            isStreaming={isPending}
+                        />
+                    );
+                }
+                return null;
+            })}
+
+            {isWaiting && <StreamingIndicator />}
 
             {message.status === "failed" && (
                 <p className="mt-1 text-xs text-red-400">Generation failed.</p>

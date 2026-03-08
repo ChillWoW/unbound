@@ -91,6 +91,7 @@ body {
     margin: 0;
     font-family: "Geist", sans-serif;
     height: 100%;
+    background-color: var(--color-dark-900);
 }
 
 #root {
