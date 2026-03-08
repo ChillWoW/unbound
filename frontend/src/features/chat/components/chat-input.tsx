@@ -175,36 +175,25 @@ function AttachmentChip({
     disabled: boolean;
 }) {
     return (
-        <div
-            className={cn(
-                "group relative flex items-center gap-2 rounded-md border border-dark-600 bg-dark-700 px-2 py-1.5",
-                "transition-colors hover:border-dark-500"
-            )}
-        >
+        <div className="group flex items-center gap-1.5 rounded-lg bg-dark-700 pr-1 pl-1 py-1 max-w-48">
             {attachment.type === "image" && attachment.preview ? (
                 <img
                     src={attachment.preview}
                     alt={attachment.file.name}
-                    className="size-8 shrink-0 rounded object-cover"
+                    className="size-7 shrink-0 rounded-md object-cover"
                 />
             ) : (
-                <div className="flex size-8 shrink-0 items-center justify-center rounded bg-dark-600">
+                <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-dark-600 text-dark-200">
                     {attachment.type === "file" ? (
-                        <FileTextIcon
-                            className="size-4 text-dark-200"
-                            weight="bold"
-                        />
+                        <FileTextIcon className="size-3.5" weight="bold" />
                     ) : (
-                        <ImageIcon
-                            className="size-4 text-dark-200"
-                            weight="bold"
-                        />
+                        <ImageIcon className="size-3.5" weight="bold" />
                     )}
                 </div>
             )}
 
-            <div className="flex min-w-0 flex-col">
-                <span className="truncate text-xs text-white max-w-[120px]">
+            <div className="flex min-w-0 flex-col leading-tight">
+                <span className="truncate text-xs font-medium text-white">
                     {attachment.file.name}
                 </span>
                 <span className="text-[10px] text-dark-300">
@@ -213,18 +202,13 @@ function AttachmentChip({
             </div>
 
             {!disabled && (
-                <button
-                    type="button"
+                <Button
+                    variant="ghost"
                     onClick={onRemove}
-                    className={cn(
-                        "absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full",
-                        "bg-dark-600 text-dark-200 opacity-0 transition-opacity",
-                        "hover:bg-dark-500 hover:text-white group-hover:opacity-100"
-                    )}
-                    aria-label={`Remove ${attachment.file.name}`}
+                    className="size-5 p-0 shrink-0 ml-1 text-dark-200 hover:text-white"
                 >
                     <XIcon className="size-3" weight="bold" />
-                </button>
+                </Button>
             )}
         </div>
     );

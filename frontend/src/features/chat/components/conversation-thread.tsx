@@ -23,6 +23,27 @@ import { type ChatAttachment } from "./chat-input";
 import { InputDock } from "./input-dock";
 import { MarkdownRenderer } from "@/components/markdown/markdown-renderer";
 
+const TODO_TOOLS = new Set([
+    "todoWrite",
+    "todoRead",
+    "todoSetStatus",
+    "todoDelete"
+]);
+
+const TOOL_LABELS: Record<string, string> = {
+    todoWrite: "Updating tasks…",
+    todoRead: "Reading tasks…",
+    todoSetStatus: "Updating task status…",
+    todoDelete: "Removing tasks…"
+};
+
+const TOOL_LABELS_DONE: Record<string, string> = {
+    todoWrite: "Updated tasks",
+    todoRead: "Read tasks",
+    todoSetStatus: "Updated task status",
+    todoDelete: "Removed tasks"
+};
+
 function getMessageText(parts: MessagePart[]) {
     return parts
         .filter((part) => part.type === "text")
@@ -145,6 +166,26 @@ function ToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
     const [expanded, setExpanded] = useState(false);
     const isPending = part.state === "call";
     const hasOutput = part.state === "result" && part.result !== undefined;
+    const isTodoTool = TODO_TOOLS.has(part.toolName);
+
+    const label = isPending
+        ? (TOOL_LABELS[part.toolName] ?? `${part.toolName}…`)
+        : (TOOL_LABELS_DONE[part.toolName] ?? part.toolName);
+
+    if (isTodoTool) {
+        return (
+            <div className="my-1.5">
+                <span
+                    className={cn(
+                        "text-xs font-medium",
+                        isPending ? "wave-text" : "text-dark-300"
+                    )}
+                >
+                    {label}
+                </span>
+            </div>
+        );
+    }
 
     return (
         <div className="my-1.5">
@@ -159,7 +200,7 @@ function ToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
                         isPending ? "wave-text" : "text-dark-300"
                     )}
                 >
-                    {part.toolName}
+                    {label}
                 </span>
                 <CaretRightIcon
                     className={cn(
@@ -169,7 +210,6 @@ function ToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
                     weight="bold"
                 />
             </button>
-
             {expanded && hasOutput && (
                 <pre className="mt-2 overflow-x-auto rounded bg-dark-900 p-2 text-xs text-dark-100">
                     {typeof part.result === "string"
