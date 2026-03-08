@@ -8,8 +8,12 @@ import {
     type ToolResultPart,
     type UserModelMessage
 } from "ai";
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { requireAuth } from "../../middleware/require-auth";
+import {
+    createModelInstance,
+    isValidProvider,
+    type ProviderType
+} from "./provider-factory";
 import { settingsService } from "../settings/settings.service";
 import { conversationsRepository } from "../conversations/conversations.repository";
 import { todosRepository } from "../todos/todos.repository";
@@ -384,24 +388,26 @@ function startBackgroundGeneration(
     generation: GenerationEntry,
     modelMessages: ModelMessage[],
     modelId: string,
+    provider: ProviderType,
     apiKey: string,
     generationStartedAt: string,
     thinking: boolean,
     tools: ReturnType<typeof createTools>
 ) {
-    const openrouter = createOpenRouter({ apiKey });
+    const model = createModelInstance(provider, modelId, apiKey);
     const assistantMessageId = generation.messageId;
 
     logger.info("Generation started", {
         conversationId: generation.conversationId,
         messageId: assistantMessageId,
         modelId,
+        provider,
         thinking,
         messageCount: modelMessages.length
     });
 
     const result = streamText({
-        model: openrouter(modelId),
+        model,
         messages: modelMessages,
         tools,
         stopWhen: stepCountIs(20),
@@ -703,6 +709,7 @@ export const aiService = {
         request: Request,
         conversationId: string,
         modelId: string,
+        provider: string,
         thinking = false
     ): Promise<Response> {
         const user = await requireAuth(request);
@@ -714,14 +721,24 @@ export const aiService = {
             );
         }
 
-        const apiKey =
-            await settingsService.getDecryptedOpenRouterApiKeyForUser(user.id);
+        const resolvedProvider: ProviderType = isValidProvider(provider)
+            ? provider
+            : "openrouter";
+
+        const apiKey = await settingsService.getDecryptedApiKeyForUser(
+            user.id,
+            resolvedProvider
+        );
 
         if (!apiKey) {
-            logger.warn("Generation rejected: no API key", { conversationId, userId: user.id });
+            logger.warn("Generation rejected: no API key", {
+                conversationId,
+                userId: user.id,
+                provider: resolvedProvider
+            });
             throw new ConversationError(
                 400,
-                "Add your OpenRouter API key in settings to use AI features."
+                `Add your ${resolvedProvider === "openrouter" ? "OpenRouter" : resolvedProvider.charAt(0).toUpperCase() + resolvedProvider.slice(1)} API key in settings to use this model.`
             );
         }
 
@@ -806,6 +823,7 @@ export const aiService = {
             generation,
             messagesWithSystemPrompt,
             modelId,
+            resolvedProvider,
             apiKey,
             generationStartedAt,
             thinking,

@@ -1,4 +1,5 @@
 import type { ModelSummary } from "./models.types";
+import type { ProviderType } from "../ai/provider-factory";
 
 interface SupportedModelDefinition {
     id: string;
@@ -199,6 +200,7 @@ export function selectSupportedModels(models: ModelSummary[]): ModelSummary[] {
                 id: definition.id,
                 name: definition.name,
                 provider: definition.provider,
+                source: "openrouter",
                 description: definition.description,
                 contextLength: null,
                 promptPricing: null,
@@ -213,6 +215,7 @@ export function selectSupportedModels(models: ModelSummary[]): ModelSummary[] {
             ...model,
             name: definition.name,
             provider: definition.provider,
+            source: "openrouter",
             description: definition.description,
             free: definition.free
         };

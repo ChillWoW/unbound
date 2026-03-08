@@ -13,6 +13,7 @@ function ConversationPage() {
     const reconnectAttemptedRef = useRef<Set<string>>(new Set());
     const {
         availableModels,
+        configuredProviders,
         getConversation,
         getConversationError,
         isConversationLoading,
@@ -121,6 +122,7 @@ function ConversationPage() {
     return (
         <ConversationThread
             availableModels={availableModels}
+            configuredProviders={configuredProviders}
             conversation={conversation}
             error={submissionError}
             isSending={isSending}

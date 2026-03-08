@@ -1,7 +1,10 @@
+import type { ProviderType } from "../ai/provider-factory";
+
 export interface ModelSummary {
     id: string;
     name: string;
     provider?: string;
+    source: ProviderType;
     description: string | null;
     contextLength: number | null;
     promptPricing: string | null;
@@ -83,6 +86,7 @@ function toModelSummary(value: unknown): ModelSummary | null {
     return {
         id,
         name: toStringOrNull(model.name) ?? id,
+        source: "openrouter",
         description: toStringOrNull(model.description),
         contextLength: toNumberOrNull(model.context_length),
         promptPricing: toStringOrNull(model.pricing?.prompt),

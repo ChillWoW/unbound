@@ -1,12 +1,14 @@
 import { authService } from "../auth/auth.service";
 import { settingsService } from "../settings/settings.service";
 import { selectSupportedModels } from "./supported-models";
+import { getDirectProviderModels } from "./direct-provider-models";
 import {
     ModelsError,
     normalizeModelsResponse,
     type ModelSummary
 } from "./models.types";
 import { DEFAULT_CONTEXT_LENGTH } from "../ai/token-estimator";
+import type { ProviderType } from "../ai/provider-factory";
 
 const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
 
@@ -29,63 +31,94 @@ function getCachedContextLength(modelId: string): number | null {
     return model?.contextLength ?? null;
 }
 
+const DIRECT_PROVIDERS: Exclude<ProviderType, "openrouter">[] = [
+    "openai",
+    "anthropic",
+    "google"
+];
+
 export const modelsService = {
     async listModels(request: Request) {
         const user = await authService.getCurrentUser(request);
+        const allModels: ModelSummary[] = [];
+        const configuredProviders: ProviderType[] = [];
 
-        let apiKey: string | null = null;
+        let openrouterKey: string | null = null;
 
         if (user) {
-            apiKey = await settingsService.getDecryptedOpenRouterApiKeyForUser(user.id);
+            openrouterKey =
+                await settingsService.getDecryptedApiKeyForUser(
+                    user.id,
+                    "openrouter"
+                );
         }
 
-        const headers: Record<string, string> = { Accept: "application/json" };
+        if (openrouterKey) {
+            configuredProviders.push("openrouter");
 
-        if (apiKey) {
-            headers.Authorization = `Bearer ${apiKey}`;
-        }
+            const headers: Record<string, string> = {
+                Accept: "application/json",
+                Authorization: `Bearer ${openrouterKey}`
+            };
 
-        let response: Response;
+            let response: Response;
 
-        try {
-            response = await fetch(OPENROUTER_MODELS_URL, { headers });
-        } catch {
-            throw new ModelsError(
-                502,
-                "Unable to reach OpenRouter to load models right now."
-            );
-        }
-
-        if (!response.ok) {
-            if (response.status === 401 || response.status === 403) {
+            try {
+                response = await fetch(OPENROUTER_MODELS_URL, { headers });
+            } catch {
                 throw new ModelsError(
-                    400,
-                    "Your OpenRouter API key is invalid or expired."
+                    502,
+                    "Unable to reach OpenRouter to load models right now."
                 );
             }
 
-            throw new ModelsError(
-                502,
-                "OpenRouter could not return models right now."
+            if (!response.ok) {
+                if (response.status === 401 || response.status === 403) {
+                    throw new ModelsError(
+                        400,
+                        "Your OpenRouter API key is invalid or expired."
+                    );
+                }
+
+                throw new ModelsError(
+                    502,
+                    "OpenRouter could not return models right now."
+                );
+            }
+
+            let payload: unknown;
+
+            try {
+                payload = await response.json();
+            } catch {
+                throw new ModelsError(
+                    502,
+                    "OpenRouter returned an unreadable models response."
+                );
+            }
+
+            const openrouterModels = selectSupportedModels(
+                normalizeModelsResponse(payload)
             );
+            allModels.push(...openrouterModels);
         }
 
-        let payload: unknown;
+        if (user) {
+            for (const provider of DIRECT_PROVIDERS) {
+                const key = await settingsService.getDecryptedApiKeyForUser(
+                    user.id,
+                    provider
+                );
 
-        try {
-            payload = await response.json();
-        } catch {
-            throw new ModelsError(
-                502,
-                "OpenRouter returned an unreadable models response."
-            );
+                if (key) {
+                    configuredProviders.push(provider);
+                    allModels.push(...getDirectProviderModels(provider));
+                }
+            }
         }
 
-        const models = selectSupportedModels(
-            normalizeModelsResponse(payload)
-        );
-        updateCache(models);
-        return models;
+        updateCache(allModels);
+        return { models: allModels, configuredProviders };
     },
 
     getModelContextLength(modelId: string): number {

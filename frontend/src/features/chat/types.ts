@@ -78,10 +78,13 @@ export interface ConversationDetail extends ConversationSummary {
     messages: ConversationMessage[];
 }
 
+export type ProviderType = "openrouter" | "openai" | "anthropic" | "google";
+
 export interface ChatModel {
     id: string;
     name: string;
     provider: string;
+    source: ProviderType;
     description: string | null;
     contextLength: number | null;
     promptPricing: string | null;
@@ -97,6 +100,7 @@ export interface ConversationsResponse {
 
 export interface ModelsResponse {
     models: ChatModel[];
+    configuredProviders: ProviderType[];
 }
 
 export interface ConversationResponse {

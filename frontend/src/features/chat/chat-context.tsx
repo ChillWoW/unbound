@@ -19,6 +19,7 @@ import type {
     ConversationMessage,
     ConversationSummary,
     MessagePart,
+    ProviderType,
     TodoItem,
     ToolInvocationPart
 } from "./types";
@@ -106,6 +107,7 @@ function writeStoredSelectedModelId(userId: string, modelId: string | null) {
 
 interface ChatContextValue {
     availableModels: ChatModel[];
+    configuredProviders: ProviderType[];
     conversations: ConversationSummary[];
     conversationsError: string | null;
     createConversation: (
@@ -273,6 +275,9 @@ function applyToolResult(
 export function ChatProvider({ children }: PropsWithChildren) {
     const { isAuthenticated, isLoading, user } = useAuth();
     const [availableModels, setAvailableModels] = useState<ChatModel[]>([]);
+    const [configuredProviders, setConfiguredProviders] = useState<
+        ProviderType[]
+    >([]);
     const [conversations, setConversations] = useState<ConversationSummary[]>(
         []
     );
@@ -302,6 +307,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
         null
     );
     const selectedModelIdRef = useRef<string | null>(null);
+    const availableModelsRef = useRef<ChatModel[]>([]);
     const [isThinkingEnabled, setIsThinkingEnabled] = useState(
         () => localStorage.getItem("thinking-enabled") === "true"
     );
@@ -313,6 +319,10 @@ export function ChatProvider({ children }: PropsWithChildren) {
     useEffect(() => {
         selectedModelIdRef.current = selectedModelId;
     }, [selectedModelId]);
+
+    useEffect(() => {
+        availableModelsRef.current = availableModels;
+    }, [availableModels]);
 
     useEffect(() => {
         isThinkingEnabledRef.current = isThinkingEnabled;
@@ -414,10 +424,12 @@ export function ChatProvider({ children }: PropsWithChildren) {
                       : (response.models[0]?.id ?? null);
 
             setAvailableModels(response.models);
+            setConfiguredProviders(response.configuredProviders ?? []);
             setSelectedModelIdState(nextSelectedModelId);
             if (user) writeStoredSelectedModelId(user.id, nextSelectedModelId);
         } catch (error) {
             setAvailableModels([]);
+            setConfiguredProviders([]);
             setSelectedModelIdState(null);
             setModelsError(getErrorMessage(error));
             throw error;
@@ -463,7 +475,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
     }, []);
 
     const runGeneration = useCallback(
-        async (conversationId: string, modelId: string) => {
+        async (conversationId: string, modelId: string, provider: string) => {
             const thinking = isThinkingEnabledRef.current;
             const abortController = new AbortController();
             activeGenerationsRef.current.set(conversationId, abortController);
@@ -495,6 +507,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 streamResponse = await chatApi.generateResponse(
                     conversationId,
                     modelId,
+                    provider,
                     thinking,
                     abortController.signal
                 );
@@ -954,6 +967,11 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 throw new Error("No model selected.");
             }
 
+            const selectedModel = availableModelsRef.current.find(
+                (m) => m.id === modelId
+            );
+            const provider = selectedModel?.source ?? "openrouter";
+
             setIsCreatingConversation(true);
 
             try {
@@ -969,7 +987,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 const conversationId = response.conversation.id;
 
                 setConversationSending(conversationId, true);
-                runGeneration(conversationId, modelId)
+                runGeneration(conversationId, modelId, provider)
                     .catch(() => undefined)
                     .finally(() =>
                         setConversationSending(conversationId, false)
@@ -1057,6 +1075,11 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 throw new Error("No model selected.");
             }
 
+            const selectedModel = availableModelsRef.current.find(
+                (m) => m.id === modelId
+            );
+            const provider = selectedModel?.source ?? "openrouter";
+
             setConversationSending(conversationId, true);
 
             try {
@@ -1070,7 +1093,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 );
                 upsertConversation(persistResponse.conversation);
 
-                await runGeneration(conversationId, modelId);
+                await runGeneration(conversationId, modelId, provider);
 
                 const finalConversation = conversationDetails[conversationId];
                 if (finalConversation) return finalConversation;
@@ -1229,6 +1252,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
     const value = useMemo<ChatContextValue>(
         () => ({
             availableModels,
+            configuredProviders,
             conversations,
             conversationsError,
             createConversation,
@@ -1258,6 +1282,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
         }),
         [
             availableModels,
+            configuredProviders,
             conversations,
             conversationsError,
             createConversation,

@@ -6,7 +6,7 @@ import {
     Switch,
     Tooltip
 } from "@/components/ui";
-import type { ChatModel } from "../types";
+import type { ChatModel, ProviderType } from "../types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     MagnifyingGlassIcon,
@@ -17,7 +17,8 @@ import {
     FileIcon,
     InfoIcon,
     BrainIcon,
-    FunnelIcon
+    FunnelIcon,
+    GearIcon
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/cn";
 import {
@@ -30,7 +31,8 @@ import {
     OpenAI,
     Google,
     Anthropic,
-    ZAI
+    ZAI,
+    OpenRouter
 } from "@lobehub/icons";
 
 const ICONS: Record<string, React.ComponentType<any>> = {
@@ -43,7 +45,17 @@ const ICONS: Record<string, React.ComponentType<any>> = {
     openai: OpenAI,
     google: Google,
     anthropic: Anthropic,
-    zai: ZAI
+    zai: ZAI,
+    openrouter: OpenRouter
+};
+
+const ALWAYS_VISIBLE_PROVIDERS = ["openai", "anthropic", "google"];
+
+const SOURCE_TO_PROVIDER: Record<ProviderType, string> = {
+    openrouter: "openrouter",
+    openai: "openai",
+    anthropic: "anthropic",
+    google: "google"
 };
 
 function formatPricing(raw: string): string {
@@ -197,6 +209,14 @@ function ModelInfoButton({ model }: { model: ChatModel }) {
                             </div>
                         </div>
                     )}
+
+                    {model.source !== "openrouter" && (
+                        <div className="border-t border-dark-600 px-3 py-2">
+                            <span className="text-[11px] text-dark-300">
+                                Direct API
+                            </span>
+                        </div>
+                    )}
                 </div>
             </PopoverContent>
         </Popover>
@@ -206,6 +226,7 @@ function ModelInfoButton({ model }: { model: ChatModel }) {
 export function ModelSelector({
     selectedModelId,
     models,
+    configuredProviders = [],
     onModelSelected,
     disabled = false,
     isThinkingEnabled = false,
@@ -213,6 +234,7 @@ export function ModelSelector({
 }: {
     selectedModelId: string | null;
     models: ChatModel[];
+    configuredProviders?: ProviderType[];
     onModelSelected: (model: ChatModel) => void;
     disabled?: boolean;
     isThinkingEnabled?: boolean;
@@ -234,13 +256,19 @@ export function ModelSelector({
         ];
     }, [selectedModelId, models]);
 
-    const providers = useMemo(
-        () =>
-            Array.from(new Set(models.map((model) => model.provider))).sort(
-                (a, b) =>
-                    formatProviderName(a).localeCompare(formatProviderName(b))
-            ),
-        [models]
+    const providers = useMemo(() => {
+        const fromModels = new Set(models.map((m) => m.provider));
+        for (const p of ALWAYS_VISIBLE_PROVIDERS) {
+            fromModels.add(p);
+        }
+        return Array.from(fromModels).sort((a, b) =>
+            formatProviderName(a).localeCompare(formatProviderName(b))
+        );
+    }, [models]);
+
+    const configuredProviderSet = useMemo(
+        () => new Set(configuredProviders),
+        [configuredProviders]
     );
 
     const allModalities = useMemo(() => {
@@ -281,12 +309,37 @@ export function ModelSelector({
     const providerEnabledMap = useMemo(() => {
         const map: Record<string, boolean> = {};
         for (const provider of providers) {
-            map[provider] = models
+            const hasMatchingModels = models
                 .filter((model) => model.provider === provider)
                 .some((model) => modelMatchesModalities(model));
+            map[provider] = hasMatchingModels;
         }
         return map;
     }, [providers, models, modelMatchesModalities]);
+
+    const providerHasModels = useMemo(() => {
+        const map: Record<string, boolean> = {};
+        for (const provider of providers) {
+            map[provider] = models.some((m) => m.provider === provider);
+        }
+        return map;
+    }, [providers, models]);
+
+    const isProviderConfigured = useCallback(
+        (provider: string) => {
+            if (providerHasModels[provider]) return true;
+            const matchingSource = Object.entries(SOURCE_TO_PROVIDER).find(
+                ([, p]) => p === provider
+            );
+            if (matchingSource) {
+                return configuredProviderSet.has(
+                    matchingSource[0] as ProviderType
+                );
+            }
+            return configuredProviderSet.has("openrouter");
+        },
+        [providerHasModels, configuredProviderSet]
+    );
 
     const availableProviders = useMemo(
         () => providers.filter((provider) => providerEnabledMap[provider]),
@@ -294,13 +347,13 @@ export function ModelSelector({
     );
 
     useEffect(() => {
-        if (providers.length === 0 || availableProviders.length === 0) {
+        if (providers.length === 0) {
             setActiveProvider(null);
             return;
         }
 
         setActiveProvider((current) => {
-            if (current && availableProviders.includes(current)) return current;
+            if (current && providerEnabledMap[current]) return current;
 
             const selectedProvider = selectedModelId
                 ? models.find((model) => model.id === selectedModelId)?.provider
@@ -308,14 +361,22 @@ export function ModelSelector({
 
             if (
                 selectedProvider &&
-                availableProviders.includes(selectedProvider)
+                providerEnabledMap[selectedProvider]
             ) {
                 return selectedProvider;
             }
 
-            return availableProviders[0];
+            if (availableProviders.length > 0) return availableProviders[0];
+
+            return providers[0];
         });
-    }, [providers, availableProviders, selectedModelId, models]);
+    }, [
+        providers,
+        availableProviders,
+        providerEnabledMap,
+        selectedModelId,
+        models
+    ]);
 
     const filteredModels = useMemo(() => {
         const scopedModels = activeProvider
@@ -377,12 +438,22 @@ export function ModelSelector({
                         {providers.map((provider) => {
                             const ProviderIcon = ICONS[provider];
                             const isActive = provider === activeProvider;
-                            const isEnabled = providerEnabledMap[provider];
+                            const hasModels = providerHasModels[provider];
+                            const isEnabled =
+                                providerEnabledMap[provider] &&
+                                isProviderConfigured(provider);
+                            const isUnconfigured =
+                                !hasModels &&
+                                !isProviderConfigured(provider);
+
+                            const tooltipText = isUnconfigured
+                                ? `${formatProviderName(provider)} - Configure API key in Settings`
+                                : formatProviderName(provider);
 
                             return (
                                 <Tooltip
                                     key={provider}
-                                    content={formatProviderName(provider)}
+                                    content={tooltipText}
                                     side="right"
                                     delay={300}
                                 >
@@ -401,10 +472,14 @@ export function ModelSelector({
                                             setActiveProvider(provider)
                                         }
                                     >
-                                        <ProviderIcon
-                                            className="size-4"
-                                            title=""
-                                        />
+                                        {ProviderIcon ? (
+                                            <ProviderIcon
+                                                className="size-4"
+                                                title=""
+                                            />
+                                        ) : (
+                                            <GearIcon className="size-4" />
+                                        )}
                                     </button>
                                 </Tooltip>
                             );
@@ -529,9 +604,12 @@ export function ModelSelector({
 
                         <div className="min-h-0 flex-1 overflow-y-auto p-1">
                             {filteredModels.length === 0 && (
-                                <div className="flex h-full items-center justify-center">
+                                <div className="flex h-full flex-col items-center justify-center gap-1">
                                     <p className="text-center text-xs text-dark-200">
-                                        No models found
+                                        {activeProvider &&
+                                        !isProviderConfigured(activeProvider)
+                                            ? "Configure API key in Settings"
+                                            : "No models found"}
                                     </p>
                                 </div>
                             )}
@@ -542,10 +620,12 @@ export function ModelSelector({
 
                                     return (
                                         <div
-                                            key={model.id}
+                                            key={`${model.source}-${model.id}`}
                                             className={cn(
                                                 "flex w-full cursor-pointer items-center gap-2.5 rounded-md px-3 py-1.5 text-xs text-dark-100 transition-colors hover:bg-dark-600 hover:text-white",
                                                 model.id === selectedModelId &&
+                                                    model.source ===
+                                                        selectedModel?.source &&
                                                     "bg-dark-600 text-dark-50"
                                             )}
                                             onClick={() => {
@@ -564,6 +644,12 @@ export function ModelSelector({
                                                     {model.name}
                                                 </span>
                                             </div>
+
+                                            {model.source !== "openrouter" && (
+                                                <span className="shrink-0 rounded-md bg-dark-700 px-1.5 py-0.5 text-[10px] text-dark-300">
+                                                    Direct
+                                                </span>
+                                            )}
 
                                             {model.free && (
                                                 <div className="shrink-0 rounded-md bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-100">

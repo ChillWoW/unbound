@@ -18,8 +18,11 @@ export const modelsRoutes = new Elysia({ prefix: "/api/models" }).get(
     "/",
     async ({ request, set }) => {
         try {
-            const models = await modelsService.listModels(request);
-            return { models };
+            const result = await modelsService.listModels(request);
+            return {
+                models: result.models,
+                configuredProviders: result.configuredProviders
+            };
         } catch (error) {
             return handleModelsError(error, set);
         }
