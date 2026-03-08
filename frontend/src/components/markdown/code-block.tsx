@@ -55,7 +55,7 @@ export function CodeBlock({ language, children }: CodeBlockProps) {
                     fontSize: "13px",
                     lineHeight: "1.5"
                 }}
-                codeTagProps={{ style: { fontFamily: "inherit" } }}
+                codeTagProps={{ style: { fontFamily: '"Geist Mono", monospace' } }}
             >
                 {children}
             </SyntaxHighlighter>
