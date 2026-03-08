@@ -17,7 +17,7 @@ import {
     type MessagePart,
     type MessageRecord
 } from "../conversations/conversations.types";
-import { tools } from "./ai.tools";
+import { createTools } from "./ai.tools";
 import {
     generationManager,
     type GenerationEntry,
@@ -300,7 +300,8 @@ function startBackgroundGeneration(
     modelId: string,
     apiKey: string,
     generationStartedAt: string,
-    thinking: boolean
+    thinking: boolean,
+    tools: ReturnType<typeof createTools>
 ) {
     const openrouter = createOpenRouter({ apiKey });
     const assistantMessageId = generation.messageId;
@@ -543,13 +544,16 @@ export const aiService = {
             assistantMessageId
         );
 
+        const tools = createTools(conversationId, user.id);
+
         startBackgroundGeneration(
             generation,
             messagesWithSystemPrompt,
             modelId,
             apiKey,
             generationStartedAt,
-            thinking
+            thinking,
+            tools
         );
 
         return createSubscriberStream(generation, false);

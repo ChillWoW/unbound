@@ -4,7 +4,8 @@ import type {
     ConversationReadResponse,
     ConversationResponse,
     ConversationsResponse,
-    ModelsResponse
+    ModelsResponse,
+    TodoItem
 } from "./types";
 
 export const chatApi = {
@@ -85,6 +86,12 @@ export const chatApi = {
                 credentials: "include",
                 signal
             }
+        );
+    },
+
+    listTodos(conversationId: string) {
+        return api.get<{ todos: TodoItem[] }>(
+            `/api/conversations/${conversationId}/todos`
         );
     }
 };

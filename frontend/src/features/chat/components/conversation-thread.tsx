@@ -5,9 +5,7 @@ import {
     CaretRightIcon,
     CopyIcon,
     CheckIcon,
-    ClockIcon,
-    ListChecksIcon,
-    ChatTeardropTextIcon
+    ClockIcon
 } from "@phosphor-icons/react";
 import { Button, Tooltip, ImageViewer } from "@/components/ui";
 import { cn } from "@/lib/cn";
@@ -20,6 +18,7 @@ import type {
     ReasoningMessagePart,
     ToolInvocationPart
 } from "../types";
+import { useChat } from "../chat-context";
 import { type ChatAttachment } from "./chat-input";
 import { InputDock } from "./input-dock";
 import { MarkdownRenderer } from "@/components/markdown/markdown-renderer";
@@ -388,6 +387,9 @@ export function ConversationThread({
     selectedModelId,
     onSubmit
 }: ConversationThreadProps) {
+    const { getConversationTodos } = useChat();
+    const todos = getConversationTodos(conversation.id);
+
     const BOTTOM_SCROLL_THRESHOLD = 48;
     const RETURN_TO_BOTTOM_THRESHOLD = 16;
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -595,59 +597,7 @@ export function ConversationThread({
                         disabled={isSending}
                         isSubmitting={isSending}
                         conversationMessages={conversation.messages}
-                        panels={[
-                            {
-                                id: "todos",
-                                label: "Todos",
-                                icon: (
-                                    <ListChecksIcon
-                                        className="size-4"
-                                        weight="bold"
-                                    />
-                                ),
-                                content: (
-                                    <div className="p-4">
-                                        <p className="text-sm font-medium text-white mb-3">
-                                            Todo list
-                                        </p>
-                                        <ul className="space-y-2 text-sm text-dark-200">
-                                            <li className="flex items-center gap-2">
-                                                <span className="size-3 rounded-sm border border-dark-400 inline-block shrink-0" />{" "}
-                                                Build the dock panel
-                                            </li>
-                                            <li className="flex items-center gap-2">
-                                                <span className="size-3 rounded-sm border border-dark-400 inline-block shrink-0" />{" "}
-                                                Add real todo items here
-                                            </li>
-                                            <li className="flex items-center gap-2">
-                                                <span className="size-3 rounded-sm border border-dark-400 inline-block shrink-0" />{" "}
-                                                Connect to backend
-                                            </li>
-                                        </ul>
-                                    </div>
-                                )
-                            },
-                            {
-                                id: "questions",
-                                label: "Tool questions",
-                                icon: (
-                                    <ChatTeardropTextIcon
-                                        className="size-4"
-                                        weight="bold"
-                                    />
-                                ),
-                                content: (
-                                    <div className="p-4">
-                                        <p className="text-sm font-medium text-white mb-3">
-                                            Pending questions
-                                        </p>
-                                        <p className="text-sm text-dark-300">
-                                            No questions from tools right now.
-                                        </p>
-                                    </div>
-                                )
-                            }
-                        ]}
+                        todos={todos}
                     />
                 </div>
             </div>

@@ -106,6 +106,19 @@ export interface ConversationDeleteResponse {
     conversationId: string;
 }
 
+export type TodoStatus = "pending" | "in_progress" | "completed" | "cancelled";
+export type TodoPriority = "low" | "medium" | "high";
+
+export interface TodoItem {
+    id: string;
+    content: string;
+    status: TodoStatus;
+    priority: TodoPriority;
+    position: number;
+    createdAt: string;
+    updatedAt: string;
+}
+
 export interface ConversationReadResponse {
     success: boolean;
     conversationId: string;

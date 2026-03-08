@@ -7,6 +7,8 @@ import {
 } from "react";
 import { cn } from "@/lib/cn";
 import { ChatInput, type ChatInputProps } from "./chat-input";
+import { TodoPanel } from "./todo-panel";
+import type { TodoItem } from "../types";
 
 export interface DockPanel {
     id: string;
@@ -17,15 +19,17 @@ export interface DockPanel {
 
 interface InputDockProps extends ChatInputProps {
     panels?: DockPanel[];
+    todos?: TodoItem[];
     className?: string;
 }
 
 export function InputDock({
     panels = [],
+    todos = [],
     className,
     ...chatInputProps
 }: InputDockProps) {
-    const [activePanelId, setActivePanelId] = useState<string | null>(null);
+    const [activePanelId, _setActivePanelId] = useState<string | null>(null);
     const [renderedPanelId, setRenderedPanelId] = useState<string | null>(null);
     const [measuredHeight, setMeasuredHeight] = useState(0);
 
@@ -33,6 +37,7 @@ export function InputDock({
     const closingTimeoutRef = useRef<number | null>(null);
 
     const isOpen = activePanelId !== null;
+    const hasTodos = todos.length > 0;
 
     function measure() {
         const el = innerRef.current;
@@ -113,6 +118,17 @@ export function InputDock({
                     </div>
                 </div>
             </div>
+
+            {hasTodos && (
+                <div
+                    className={cn(
+                        "relative z-10 mx-2 overflow-hidden rounded-t-md border border-b-0 border-dark-600 bg-dark-800",
+                        isOpen && "border-t-0 rounded-t-none"
+                    )}
+                >
+                    <TodoPanel todos={todos} />
+                </div>
+            )}
 
             <ChatInput {...chatInputProps} className={className} />
         </div>

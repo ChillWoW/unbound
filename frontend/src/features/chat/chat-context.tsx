@@ -19,6 +19,7 @@ import type {
     ConversationMessage,
     ConversationSummary,
     MessagePart,
+    TodoItem,
     ToolInvocationPart
 } from "./types";
 
@@ -114,6 +115,7 @@ interface ChatContextValue {
     deleteConversation: (conversationId: string) => Promise<void>;
     getConversation: (conversationId: string) => ConversationDetail | undefined;
     getConversationError: (conversationId: string) => string | null;
+    getConversationTodos: (conversationId: string) => TodoItem[];
     isConversationLoading: (conversationId: string) => boolean;
     isConversationSending: (conversationId: string) => boolean;
     isCreatingConversation: boolean;
@@ -202,6 +204,22 @@ function toConversationSummary(
     };
 }
 
+function extractTodosFromToolResult(
+    toolName: string,
+    result: unknown
+): TodoItem[] | null {
+    if (!toolName.startsWith("todo")) return null;
+    if (
+        typeof result === "object" &&
+        result !== null &&
+        "todos" in result &&
+        Array.isArray((result as Record<string, unknown>).todos)
+    ) {
+        return (result as { todos: TodoItem[] }).todos;
+    }
+    return null;
+}
+
 function upsertToolInvocationPart(
     parts: MessagePart[],
     incoming: ToolInvocationPart
@@ -260,6 +278,9 @@ export function ChatProvider({ children }: PropsWithChildren) {
     );
     const [conversationDetails, setConversationDetails] = useState<
         Record<string, ConversationDetail>
+    >({});
+    const [conversationTodos, setConversationTodos] = useState<
+        Record<string, TodoItem[]>
     >({});
     const [conversationErrors, setConversationErrors] = useState<
         Record<string, string | null>
@@ -413,6 +434,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
         if (!isAuthenticated) {
             setConversations([]);
             setConversationDetails({});
+            setConversationTodos({});
             setConversationErrors({});
             setConversationLoadingState({});
             setConversationSendingState({});
@@ -604,6 +626,17 @@ export function ChatProvider({ children }: PropsWithChildren) {
                             }
                         };
                     });
+
+                    const todos = extractTodosFromToolResult(
+                        toolResult.toolName,
+                        toolResult.result
+                    );
+                    if (todos) {
+                        setConversationTodos((current) => ({
+                            ...current,
+                            [conversationId]: todos
+                        }));
+                    }
                 },
                 onError(_error) {
                     if (abortController.signal.aborted) return;
@@ -840,6 +873,17 @@ export function ChatProvider({ children }: PropsWithChildren) {
                                 }
                             };
                         });
+
+                        const todos = extractTodosFromToolResult(
+                            toolResult.toolName,
+                            toolResult.result
+                        );
+                        if (todos) {
+                            setConversationTodos((current) => ({
+                                ...current,
+                                [conversationId]: todos
+                            }));
+                        }
                     },
                     onError() {
                         if (abortController.signal.aborted) return;
@@ -933,8 +977,15 @@ export function ChatProvider({ children }: PropsWithChildren) {
             }));
 
             try {
-                const response = await chatApi.getConversation(conversationId);
+                const [response, todosResponse] = await Promise.all([
+                    chatApi.getConversation(conversationId),
+                    chatApi.listTodos(conversationId).catch(() => ({ todos: [] as TodoItem[] }))
+                ]);
                 upsertConversation(response.conversation);
+                setConversationTodos((current) => ({
+                    ...current,
+                    [conversationId]: todosResponse.todos
+                }));
                 return response.conversation;
             } catch (error) {
                 const message = getErrorMessage(error);
@@ -953,6 +1004,11 @@ export function ChatProvider({ children }: PropsWithChildren) {
     const getConversation = useCallback(
         (conversationId: string) => conversationDetails[conversationId],
         [conversationDetails]
+    );
+
+    const getConversationTodos = useCallback(
+        (conversationId: string) => conversationTodos[conversationId] ?? [],
+        [conversationTodos]
     );
 
     const getConversationError = useCallback(
@@ -1127,6 +1183,12 @@ export function ChatProvider({ children }: PropsWithChildren) {
                         current;
                     return rest;
                 });
+
+                setConversationTodos((current) => {
+                    const { [conversationId]: _removedTodos, ...rest } =
+                        current;
+                    return rest;
+                });
             } catch (error) {
                 throw new Error(getErrorMessage(error));
             }
@@ -1156,6 +1218,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
             deleteConversation,
             getConversation,
             getConversationError,
+            getConversationTodos,
             isConversationLoading,
             isConversationSending,
             isCreatingConversation,
@@ -1184,6 +1247,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
             deleteConversation,
             getConversation,
             getConversationError,
+            getConversationTodos,
             isConversationLoading,
             isConversationSending,
             isCreatingConversation,
