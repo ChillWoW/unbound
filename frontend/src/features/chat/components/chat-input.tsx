@@ -25,21 +25,32 @@ const FILE_MIME_TYPES: Record<string, true> = {
     "application/pdf": true
 };
 
+const CHARS_PER_TOKEN = 3.5;
+const MESSAGE_OVERHEAD = 4;
+const IMAGE_TOKEN_ESTIMATE = 1000;
+
 function estimateTokens(messages: ConversationMessage[]): number {
-    let chars = 0;
+    let tokens = 0;
     for (const msg of messages) {
+        tokens += MESSAGE_OVERHEAD;
         for (const part of msg.parts) {
             if (part.type === "text") {
-                chars += part.text.length;
+                tokens += Math.ceil(part.text.length / CHARS_PER_TOKEN);
+            } else if (part.type === "image") {
+                tokens += IMAGE_TOKEN_ESTIMATE;
             } else if (part.type === "tool-invocation") {
-                chars += JSON.stringify(part.args).length;
+                tokens += Math.ceil(
+                    JSON.stringify(part.args).length / CHARS_PER_TOKEN
+                );
                 if (part.result !== undefined) {
-                    chars += JSON.stringify(part.result).length;
+                    tokens += Math.ceil(
+                        JSON.stringify(part.result).length / CHARS_PER_TOKEN
+                    );
                 }
             }
         }
     }
-    return Math.ceil(chars / 4);
+    return tokens;
 }
 
 // ── Types ────────────────────────────────────────────────────────────────────

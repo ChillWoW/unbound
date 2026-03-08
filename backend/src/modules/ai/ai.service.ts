@@ -24,10 +24,35 @@ import {
     type GenerationEntry,
     type SSEEvent
 } from "./generation-manager";
+import { buildOptimizedContext } from "./context-manager";
+import { modelsService } from "../models/models.service";
 import { logger } from "../../lib/logger";
 
 function createMessageId(): string {
     return `msg_${randomBytes(10).toString("hex")}`;
+}
+
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (typeof error === "string") return error;
+    if (error && typeof error === "object") {
+        const obj = error as Record<string, unknown>;
+        if (typeof obj.message === "string") return obj.message;
+        if (typeof obj.error === "string") return obj.error;
+        if (
+            obj.error &&
+            typeof obj.error === "object" &&
+            typeof (obj.error as Record<string, unknown>).message === "string"
+        ) {
+            return (obj.error as Record<string, unknown>).message as string;
+        }
+        try {
+            return JSON.stringify(error);
+        } catch {
+            return "[Unreadable error object]";
+        }
+    }
+    return String(error);
 }
 
 function toToolResultOutput(result: unknown): ToolResultPart["output"] {
@@ -485,10 +510,7 @@ function startBackgroundGeneration(
             const durationMs =
                 new Date(generationCompletedAt).getTime() -
                 new Date(generationStartedAt).getTime();
-            const errorMessage =
-                event.error instanceof Error
-                    ? event.error.message
-                    : String(event.error);
+            const errorMessage = extractErrorMessage(event.error);
 
             logger.error("Generation failed (onError)", {
                 conversationId: generation.conversationId,
@@ -600,8 +622,7 @@ function startBackgroundGeneration(
                 return;
             }
 
-            const streamErrorMessage =
-                error instanceof Error ? error.message : "Stream failed";
+            const streamErrorMessage = extractErrorMessage(error);
 
             logger.error("Stream loop error", {
                 conversationId: generation.conversationId,
@@ -719,11 +740,44 @@ export const aiService = {
                 conversationId
             );
 
-        const modelMessages = toModelMessages(messageRecords);
-        const messagesWithSystemPrompt: ModelMessage[] = [
-            { role: "system", content: buildSystemPrompt() },
-            ...modelMessages
-        ];
+        let messagesWithSystemPrompt: ModelMessage[];
+
+        try {
+            const contextResult = buildOptimizedContext(
+                messageRecords,
+                buildSystemPrompt(),
+                {
+                    modelContextLength:
+                        modelsService.getModelContextLength(modelId),
+                    thinking
+                },
+                toModelMessages
+            );
+
+            messagesWithSystemPrompt = contextResult.messages;
+
+            logger.info("Context optimized", {
+                conversationId,
+                modelId,
+                originalMessages: contextResult.originalMessageCount,
+                includedMessages: contextResult.includedMessageCount,
+                estimatedTokens: contextResult.estimatedTokens,
+                truncated: contextResult.truncated
+            });
+        } catch (ctxError) {
+            logger.warn("Context optimization failed, using raw messages", {
+                conversationId,
+                error:
+                    ctxError instanceof Error
+                        ? ctxError.message
+                        : String(ctxError)
+            });
+
+            messagesWithSystemPrompt = [
+                { role: "system", content: buildSystemPrompt() },
+                ...toModelMessages(messageRecords)
+            ];
+        }
         const assistantMessageId = createMessageId();
         const generationStartedAt = new Date().toISOString();
 

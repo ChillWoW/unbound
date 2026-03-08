@@ -1,9 +1,33 @@
 import { authService } from "../auth/auth.service";
 import { settingsService } from "../settings/settings.service";
 import { selectSupportedModels } from "./supported-models";
-import { ModelsError, normalizeModelsResponse } from "./models.types";
+import {
+    ModelsError,
+    normalizeModelsResponse,
+    type ModelSummary
+} from "./models.types";
+import { DEFAULT_CONTEXT_LENGTH } from "../ai/token-estimator";
 
 const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
+
+const CACHE_TTL_MS = 10 * 60 * 1000;
+
+let cachedModels: ModelSummary[] | null = null;
+let cacheTimestamp = 0;
+
+function updateCache(models: ModelSummary[]) {
+    cachedModels = models;
+    cacheTimestamp = Date.now();
+}
+
+function getCachedContextLength(modelId: string): number | null {
+    if (!cachedModels || Date.now() - cacheTimestamp > CACHE_TTL_MS) {
+        return null;
+    }
+
+    const model = cachedModels.find((m) => m.id === modelId);
+    return model?.contextLength ?? null;
+}
 
 export const modelsService = {
     async listModels(request: Request) {
@@ -57,6 +81,14 @@ export const modelsService = {
             );
         }
 
-        return selectSupportedModels(normalizeModelsResponse(payload));
+        const models = selectSupportedModels(
+            normalizeModelsResponse(payload)
+        );
+        updateCache(models);
+        return models;
+    },
+
+    getModelContextLength(modelId: string): number {
+        return getCachedContextLength(modelId) ?? DEFAULT_CONTEXT_LENGTH;
     }
 };
