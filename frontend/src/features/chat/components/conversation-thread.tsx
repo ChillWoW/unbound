@@ -488,30 +488,32 @@ export function ConversationThread({
                                     className="flex justify-end"
                                 >
                                     <div className="max-w-[80%]">
-                                        <div className="rounded-md border border-dark-500 bg-dark-800 px-3 py-0.5 space-y-2">
-                                            {images.length > 0 && (
-                                                <div className="flex flex-wrap gap-2">
-                                                    {images.map((img, i) => (
-                                                        <ImageViewer
-                                                            key={i}
-                                                            src={`data:${img.mimeType};base64,${img.data}`}
-                                                            alt="attachment"
-                                                            imgClassName="max-h-48 w-auto max-w-full"
-                                                        />
-                                                    ))}
-                                                </div>
-                                            )}
-                                            {text && (
+                                        {images.length > 0 && (
+                                            <div className="flex flex-wrap justify-end gap-2 mb-1.5">
+                                                {images.map((img, i) => (
+                                                    <ImageViewer
+                                                        key={i}
+                                                        src={`data:${img.mimeType};base64,${img.data}`}
+                                                        alt="attachment"
+                                                        imgClassName="max-h-32 w-auto max-w-full rounded-md"
+                                                    />
+                                                ))}
+                                            </div>
+                                        )}
+                                        {text && (
+                                            <div className="rounded-md border border-dark-500 bg-dark-800 px-3 py-0.5">
                                                 <p className="whitespace-pre-wrap text-sm leading-7 text-white">
                                                     {text}
                                                 </p>
-                                            )}
-                                            {!text && images.length === 0 && (
+                                            </div>
+                                        )}
+                                        {!text && images.length === 0 && (
+                                            <div className="rounded-md border border-dark-500 bg-dark-800 px-3 py-0.5">
                                                 <p className="whitespace-pre-wrap text-sm leading-7 text-white">
                                                     Unsupported message part.
                                                 </p>
-                                            )}
-                                        </div>
+                                            </div>
+                                        )}
                                         <div className="mt-1.5 flex items-center justify-end gap-2">
                                             {text && <CopyButton text={text} />}
                                             <UserMessageMetadataDisplay
