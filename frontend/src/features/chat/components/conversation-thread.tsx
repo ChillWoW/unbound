@@ -173,14 +173,53 @@ function ReasoningDisplay({
 function ToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
     const [expanded, setExpanded] = useState(false);
     const isPending = part.state === "call";
+    const isErrored = part.state === "error";
     const hasOutput = part.state === "result" && part.result !== undefined;
     const isTodoTool = TODO_TOOLS.has(part.toolName);
 
     const label = isPending
         ? (TOOL_LABELS[part.toolName] ?? `${part.toolName}…`)
-        : (TOOL_LABELS_DONE[part.toolName] ?? part.toolName);
+        : isErrored
+          ? (TOOL_LABELS_DONE[part.toolName]?.replace(/…$/, "") ??
+                part.toolName) + " (failed)"
+          : (TOOL_LABELS_DONE[part.toolName] ?? part.toolName);
 
     if (isTodoTool) {
+        if (isErrored) {
+            const errorText =
+                typeof part.result === "object" &&
+                part.result !== null &&
+                "error" in part.result
+                    ? String((part.result as Record<string, unknown>).error)
+                    : "Tool execution failed";
+
+            return (
+                <div className="my-1.5">
+                    <button
+                        type="button"
+                        onClick={() => setExpanded(!expanded)}
+                        className="flex items-center gap-1.5 text-xs"
+                    >
+                        <span className="font-medium text-dark-200 hover:text-dark-50 transition-colors">
+                            {label}
+                        </span>
+                        <CaretRightIcon
+                            className={cn(
+                                "size-2.5 text-dark-200 transition-transform",
+                                expanded && "rotate-90"
+                            )}
+                            weight="bold"
+                        />
+                    </button>
+                    {expanded && (
+                        <pre className="mt-2 overflow-x-auto rounded bg-dark-900 p-2 text-xs text-dark-200">
+                            {errorText}
+                        </pre>
+                    )}
+                </div>
+            );
+        }
+
         return (
             <div className="my-1.5">
                 <span
@@ -223,7 +262,7 @@ function ToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
                 />
             </button>
             {expanded && hasOutput && (
-                <pre className="mt-2 overflow-x-auto rounded bg-dark-900 p-2 text-xs text-dark-300">
+                <pre className="mt-2 overflow-x-auto rounded bg-dark-900 p-2 text-xs text-dark-200">
                     {typeof part.result === "string"
                         ? part.result
                         : JSON.stringify(part.result, null, 2)}
@@ -261,7 +300,10 @@ function CopyButton({ text }: { text: string }) {
     );
 }
 
-function useLiveTimer(startIso: string | undefined, isActive: boolean): string | null {
+function useLiveTimer(
+    startIso: string | undefined,
+    isActive: boolean
+): string | null {
     const [elapsed, setElapsed] = useState<string | null>(null);
 
     useEffect(() => {
@@ -307,11 +349,11 @@ function AssistantMessageMetadataDisplay({
     const duration = liveTimer
         ? liveTimer
         : metadata.generationStartedAt && metadata.generationCompletedAt
-            ? formatDuration(
-                  metadata.generationStartedAt,
-                  metadata.generationCompletedAt
-              )
-            : null;
+          ? formatDuration(
+                metadata.generationStartedAt,
+                metadata.generationCompletedAt
+            )
+          : null;
     const usedThinking = metadata.thinkingEnabled === true;
 
     if (!model && !duration && !usedThinking) return null;

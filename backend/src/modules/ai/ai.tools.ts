@@ -76,21 +76,29 @@ export function createTools(conversationId: string, userId: string) {
 
         todoSetStatus: tool({
             description:
-                "Update the status of a single todo item. Use this for quick status changes without rewriting the whole list. Before finalizing your response, avoid leaving stale in_progress tasks.",
+                "Update the status of one or more todo items. Pass multiple updates to tick several todos in a single call. Before finalizing your response, avoid leaving stale in_progress tasks.",
             inputSchema: z.object({
-                todoId: z.string().describe("The id of the todo to update"),
-                status: z.enum([
-                    "pending",
-                    "in_progress",
-                    "completed",
-                    "cancelled"
-                ])
+                updates: z
+                    .array(
+                        z.object({
+                            todoId: z
+                                .string()
+                                .describe("The id of the todo to update"),
+                            status: z.enum([
+                                "pending",
+                                "in_progress",
+                                "completed",
+                                "cancelled"
+                            ])
+                        })
+                    )
+                    .min(1)
+                    .describe("One or more status updates to apply atomically")
             }),
-            execute: async ({ todoId, status }) => {
-                await todosRepository.updateStatus(
+            execute: async ({ updates }) => {
+                await todosRepository.updateStatusBatch(
                     conversationId,
-                    todoId,
-                    status
+                    updates
                 );
                 const todos =
                     await todosRepository.listByConversationId(conversationId);

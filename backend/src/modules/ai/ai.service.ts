@@ -119,18 +119,21 @@ function toModelMessages(records: MessageRecord[]): ModelMessage[] {
                 result.push({ role: "assistant", content });
             }
 
-            const toolResults = toolParts.filter(
-                (p) => p.state === "result" && p.result !== undefined
-            );
-
-            if (toolResults.length > 0) {
+            // Every tool-call in the assistant message must have a corresponding
+            // tool-result, otherwise the AI SDK rejects the message history.
+            // Synthesize an error result for any tool that never completed.
+            if (toolParts.length > 0) {
                 result.push({
                     role: "tool",
-                    content: toolResults.map((p) => ({
+                    content: toolParts.map((p) => ({
                         type: "tool-result" as const,
                         toolCallId: p.toolInvocationId,
                         toolName: p.toolName,
-                        output: toToolResultOutput(p.result)
+                        output: toToolResultOutput(
+                            p.state === "result" && p.result !== undefined
+                                ? p.result
+                                : { error: "Tool execution failed" }
+                        )
                     }))
                 });
             }
@@ -258,6 +261,35 @@ function applyToolResult(
     });
 }
 
+function buildErrorParts(
+    generation: GenerationEntry,
+    thinking: boolean
+): MessagePart[] {
+    const parts: MessagePart[] = [];
+
+    if (thinking && generation.accumulatedReasoning) {
+        parts.push({ type: "reasoning", text: generation.accumulatedReasoning });
+    }
+
+    for (const tp of generation.toolParts) {
+        if (tp.type === "tool-invocation" && tp.state === "call") {
+            parts.push({ ...tp, state: "error" });
+        } else {
+            parts.push(tp);
+        }
+    }
+
+    if (generation.accumulatedText) {
+        parts.push({ type: "text", text: generation.accumulatedText });
+    }
+
+    if (parts.length === 0) {
+        parts.push({ type: "text", text: "" });
+    }
+
+    return parts;
+}
+
 function createSubscriberStream(
     generation: GenerationEntry,
     isReconnect: boolean
@@ -347,7 +379,7 @@ function startBackgroundGeneration(
         model: openrouter(modelId),
         messages: modelMessages,
         tools,
-        stopWhen: stepCountIs(5),
+        stopWhen: stepCountIs(20),
         abortSignal: generation.abortController.signal,
         onFinish: async ({ steps, finishReason }) => {
             if (generation.abortController.signal.aborted) return;
@@ -392,6 +424,14 @@ function startBackgroundGeneration(
 
             if (finalParts.length === 0) {
                 finalParts.push({ type: "text", text: "" });
+            }
+
+            // Resolve any tool calls that never received a result
+            for (let i = 0; i < finalParts.length; i++) {
+                const part = finalParts[i];
+                if (part.type === "tool-invocation" && part.state === "call") {
+                    finalParts[i] = { ...part, state: "error" };
+                }
             }
 
             const generationCompletedAt = new Date().toISOString();
@@ -458,7 +498,10 @@ function startBackgroundGeneration(
                 durationMs
             });
 
+            const errorParts = buildErrorParts(generation, thinking);
+
             await conversationsRepository.updateMessage(assistantMessageId, {
+                parts: errorParts,
                 status: "failed",
                 metadata: {
                     model: modelId,
@@ -515,7 +558,8 @@ function startBackgroundGeneration(
                 }
             }
 
-            generation.emitter.emit("event", { type: "done" });
+            // Do NOT emit "done" here — generationManager.complete() in onFinish
+            // emits it after the DB save, eliminating the race condition.
         } catch (error) {
             const isAbort =
                 (error instanceof Error && error.name === "AbortError") ||
@@ -556,16 +600,30 @@ function startBackgroundGeneration(
                 return;
             }
 
+            const streamErrorMessage =
+                error instanceof Error ? error.message : "Stream failed";
+
             logger.error("Stream loop error", {
                 conversationId: generation.conversationId,
                 messageId: assistantMessageId,
-                error: error instanceof Error ? error.message : String(error)
+                error: streamErrorMessage
             });
-            generation.emitter.emit("event", {
-                type: "error",
-                error: error instanceof Error ? error.message : "Stream failed"
+
+            const errorParts = buildErrorParts(generation, thinking);
+
+            await conversationsRepository.updateMessage(assistantMessageId, {
+                parts: errorParts,
+                status: "failed",
+                metadata: {
+                    model: modelId,
+                    thinkingEnabled: thinking,
+                    generationStartedAt,
+                    generationCompletedAt: new Date().toISOString(),
+                    errorMessage: streamErrorMessage
+                }
             });
-            generation.emitter.emit("event", { type: "done" });
+
+            generationManager.fail(generation.conversationId, streamErrorMessage);
         }
     })();
 }

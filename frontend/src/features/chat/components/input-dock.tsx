@@ -40,7 +40,8 @@ export function InputDock({
     const allTodosDone = todos.every(
         (t) => t.status === "completed" || t.status === "cancelled"
     );
-    const hasTodos = todos.length > 0 && !allTodosDone;
+    const hasTodos = todos.length > 0;
+    const canExpand = !allTodosDone;
 
     function measure() {
         const el = innerRef.current;
@@ -124,7 +125,7 @@ export function InputDock({
 
             {hasTodos && (
                 <div className="relative z-10 mx-2 overflow-hidden rounded-t-md border border-b-0 border-dark-600 bg-dark-850">
-                    <TodoPanel todos={todos} />
+                    <TodoPanel todos={todos} canExpand={canExpand} />
                 </div>
             )}
 

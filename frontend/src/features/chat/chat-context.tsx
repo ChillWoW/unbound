@@ -673,6 +673,14 @@ export function ChatProvider({ children }: PropsWithChildren) {
 
             activeGenerationsRef.current.delete(conversationId);
 
+            // Resolve any tools still in "call" state — they'll never get a result
+            for (let i = 0; i < streamParts.length; i++) {
+                const p = streamParts[i];
+                if (p.type === "tool-invocation" && p.state === "call") {
+                    streamParts[i] = { ...p, state: "error" };
+                }
+            }
+
             if (abortController.signal.aborted) {
                 const stoppedParts = buildParts();
                 savePartialMessage(realMessageId, stoppedParts);

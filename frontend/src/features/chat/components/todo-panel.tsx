@@ -74,9 +74,10 @@ function TodoItemRow({ todo }: { todo: TodoItem }) {
 
 interface TodoPanelProps {
     todos: TodoItem[];
+    canExpand?: boolean;
 }
 
-export function TodoPanel({ todos }: TodoPanelProps) {
+export function TodoPanel({ todos, canExpand = true }: TodoPanelProps) {
     const [expanded, setExpanded] = useState(false);
     const [measuredHeight, setMeasuredHeight] = useState(0);
     const expandedRef = useRef<HTMLDivElement>(null);
@@ -146,12 +147,17 @@ export function TodoPanel({ todos }: TodoPanelProps) {
         };
     }, [currentTodo?.content, expanded, displayedCollapsedTodo]);
 
+    useEffect(() => {
+        if (!canExpand) setExpanded(false);
+    }, [canExpand]);
+
     return (
         <div>
             <button
                 type="button"
                 onClick={() => setExpanded((prev) => !prev)}
-                className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left transition-colors hover:bg-dark-800"
+                disabled={!canExpand}
+                className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left transition-colors hover:bg-dark-800 disabled:pointer-events-none"
             >
                 <ListChecksIcon
                     className="size-4 shrink-0 text-dark-200"
@@ -187,13 +193,15 @@ export function TodoPanel({ todos }: TodoPanelProps) {
                         />
                     </div>
 
-                    <CaretDownIcon
-                        className={cn(
-                            "size-4 text-dark-200 transition-transform duration-200",
-                            expanded && "rotate-180"
-                        )}
-                        weight="bold"
-                    />
+                    {canExpand && (
+                        <CaretDownIcon
+                            className={cn(
+                                "size-4 text-dark-200 transition-transform duration-200",
+                                expanded && "rotate-180"
+                            )}
+                            weight="bold"
+                        />
+                    )}
                 </div>
             </button>
 

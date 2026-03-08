@@ -132,6 +132,27 @@ export const todosRepository = {
         return updated ?? null;
     },
 
+    async updateStatusBatch(
+        conversationId: string,
+        updates: { todoId: string; status: string }[]
+    ): Promise<void> {
+        if (updates.length === 0) return;
+        const now = new Date();
+        await db.transaction(async (tx) => {
+            for (const { todoId, status } of updates) {
+                await tx
+                    .update(todoItems)
+                    .set({ status, updatedAt: now })
+                    .where(
+                        and(
+                            eq(todoItems.id, todoId),
+                            eq(todoItems.conversationId, conversationId)
+                        )
+                    );
+            }
+        });
+    },
+
     async deleteTodos(
         conversationId: string,
         todoIds: string[]
