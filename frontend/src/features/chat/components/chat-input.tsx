@@ -2,7 +2,6 @@ import { useMemo, useRef, useState, useCallback } from "react";
 import TextareaAutosize from "react-textarea-autosize";
 import {
     ArrowUpIcon,
-    BrainIcon,
     PaperclipIcon,
     XIcon,
     FileTextIcon,
@@ -497,36 +496,10 @@ export function ChatInput({
                                 onSelectedModelChange?.(model.id)
                             }
                             disabled={isModelSelectDisabled}
+                            isThinkingEnabled={isThinkingEnabled}
+                            onThinkingChange={onThinkingChange}
                         />
                     </div>
-
-                    <Tooltip
-                        content={
-                            isThinkingEnabled
-                                ? "Thinking enabled"
-                                : "Enable thinking"
-                        }
-                    >
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            className={cn(
-                                "size-8 shrink-0 p-0",
-                                isThinkingEnabled
-                                    ? "bg-dark-600 text-white"
-                                    : "text-dark-200 hover:bg-dark-600 hover:text-white"
-                            )}
-                            onClick={() =>
-                                onThinkingChange?.(!isThinkingEnabled)
-                            }
-                            disabled={disabled || isSubmitting}
-                        >
-                            <BrainIcon
-                                className="size-4"
-                                weight={isThinkingEnabled ? "fill" : "bold"}
-                            />
-                        </Button>
-                    </Tooltip>
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">

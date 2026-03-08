@@ -3,6 +3,7 @@ import {
     Popover,
     PopoverContent,
     PopoverTrigger,
+    Switch,
     Tooltip
 } from "@/components/ui";
 import type { ChatModel } from "../types";
@@ -14,7 +15,8 @@ import {
     MicrophoneIcon,
     FilmStripIcon,
     FileIcon,
-    InfoIcon
+    InfoIcon,
+    BrainIcon
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/cn";
 import {
@@ -204,12 +206,16 @@ export function ModelSelector({
     selectedModelId,
     models,
     onModelSelected,
-    disabled = false
+    disabled = false,
+    isThinkingEnabled = false,
+    onThinkingChange
 }: {
     selectedModelId: string | null;
     models: ChatModel[];
     onModelSelected: (model: ChatModel) => void;
     disabled?: boolean;
+    isThinkingEnabled?: boolean;
+    onThinkingChange?: (enabled: boolean) => void;
 }) {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState("");
@@ -289,102 +295,133 @@ export function ModelSelector({
 
             <PopoverContent
                 side="top"
-                className="flex h-72 w-[28rem] overflow-hidden p-0"
+                className="flex h-72 w-[28rem] flex-col overflow-hidden p-0"
             >
-                <div className="flex w-12 shrink-0 flex-col items-center gap-1 overflow-y-auto overflow-x-hidden hide-scrollbar border-r border-dark-600 bg-dark-900 p-2">
-                    {providers.map((provider) => {
-                        const ProviderIcon = ICONS[provider];
-                        const isActive = provider === activeProvider;
+                <div className="flex min-h-0 flex-1">
+                    <div className="flex w-12 shrink-0 flex-col items-center gap-1 overflow-y-auto overflow-x-hidden hide-scrollbar border-r border-dark-600 bg-dark-950 p-2">
+                        {providers.map((provider) => {
+                            const ProviderIcon = ICONS[provider];
+                            const isActive = provider === activeProvider;
 
-                        return (
-                            <Tooltip
-                                key={provider}
-                                content={formatProviderName(provider)}
-                                side="right"
-                                delay={300}
-                            >
-                                <button
-                                    type="button"
-                                    className={cn(
-                                        "inline-flex size-8 shrink-0 items-center justify-center rounded-md transition-colors",
-                                        isActive
-                                            ? "bg-dark-800 text-white"
-                                            : "text-dark-200 hover:bg-dark-700 hover:text-white"
-                                    )}
-                                    onClick={() => setActiveProvider(provider)}
+                            return (
+                                <Tooltip
+                                    key={provider}
+                                    content={formatProviderName(provider)}
+                                    side="right"
+                                    delay={300}
                                 >
-                                    <ProviderIcon className="size-4" title="" />
-                                </button>
-                            </Tooltip>
-                        );
-                    })}
-                </div>
-
-                <div className="flex min-w-0 flex-1 flex-col">
-                    <Input
-                        leftSection={
-                            <MagnifyingGlassIcon
-                                className="size-4"
-                                weight="bold"
-                            />
-                        }
-                        placeholder="Search models"
-                        className="rounded-none border-b border-dark-600 py-1"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                    />
-
-                    <div className="min-h-0 flex-1 overflow-y-auto px-1 py-1">
-                        {filteredModels.length === 0 && (
-                            <div className="flex h-full items-center justify-center">
-                                <p className="text-center text-xs text-dark-200">
-                                    No models found
-                                </p>
-                            </div>
-                        )}
-
-                        <div className="flex flex-col gap-0.5">
-                            {filteredModels.map((model) => {
-                                const ProviderIcon = ICONS[model.provider];
-
-                                return (
-                                    <div
-                                        key={model.id}
+                                    <button
+                                        type="button"
                                         className={cn(
-                                            "flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-xs text-dark-100 transition-colors hover:bg-dark-600 hover:text-white",
-                                            model.id === selectedModelId &&
-                                                "bg-dark-600 text-white"
+                                            "inline-flex size-8 shrink-0 items-center justify-center rounded-md transition-colors",
+                                            isActive
+                                                ? "bg-dark-800 text-white"
+                                                : "text-dark-200 hover:bg-dark-800 hover:text-white"
                                         )}
-                                        onClick={() => {
-                                            onModelSelected(model);
-                                            setOpen(false);
-                                        }}
+                                        onClick={() =>
+                                            setActiveProvider(provider)
+                                        }
                                     >
-                                        <div className="flex min-w-0 flex-1 items-center gap-2">
-                                            {ProviderIcon && (
-                                                <ProviderIcon
-                                                    className="size-3.5 shrink-0 opacity-50"
-                                                    title=""
-                                                />
+                                        <ProviderIcon
+                                            className="size-4"
+                                            title=""
+                                        />
+                                    </button>
+                                </Tooltip>
+                            );
+                        })}
+                    </div>
+
+                    <div className="flex min-w-0 flex-1 flex-col">
+                        <Input
+                            leftSection={
+                                <MagnifyingGlassIcon
+                                    className="size-4"
+                                    weight="bold"
+                                />
+                            }
+                            placeholder="Search models"
+                            className="rounded-none border-b border-dark-600 py-1"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                        />
+
+                        <div className="min-h-0 flex-1 overflow-y-auto px-1 py-1">
+                            {filteredModels.length === 0 && (
+                                <div className="flex h-full items-center justify-center">
+                                    <p className="text-center text-xs text-dark-200">
+                                        No models found
+                                    </p>
+                                </div>
+                            )}
+
+                            <div className="flex flex-col gap-0.5">
+                                {filteredModels.map((model) => {
+                                    const ProviderIcon = ICONS[model.provider];
+
+                                    return (
+                                        <div
+                                            key={model.id}
+                                            className={cn(
+                                                "flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-xs text-dark-100 transition-colors hover:bg-dark-600 hover:text-white",
+                                                model.id === selectedModelId &&
+                                                    "bg-dark-600 text-white"
                                             )}
-                                            <span className="min-w-0 flex-1 truncate text-left">
-                                                {model.name}
-                                            </span>
-                                        </div>
-
-                                        {model.free && (
-                                            <div className="shrink-0 rounded-md bg-green-500/15 px-2 py-0.5 text-[11px] text-green-100">
-                                                Free
+                                            onClick={() => {
+                                                onModelSelected(model);
+                                                setOpen(false);
+                                            }}
+                                        >
+                                            <div className="flex min-w-0 flex-1 items-center gap-2">
+                                                {ProviderIcon && (
+                                                    <ProviderIcon
+                                                        className="size-3.5 shrink-0 opacity-50"
+                                                        title=""
+                                                    />
+                                                )}
+                                                <span className="min-w-0 flex-1 truncate text-left">
+                                                    {model.name}
+                                                </span>
                                             </div>
-                                        )}
 
-                                        <ModelInfoButton model={model} />
-                                    </div>
-                                );
-                            })}
+                                            {model.free && (
+                                                <div className="shrink-0 rounded-md bg-green-500/15 px-2 py-0.5 text-[11px] text-green-100">
+                                                    Free
+                                                </div>
+                                            )}
+
+                                            <ModelInfoButton model={model} />
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         </div>
                     </div>
                 </div>
+
+                {onThinkingChange && (
+                    <button
+                        type="button"
+                        className={cn(
+                            "flex w-full shrink-0 items-center gap-2 border-t border-dark-600 px-3 py-2 text-xs transition-colors hover:bg-dark-700",
+                            isThinkingEnabled ? "text-white" : "text-dark-100"
+                        )}
+                        onClick={() => onThinkingChange(!isThinkingEnabled)}
+                    >
+                        <BrainIcon
+                            className="size-3.5"
+                            weight={isThinkingEnabled ? "fill" : "bold"}
+                        />
+                        <span>Thinking</span>
+
+                        <Switch
+                            checked={isThinkingEnabled}
+                            onCheckedChange={onThinkingChange}
+                            className="ml-auto bg-dark-900"
+                            size="sm"
+                        />
+                    </button>
+                )}
             </PopoverContent>
         </Popover>
     );
