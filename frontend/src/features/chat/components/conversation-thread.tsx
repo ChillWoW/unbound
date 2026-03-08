@@ -75,10 +75,27 @@ function ReasoningDisplay({
     isStreaming: boolean;
 }) {
     const [expanded, setExpanded] = useState(true);
+    const [isScrolledToBottom, setIsScrolledToBottom] = useState(false);
+    const reasoningScrollRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (!isStreaming) setExpanded(false);
     }, [isStreaming]);
+
+    useEffect(() => {
+        const el = reasoningScrollRef.current;
+        if (!el) return;
+
+        const check = () => {
+            setIsScrolledToBottom(
+                el.scrollHeight - el.scrollTop - el.clientHeight < 4
+            );
+        };
+
+        check();
+        el.addEventListener("scroll", check, { passive: true });
+        return () => el.removeEventListener("scroll", check);
+    }, [expanded, part.text]);
 
     return (
         <div className="my-2">
@@ -104,9 +121,19 @@ function ReasoningDisplay({
                 />
             </button>
             {expanded && (
-                <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-dark-200">
-                    {part.text}
-                </p>
+                <div className="relative mt-2">
+                    <div
+                        ref={reasoningScrollRef}
+                        className="max-h-72 overflow-y-auto"
+                    >
+                        <p className="whitespace-pre-wrap text-xs leading-5 text-dark-200">
+                            {part.text}
+                        </p>
+                    </div>
+                    {!isScrolledToBottom && (
+                        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-dark-900 to-transparent" />
+                    )}
+                </div>
             )}
         </div>
     );
@@ -461,7 +488,7 @@ export function ConversationThread({
                                     className="flex justify-end"
                                 >
                                     <div className="max-w-[80%]">
-                                        <div className="rounded-md border border-dark-600 bg-dark-800 px-3 py-0.5 space-y-2">
+                                        <div className="rounded-md border border-dark-500 bg-dark-800 px-3 py-0.5 space-y-2">
                                             {images.length > 0 && (
                                                 <div className="flex flex-wrap gap-2">
                                                     {images.map((img, i) => (
@@ -516,12 +543,11 @@ export function ConversationThread({
                         </div>
                     ) : null}
 
-                    <div className="mb-2 flex h-7 justify-end">
+                    <div className="mb-2 flex h-8 justify-end">
                         <Button
                             type="button"
-                            variant="default"
                             className={cn(
-                                "h-7 px-2.5 text-xs transition-opacity",
+                                "h-7 px-2.5 text-xs transition-opacity text-dark-50 bg-dark-800 border border-dark-500",
                                 !isAtBottom && conversation.messages.length > 0
                                     ? "opacity-100"
                                     : "pointer-events-none opacity-0"
@@ -534,7 +560,7 @@ export function ConversationThread({
                             onClick={() => scrollToBottom("smooth")}
                         >
                             <ArrowDownIcon className="size-3.5" weight="bold" />
-                            Jump to latest message
+                            Back to bottom
                         </Button>
                     </div>
 
