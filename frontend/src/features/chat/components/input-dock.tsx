@@ -37,7 +37,10 @@ export function InputDock({
     const closingTimeoutRef = useRef<number | null>(null);
 
     const isOpen = activePanelId !== null;
-    const hasTodos = todos.length > 0;
+    const allTodosDone = todos.every(
+        (t) => t.status === "completed" || t.status === "cancelled"
+    );
+    const hasTodos = todos.length > 0 && !allTodosDone;
 
     function measure() {
         const el = innerRef.current;
