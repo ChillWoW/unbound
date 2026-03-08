@@ -261,20 +261,52 @@ function CopyButton({ text }: { text: string }) {
     );
 }
 
+function useLiveTimer(startIso: string | undefined, isActive: boolean): string | null {
+    const [elapsed, setElapsed] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!isActive || !startIso) {
+            setElapsed(null);
+            return;
+        }
+
+        const update = () => {
+            const start = new Date(startIso).getTime();
+            const now = Date.now();
+            const totalSeconds = Math.max(0, Math.round((now - start) / 1000));
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            setElapsed(`${minutes}m ${seconds}s`);
+        };
+
+        update();
+        const id = setInterval(update, 1000);
+        return () => clearInterval(id);
+    }, [isActive, startIso]);
+
+    return elapsed;
+}
+
 function AssistantMessageMetadataDisplay({
     metadata,
-    availableModels
+    availableModels,
+    isPending
 }: {
     metadata: MessageMetadata | null;
     availableModels: ChatModel[];
+    isPending: boolean;
 }) {
+    const isLive = isPending && !metadata?.generationCompletedAt;
+    const liveTimer = useLiveTimer(metadata?.generationStartedAt, isLive);
+
     if (!metadata) return null;
 
     const model = metadata.model
         ? getModelDisplayName(metadata.model, availableModels)
         : null;
-    const duration =
-        metadata.generationStartedAt && metadata.generationCompletedAt
+    const duration = liveTimer
+        ? liveTimer
+        : metadata.generationStartedAt && metadata.generationCompletedAt
             ? formatDuration(
                   metadata.generationStartedAt,
                   metadata.generationCompletedAt
@@ -453,6 +485,7 @@ function AssistantMessage({
                 <AssistantMessageMetadataDisplay
                     metadata={message.metadata}
                     availableModels={availableModels}
+                    isPending={isPending}
                 />
             </div>
         </div>
