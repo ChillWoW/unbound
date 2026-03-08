@@ -151,14 +151,19 @@ function ReasoningDisplay({
                     <div
                         ref={reasoningScrollRef}
                         className="max-h-72 overflow-y-auto"
+                        style={{
+                            maskImage: isScrolledToBottom
+                                ? undefined
+                                : "linear-gradient(to bottom, black 70%, transparent 100%)",
+                            WebkitMaskImage: isScrolledToBottom
+                                ? undefined
+                                : "linear-gradient(to bottom, black 70%, transparent 100%)"
+                        }}
                     >
                         <p className="whitespace-pre-wrap text-xs leading-5 text-dark-300">
                             {part.text}
                         </p>
                     </div>
-                    {!isScrolledToBottom && (
-                        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-dark-900 to-transparent" />
-                    )}
                 </div>
             )}
         </div>
