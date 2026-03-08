@@ -630,15 +630,6 @@ export function ChatSidebar({
                                     </div>
                                 </div>
                             ))}
-
-                            {!isLoadingConversations &&
-                            !conversationsError &&
-                            favoriteConversations.length === 0 &&
-                            groupedConversations.length === 0 ? (
-                                <div className="px-3 py-2 text-sm text-dark-200">
-                                    No conversations yet.
-                                </div>
-                            ) : null}
                         </div>
                     </nav>
                 )}
