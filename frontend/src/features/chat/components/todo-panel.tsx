@@ -180,14 +180,7 @@ export function TodoPanel({ todos }: TodoPanelProps) {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <div
-                        className={cn(
-                            "relative h-1 overflow-hidden rounded-full bg-dark-600 transition-all duration-300 ease-out",
-                            expanded
-                                ? "w-0 opacity-0 scale-x-75"
-                                : "w-16 md:w-24 opacity-100 scale-x-100"
-                        )}
-                    >
+                    <div className="relative h-1 w-16 md:w-24 overflow-hidden rounded-full bg-dark-600 transition-all duration-300 ease-out">
                         <div
                             className="h-full rounded-full bg-primary-400 transition-[width] duration-500"
                             style={{ width: `${progressPercent}%` }}
@@ -209,12 +202,6 @@ export function TodoPanel({ todos }: TodoPanelProps) {
                 style={{ height: expanded ? measuredHeight : 0 }}
             >
                 <div ref={expandedRef}>
-                    <div className="h-px w-full overflow-hidden rounded-full bg-dark-600">
-                        <div
-                            className="h-full rounded-full bg-primary-400 transition-all duration-500"
-                            style={{ width: `${progressPercent}%` }}
-                        />
-                    </div>
                     <div className="max-h-56 overflow-y-auto px-1.5 pb-1.5">
                         {todos.map((todo) => (
                             <TodoItemRow key={todo.id} todo={todo} />
