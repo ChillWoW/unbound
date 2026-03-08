@@ -14,17 +14,15 @@ import {
     FileTextIcon,
     ImageIcon,
     StopIcon,
-    ChatTextIcon,
-    MagicWandIcon
+    MagicWandIcon,
+    SlidersHorizontalIcon
 } from "@phosphor-icons/react";
 import {
     Button,
     Tooltip,
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue
+    Popover,
+    PopoverContent,
+    PopoverTrigger
 } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type { ChatModel, ConversationMessage } from "../types";
@@ -335,6 +333,17 @@ export function ChatInput({
         [models]
     );
 
+    const chatModels = useMemo(
+        () =>
+            models.filter(
+                (model) =>
+                    !IMAGE_GENERATION_MODEL_IDS.includes(
+                        model.id as (typeof IMAGE_GENERATION_MODEL_IDS)[number]
+                    )
+            ),
+        [models]
+    );
+
     useEffect(() => {
         if (imageModels.length === 0) {
             setImageModelId(null);
@@ -353,7 +362,7 @@ export function ChatInput({
                 (model) => model.id === DEFAULT_IMAGE_MODEL_ID
             )?.id
                 ? DEFAULT_IMAGE_MODEL_ID
-                : imageModels[0]?.id ?? null;
+                : (imageModels[0]?.id ?? null);
         });
     }, [imageModels, mode]);
 
@@ -401,10 +410,10 @@ export function ChatInput({
         return lastMessage.metadata?.imageGeneration === true;
     }, [conversationMessages, isSubmitting]);
 
-    const resolvedImageModelId =
-        (selectedImageModel?.id ?? DEFAULT_IMAGE_MODEL_ID) as
-            | (typeof IMAGE_GENERATION_MODEL_IDS)[number]
-            | undefined;
+    const resolvedImageModelId = (selectedImageModel?.id ??
+        DEFAULT_IMAGE_MODEL_ID) as
+        | (typeof IMAGE_GENERATION_MODEL_IDS)[number]
+        | undefined;
 
     const submitOptions: ChatSubmitOptions = isImageMode
         ? {
@@ -590,117 +599,6 @@ export function ChatInput({
                 <p className="px-3 pt-2 text-xs text-red-400">{fileError}</p>
             )}
 
-            <div className="px-3 pt-2">
-                <div className="inline-flex items-center gap-1 rounded-md border border-dark-600 bg-dark-900 p-1">
-                    <button
-                        type="button"
-                        className={cn(
-                            "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors",
-                            mode === "chat"
-                                ? "bg-dark-700 text-dark-50"
-                                : "text-dark-200 hover:bg-dark-800 hover:text-dark-50"
-                        )}
-                        onClick={() => setMode("chat")}
-                        disabled={disabled || isSubmitting}
-                    >
-                        <ChatTextIcon className="size-3.5" weight="bold" />
-                        Chat
-                    </button>
-
-                    <button
-                        type="button"
-                        className={cn(
-                            "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors",
-                            mode === "image"
-                                ? "bg-dark-700 text-dark-50"
-                                : "text-dark-200 hover:bg-dark-800 hover:text-dark-50",
-                            !supportsImageMode &&
-                                "cursor-not-allowed opacity-50 hover:bg-transparent hover:text-dark-200"
-                        )}
-                        onClick={() => setMode("image")}
-                        disabled={
-                            disabled || isSubmitting || !supportsImageMode
-                        }
-                    >
-                        <MagicWandIcon className="size-3.5" weight="bold" />
-                        Image
-                    </button>
-                </div>
-            </div>
-
-            {isImageMode && (
-                <div className="px-3 pt-2">
-                    <div className="flex flex-wrap items-center gap-2 rounded-md border border-dark-600 bg-dark-900 px-2.5 py-2">
-                        <div className="min-w-40 flex-1">
-                            <Select
-                                value={imageModelId ?? undefined}
-                                onValueChange={(value) => setImageModelId(value)}
-                                disabled={
-                                    disabled ||
-                                    isSubmitting ||
-                                    imageModels.length === 0
-                                }
-                            >
-                                <SelectTrigger className="h-8 bg-dark-800">
-                                    <SelectValue placeholder="Image model" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {imageModels.map((model) => (
-                                        <SelectItem key={model.id} value={model.id}>
-                                            {model.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        <div className="w-28">
-                            <Select
-                                value={imageAspectRatio}
-                                onValueChange={(value) => {
-                                    if (value) setImageAspectRatio(value);
-                                }}
-                                disabled={disabled || isSubmitting}
-                            >
-                                <SelectTrigger className="h-8 bg-dark-800">
-                                    <SelectValue placeholder="Aspect" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {IMAGE_ASPECT_RATIOS.map((ratio) => (
-                                        <SelectItem key={ratio} value={ratio}>
-                                            {ratio}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        {isGeminiImageModel && (
-                            <div className="w-24">
-                                <Select
-                                    value={imageSize}
-                                    onValueChange={(value) => {
-                                        if (value) setImageSize(value);
-                                    }}
-                                    disabled={disabled || isSubmitting}
-                                >
-                                    <SelectTrigger className="h-8 bg-dark-800">
-                                        <SelectValue placeholder="Size" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {IMAGE_SIZES.map((size) => (
-                                            <SelectItem key={size} value={size}>
-                                                {size}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
-
             <div className="px-3 pt-3">
                 <TextareaAutosize
                     className="w-full resize-none bg-transparent text-sm text-white outline-none placeholder:text-dark-200"
@@ -746,25 +644,118 @@ export function ChatInput({
             </div>
 
             <div className="flex items-center justify-between gap-4 px-2 pb-2 pt-1">
-                <div className="flex min-w-0 items-center gap-2">
-                    {isImageMode ? (
-                        <span className="text-xs text-dark-200 px-1">
-                            Image generation mode
-                        </span>
-                    ) : (
-                        <div className="min-w-0">
-                            <ModelSelector
-                                selectedModelId={selectedModelId}
-                                models={models}
-                                onModelSelected={(model) =>
-                                    onSelectedModelChange?.(model.id)
+                <div className="flex min-w-0 items-center gap-1">
+                    <div className="min-w-0">
+                        <ModelSelector
+                            selectedModelId={
+                                isImageMode ? imageModelId : selectedModelId
+                            }
+                            models={isImageMode ? imageModels : chatModels}
+                            onModelSelected={(model) =>
+                                isImageMode
+                                    ? setImageModelId(model.id)
+                                    : onSelectedModelChange?.(model.id)
+                            }
+                            disabled={isModelSelectDisabled}
+                            isThinkingEnabled={isThinkingEnabled}
+                            onThinkingChange={
+                                isImageMode ? undefined : onThinkingChange
+                            }
+                        />
+                    </div>
+
+                    {supportsImageMode && (
+                        <Tooltip content="Image generation" side="top">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                className={cn(
+                                    "size-8 p-0",
+                                    isImageMode
+                                        ? "text-primary-400 bg-dark-700 hover:bg-dark-600"
+                                        : "text-dark-200 hover:text-dark-50 hover:bg-dark-700"
+                                )}
+                                disabled={disabled || isSubmitting}
+                                onClick={() =>
+                                    setMode(isImageMode ? "chat" : "image")
                                 }
-                                disabled={isModelSelectDisabled}
-                                isThinkingEnabled={isThinkingEnabled}
-                                onThinkingChange={onThinkingChange}
-                            />
-                        </div>
+                            >
+                                <MagicWandIcon
+                                    className="size-4"
+                                    weight={isImageMode ? "fill" : "bold"}
+                                />
+                            </Button>
+                        </Tooltip>
                     )}
+
+                    {isImageMode && (
+                        <Popover>
+                            <PopoverTrigger className="inline-flex size-8 items-center justify-center rounded-md text-dark-200 transition-colors hover:bg-dark-700 hover:text-dark-50">
+                                <SlidersHorizontalIcon
+                                    className="size-4"
+                                    weight="bold"
+                                />
+                            </PopoverTrigger>
+                            <PopoverContent
+                                side="top"
+                                align="start"
+                                className="w-52 p-3 flex flex-col gap-3"
+                            >
+                                <div className="flex flex-col gap-1.5">
+                                    <span className="text-[11px] font-medium text-dark-200">
+                                        Aspect ratio
+                                    </span>
+                                    <div className="grid grid-cols-4 gap-1">
+                                        {IMAGE_ASPECT_RATIOS.map((ratio) => (
+                                            <button
+                                                key={ratio}
+                                                type="button"
+                                                className={cn(
+                                                    "rounded px-1.5 py-1 text-[11px] transition-colors",
+                                                    imageAspectRatio === ratio
+                                                        ? "bg-dark-600 text-white"
+                                                        : "text-dark-300 hover:bg-dark-700 hover:text-white"
+                                                )}
+                                                onClick={() =>
+                                                    setImageAspectRatio(ratio)
+                                                }
+                                            >
+                                                {ratio}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {isGeminiImageModel && (
+                                    <div className="flex flex-col gap-1.5">
+                                        <span className="text-[11px] font-medium text-dark-200">
+                                            Image size
+                                        </span>
+                                        <div className="flex gap-1">
+                                            {IMAGE_SIZES.map((size) => (
+                                                <button
+                                                    key={size}
+                                                    type="button"
+                                                    className={cn(
+                                                        "flex-1 rounded px-1.5 py-1 text-[11px] transition-colors",
+                                                        imageSize === size
+                                                            ? "bg-dark-600 text-white"
+                                                            : "text-dark-300 hover:bg-dark-700 hover:text-white"
+                                                    )}
+                                                    onClick={() =>
+                                                        setImageSize(size)
+                                                    }
+                                                >
+                                                    {size}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </PopoverContent>
+                        </Popover>
+                    )}
+
                     {toolbarSlot}
                 </div>
 

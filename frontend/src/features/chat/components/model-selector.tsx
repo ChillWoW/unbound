@@ -30,7 +30,8 @@ import {
     OpenAI,
     Google,
     Anthropic,
-    ZAI
+    ZAI,
+    ByteDance
 } from "@lobehub/icons";
 
 const ICONS: Record<string, React.ComponentType<any>> = {
@@ -43,7 +44,8 @@ const ICONS: Record<string, React.ComponentType<any>> = {
     openai: OpenAI,
     google: Google,
     anthropic: Anthropic,
-    zai: ZAI
+    zai: ZAI,
+    "bytedance-seed": ByteDance
 };
 
 function formatPricing(raw: string): string {
