@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useChat } from "@/features/chat/chat-context";
 import { ConversationThread } from "@/features/chat/components/conversation-thread";
+import type { ChatSubmitOptions } from "@/features/chat/components/chat-input";
 
 export const Route = createFileRoute("/_chat/conversations/$conversationId")({
     component: ConversationPage
@@ -68,11 +69,15 @@ function ConversationPage() {
         );
     }, [conversation, conversationId, markConversationRead]);
 
-    async function handleSubmit(value: string, attachments: import("@/features/chat/components/chat-input").ChatAttachment[]) {
+    async function handleSubmit(
+        value: string,
+        attachments: import("@/features/chat/components/chat-input").ChatAttachment[],
+        options: ChatSubmitOptions
+    ) {
         setSubmissionError(null);
 
         try {
-            await sendMessage(conversationId, value, attachments);
+            await sendMessage(conversationId, value, attachments, options);
         } catch (submitError) {
             if (submitError instanceof Error) {
                 setSubmissionError(submitError.message);

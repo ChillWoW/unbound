@@ -14,6 +14,10 @@ import { chatApi } from "./api";
 import { parseAIStream, type ReconnectState } from "./utils/parse-ai-stream";
 import type { ChatAttachment } from "./components/chat-input";
 import type {
+    ImageGenerationConfig,
+    MessageGenerationOptions
+} from "./generation-options";
+import type {
     ChatModel,
     ConversationDetail,
     ConversationMessage,
@@ -110,7 +114,8 @@ interface ChatContextValue {
     conversationsError: string | null;
     createConversation: (
         prompt: string,
-        attachments?: ChatAttachment[]
+        attachments?: ChatAttachment[],
+        options?: MessageGenerationOptions
     ) => Promise<ConversationDetail>;
     deleteConversation: (conversationId: string) => Promise<void>;
     getConversation: (conversationId: string) => ConversationDetail | undefined;
@@ -139,7 +144,8 @@ interface ChatContextValue {
     sendMessage: (
         conversationId: string,
         prompt: string,
-        attachments?: ChatAttachment[]
+        attachments?: ChatAttachment[],
+        options?: MessageGenerationOptions
     ) => Promise<ConversationDetail>;
     setSelectedModelId: (modelId: string | null) => void;
     setThinkingEnabled: (enabled: boolean) => void;
@@ -716,6 +722,130 @@ export function ChatProvider({ children }: PropsWithChildren) {
         [upsertConversation]
     );
 
+    const runImageGeneration = useCallback(
+        async (
+            conversationId: string,
+            modelId: string,
+            imageConfig?: ImageGenerationConfig
+        ) => {
+            const optimisticId = `msg_optimistic_image_${Date.now()}`;
+            const optimisticMessage: ConversationMessage = {
+                id: optimisticId,
+                role: "assistant",
+                parts: [],
+                status: "pending",
+                createdAt: new Date().toISOString(),
+                metadata: {
+                    model: modelId,
+                    imageGeneration: true,
+                    ...(imageConfig ? { imageConfig } : {})
+                }
+            };
+
+            setConversationDetails((current) => {
+                const existing = current[conversationId];
+                if (!existing) return current;
+                return {
+                    ...current,
+                    [conversationId]: {
+                        ...existing,
+                        messages: [...existing.messages, optimisticMessage]
+                    }
+                };
+            });
+
+            let response: Response;
+
+            try {
+                response = await chatApi.generateImage(
+                    conversationId,
+                    {
+                        modelId,
+                        ...(imageConfig ? { imageConfig } : {})
+                    }
+                );
+            } catch (error) {
+                const message = getErrorMessage(error);
+
+                setConversationDetails((current) => {
+                    const existing = current[conversationId];
+                    if (!existing) return current;
+                    return {
+                        ...current,
+                        [conversationId]: {
+                            ...existing,
+                            messages: existing.messages.map((m) =>
+                                m.id === optimisticId
+                                    ? {
+                                          ...m,
+                                          status: "failed",
+                                          errorMessage: message,
+                                          metadata: {
+                                              ...(m.metadata ?? {}),
+                                              errorMessage: message
+                                          }
+                                      }
+                                    : m
+                            )
+                        }
+                    };
+                });
+
+                throw new Error(message);
+            }
+
+            if (!response.ok) {
+                let errorMessage = "Image generation failed.";
+
+                try {
+                    const payload = await response.json();
+                    if (
+                        payload &&
+                        typeof payload === "object" &&
+                        typeof (payload as Record<string, unknown>).message ===
+                            "string"
+                    ) {
+                        errorMessage = String(
+                            (payload as Record<string, unknown>).message
+                        );
+                    }
+                } catch {
+                    // keep default message
+                }
+
+                setConversationDetails((current) => {
+                    const existing = current[conversationId];
+                    if (!existing) return current;
+                    return {
+                        ...current,
+                        [conversationId]: {
+                            ...existing,
+                            messages: existing.messages.map((m) =>
+                                m.id === optimisticId
+                                    ? {
+                                          ...m,
+                                          status: "failed",
+                                          errorMessage,
+                                          metadata: {
+                                              ...(m.metadata ?? {}),
+                                              errorMessage
+                                          }
+                                      }
+                                    : m
+                            )
+                        }
+                    };
+                });
+
+                throw new Error(errorMessage);
+            }
+
+            const finalResponse = await chatApi.getConversation(conversationId);
+            upsertConversation(finalResponse.conversation);
+        },
+        [upsertConversation]
+    );
+
     const reconnectToGeneration = useCallback(
         async (conversationId: string) => {
             if (activeGenerationsRef.current.has(conversationId)) return;
@@ -947,11 +1077,22 @@ export function ChatProvider({ children }: PropsWithChildren) {
     );
 
     const createConversation = useCallback(
-        async (prompt: string, attachments?: ChatAttachment[]) => {
-            const modelId = selectedModelIdRef.current;
+        async (
+            prompt: string,
+            attachments?: ChatAttachment[],
+            options: MessageGenerationOptions = { mode: "chat" }
+        ) => {
+            const isImageMode = options.mode === "image";
+            const modelId = isImageMode
+                ? options.modelId
+                : selectedModelIdRef.current;
 
             if (!modelId) {
-                throw new Error("No model selected.");
+                throw new Error(
+                    isImageMode
+                        ? "No image model selected."
+                        : "No model selected."
+                );
             }
 
             setIsCreatingConversation(true);
@@ -969,7 +1110,14 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 const conversationId = response.conversation.id;
 
                 setConversationSending(conversationId, true);
-                runGeneration(conversationId, modelId)
+                (isImageMode
+                    ? runImageGeneration(
+                          conversationId,
+                          modelId,
+                          options.imageConfig
+                      )
+                    : runGeneration(conversationId, modelId)
+                )
                     .catch(() => undefined)
                     .finally(() =>
                         setConversationSending(conversationId, false)
@@ -982,7 +1130,12 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 setIsCreatingConversation(false);
             }
         },
-        [runGeneration, setConversationSending, upsertConversation]
+        [
+            runGeneration,
+            runImageGeneration,
+            setConversationSending,
+            upsertConversation
+        ]
     );
 
     const loadConversation = useCallback(
@@ -1049,12 +1202,20 @@ export function ChatProvider({ children }: PropsWithChildren) {
         async (
             conversationId: string,
             prompt: string,
-            attachments?: ChatAttachment[]
+            attachments?: ChatAttachment[],
+            options: MessageGenerationOptions = { mode: "chat" }
         ) => {
-            const modelId = selectedModelIdRef.current;
+            const isImageMode = options.mode === "image";
+            const modelId = isImageMode
+                ? options.modelId
+                : selectedModelIdRef.current;
 
             if (!modelId) {
-                throw new Error("No model selected.");
+                throw new Error(
+                    isImageMode
+                        ? "No image model selected."
+                        : "No model selected."
+                );
             }
 
             setConversationSending(conversationId, true);
@@ -1070,7 +1231,15 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 );
                 upsertConversation(persistResponse.conversation);
 
-                await runGeneration(conversationId, modelId);
+                if (isImageMode) {
+                    await runImageGeneration(
+                        conversationId,
+                        modelId,
+                        options.imageConfig
+                    );
+                } else {
+                    await runGeneration(conversationId, modelId);
+                }
 
                 const finalConversation = conversationDetails[conversationId];
                 if (finalConversation) return finalConversation;
@@ -1087,6 +1256,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
         [
             conversationDetails,
             runGeneration,
+            runImageGeneration,
             setConversationSending,
             upsertConversation
         ]

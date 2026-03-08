@@ -1,4 +1,11 @@
-import { useMemo, useRef, useState, useCallback, type ReactNode } from "react";
+import {
+    useMemo,
+    useRef,
+    useState,
+    useCallback,
+    useEffect,
+    type ReactNode
+} from "react";
 import TextareaAutosize from "react-textarea-autosize";
 import {
     ArrowUpIcon,
@@ -6,12 +13,27 @@ import {
     XIcon,
     FileTextIcon,
     ImageIcon,
-    StopIcon
+    StopIcon,
+    ChatTextIcon,
+    MagicWandIcon
 } from "@phosphor-icons/react";
-import { Button, Tooltip } from "@/components/ui";
+import {
+    Button,
+    Tooltip,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue
+} from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type { ChatModel, ConversationMessage } from "../types";
 import { ModelSelector } from "./model-selector";
+import {
+    IMAGE_GENERATION_MODEL_IDS,
+    type ImageGenerationConfig,
+    type MessageGenerationOptions
+} from "../generation-options";
 
 const IMAGE_MIME_TYPES: Record<string, true> = {
     "image/png": true,
@@ -62,10 +84,27 @@ export interface ChatAttachment {
     type: "image" | "file";
 }
 
+export type ComposerMode = "chat" | "image";
+
+export type ChatSubmitOptions = MessageGenerationOptions;
+
 const IMAGE_ACCEPT_STRING = Object.keys(IMAGE_MIME_TYPES).join(",");
 const FILE_ACCEPT_STRING = Object.keys(FILE_MIME_TYPES).join(",");
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
 const MAX_ATTACHMENTS = 10;
+const DEFAULT_IMAGE_MODEL_ID = IMAGE_GENERATION_MODEL_IDS[0];
+
+const IMAGE_ASPECT_RATIOS = [
+    "1:1",
+    "16:9",
+    "9:16",
+    "4:3",
+    "3:4",
+    "3:2",
+    "2:3"
+] as const;
+
+const IMAGE_SIZES = ["1K", "2K", "4K"] as const;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -245,7 +284,8 @@ export interface ChatInputProps {
     onStop?: () => void;
     onSubmit?: (
         value: string,
-        attachments: ChatAttachment[]
+        attachments: ChatAttachment[],
+        options: ChatSubmitOptions
     ) => void | Promise<void>;
     placeholder?: string;
     selectedModelId?: string | null;
@@ -273,6 +313,10 @@ export function ChatInput({
     const [internalValue, setInternalValue] = useState("");
     const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
     const [fileError, setFileError] = useState<string | null>(null);
+    const [mode, setMode] = useState<ComposerMode>("chat");
+    const [imageModelId, setImageModelId] = useState<string | null>(null);
+    const [imageAspectRatio, setImageAspectRatio] = useState<string>("1:1");
+    const [imageSize, setImageSize] = useState<string>("1K");
     const imageInputRef = useRef<HTMLInputElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -281,18 +325,97 @@ export function ChatInput({
     const trimmedDraft = useMemo(() => draft.trim(), [draft]);
     const hasContent = trimmedDraft.length > 0 || attachments.length > 0;
 
+    const imageModels = useMemo(
+        () =>
+            models.filter((model) =>
+                IMAGE_GENERATION_MODEL_IDS.includes(
+                    model.id as (typeof IMAGE_GENERATION_MODEL_IDS)[number]
+                )
+            ),
+        [models]
+    );
+
+    useEffect(() => {
+        if (imageModels.length === 0) {
+            setImageModelId(null);
+            if (mode === "image") {
+                setMode("chat");
+            }
+            return;
+        }
+
+        setImageModelId((current) => {
+            if (current && imageModels.some((model) => model.id === current)) {
+                return current;
+            }
+
+            return imageModels.find(
+                (model) => model.id === DEFAULT_IMAGE_MODEL_ID
+            )?.id
+                ? DEFAULT_IMAGE_MODEL_ID
+                : imageModels[0]?.id ?? null;
+        });
+    }, [imageModels, mode]);
+
     const selectedModel = useMemo(
         () => models.find((model) => model.id === selectedModelId) ?? null,
         [models, selectedModelId]
     );
-    const supportsImages = selectedModel
-        ? selectedModel.inputModalities.includes("image")
-        : true;
-    const supportsFiles = selectedModel
-        ? selectedModel.inputModalities.includes("file")
-        : false;
+
+    const selectedImageModel = useMemo(
+        () => imageModels.find((model) => model.id === imageModelId) ?? null,
+        [imageModels, imageModelId]
+    );
+
+    const isImageMode = mode === "image";
+    const supportsImages = isImageMode
+        ? true
+        : selectedModel
+          ? selectedModel.inputModalities.includes("image")
+          : true;
+    const supportsFiles = isImageMode
+        ? false
+        : selectedModel
+          ? selectedModel.inputModalities.includes("file")
+          : false;
     const isModelSelectDisabled =
         disabled || isSubmitting || isModelsLoading || models.length === 0;
+
+    const supportsImageMode = imageModels.length > 0;
+    const isGeminiImageModel =
+        selectedImageModel?.id === "google/gemini-3.1-flash-image-preview";
+
+    const isImageGenerationInFlight = useMemo(() => {
+        if (!isSubmitting) return false;
+
+        const lastMessage = conversationMessages.at(-1);
+
+        if (
+            !lastMessage ||
+            lastMessage.role !== "assistant" ||
+            lastMessage.status !== "pending"
+        ) {
+            return false;
+        }
+
+        return lastMessage.metadata?.imageGeneration === true;
+    }, [conversationMessages, isSubmitting]);
+
+    const resolvedImageModelId =
+        (selectedImageModel?.id ?? DEFAULT_IMAGE_MODEL_ID) as
+            | (typeof IMAGE_GENERATION_MODEL_IDS)[number]
+            | undefined;
+
+    const submitOptions: ChatSubmitOptions = isImageMode
+        ? {
+              mode: "image",
+              modelId: resolvedImageModelId ?? DEFAULT_IMAGE_MODEL_ID,
+              imageConfig: {
+                  aspectRatio: imageAspectRatio,
+                  ...(isGeminiImageModel ? { imageSize } : {})
+              } satisfies ImageGenerationConfig
+          }
+        : { mode: "chat" };
 
     // ── Value helpers ────────────────────────────────────────────────────
 
@@ -420,7 +543,7 @@ export function ChatInput({
 
         if (disabled || isSubmitting || !hasContent) return;
 
-        await onSubmit?.(trimmedDraft, attachments);
+        await onSubmit?.(trimmedDraft, attachments, submitOptions);
 
         if (!isControlled) setInternalValue("");
         clearAttachments();
@@ -428,7 +551,7 @@ export function ChatInput({
 
     function handleKeySubmit() {
         if (!disabled && !isSubmitting && hasContent) {
-            onSubmit?.(trimmedDraft, attachments);
+            onSubmit?.(trimmedDraft, attachments, submitOptions);
             if (!isControlled) setInternalValue("");
             clearAttachments();
         }
@@ -467,13 +590,128 @@ export function ChatInput({
                 <p className="px-3 pt-2 text-xs text-red-400">{fileError}</p>
             )}
 
+            <div className="px-3 pt-2">
+                <div className="inline-flex items-center gap-1 rounded-md border border-dark-600 bg-dark-900 p-1">
+                    <button
+                        type="button"
+                        className={cn(
+                            "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors",
+                            mode === "chat"
+                                ? "bg-dark-700 text-dark-50"
+                                : "text-dark-200 hover:bg-dark-800 hover:text-dark-50"
+                        )}
+                        onClick={() => setMode("chat")}
+                        disabled={disabled || isSubmitting}
+                    >
+                        <ChatTextIcon className="size-3.5" weight="bold" />
+                        Chat
+                    </button>
+
+                    <button
+                        type="button"
+                        className={cn(
+                            "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors",
+                            mode === "image"
+                                ? "bg-dark-700 text-dark-50"
+                                : "text-dark-200 hover:bg-dark-800 hover:text-dark-50",
+                            !supportsImageMode &&
+                                "cursor-not-allowed opacity-50 hover:bg-transparent hover:text-dark-200"
+                        )}
+                        onClick={() => setMode("image")}
+                        disabled={
+                            disabled || isSubmitting || !supportsImageMode
+                        }
+                    >
+                        <MagicWandIcon className="size-3.5" weight="bold" />
+                        Image
+                    </button>
+                </div>
+            </div>
+
+            {isImageMode && (
+                <div className="px-3 pt-2">
+                    <div className="flex flex-wrap items-center gap-2 rounded-md border border-dark-600 bg-dark-900 px-2.5 py-2">
+                        <div className="min-w-40 flex-1">
+                            <Select
+                                value={imageModelId ?? undefined}
+                                onValueChange={(value) => setImageModelId(value)}
+                                disabled={
+                                    disabled ||
+                                    isSubmitting ||
+                                    imageModels.length === 0
+                                }
+                            >
+                                <SelectTrigger className="h-8 bg-dark-800">
+                                    <SelectValue placeholder="Image model" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {imageModels.map((model) => (
+                                        <SelectItem key={model.id} value={model.id}>
+                                            {model.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="w-28">
+                            <Select
+                                value={imageAspectRatio}
+                                onValueChange={(value) => {
+                                    if (value) setImageAspectRatio(value);
+                                }}
+                                disabled={disabled || isSubmitting}
+                            >
+                                <SelectTrigger className="h-8 bg-dark-800">
+                                    <SelectValue placeholder="Aspect" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {IMAGE_ASPECT_RATIOS.map((ratio) => (
+                                        <SelectItem key={ratio} value={ratio}>
+                                            {ratio}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {isGeminiImageModel && (
+                            <div className="w-24">
+                                <Select
+                                    value={imageSize}
+                                    onValueChange={(value) => {
+                                        if (value) setImageSize(value);
+                                    }}
+                                    disabled={disabled || isSubmitting}
+                                >
+                                    <SelectTrigger className="h-8 bg-dark-800">
+                                        <SelectValue placeholder="Size" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {IMAGE_SIZES.map((size) => (
+                                            <SelectItem key={size} value={size}>
+                                                {size}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
             <div className="px-3 pt-3">
                 <TextareaAutosize
                     className="w-full resize-none bg-transparent text-sm text-white outline-none placeholder:text-dark-200"
                     minRows={1}
                     maxRows={8}
                     disabled={disabled}
-                    placeholder={placeholder}
+                    placeholder={
+                        isImageMode
+                            ? "Describe the image you want to generate..."
+                            : placeholder
+                    }
                     value={draft}
                     onChange={(event) => updateValue(event.target.value)}
                     onKeyDown={(event) => {
@@ -509,23 +747,29 @@ export function ChatInput({
 
             <div className="flex items-center justify-between gap-4 px-2 pb-2 pt-1">
                 <div className="flex min-w-0 items-center gap-2">
-                    <div className="min-w-0">
-                        <ModelSelector
-                            selectedModelId={selectedModelId}
-                            models={models}
-                            onModelSelected={(model) =>
-                                onSelectedModelChange?.(model.id)
-                            }
-                            disabled={isModelSelectDisabled}
-                            isThinkingEnabled={isThinkingEnabled}
-                            onThinkingChange={onThinkingChange}
-                        />
-                    </div>
+                    {isImageMode ? (
+                        <span className="text-xs text-dark-200 px-1">
+                            Image generation mode
+                        </span>
+                    ) : (
+                        <div className="min-w-0">
+                            <ModelSelector
+                                selectedModelId={selectedModelId}
+                                models={models}
+                                onModelSelected={(model) =>
+                                    onSelectedModelChange?.(model.id)
+                                }
+                                disabled={isModelSelectDisabled}
+                                isThinkingEnabled={isThinkingEnabled}
+                                onThinkingChange={onThinkingChange}
+                            />
+                        </div>
+                    )}
                     {toolbarSlot}
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                    {showContextBadge ? (
+                    {showContextBadge && !isImageMode ? (
                         <ContextWindowMeter
                             model={selectedModel}
                             estimatedTokenCount={estimateTokens(
@@ -593,7 +837,10 @@ export function ChatInput({
                         </Tooltip>
                     )}
 
-                    {isSubmitting && onStop ? (
+                    {isSubmitting &&
+                    onStop &&
+                    !isImageMode &&
+                    !isImageGenerationInFlight ? (
                         <Tooltip content="Stop generation">
                             <Button
                                 type="button"

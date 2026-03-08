@@ -7,6 +7,7 @@ import { modelsRoutes } from "./modules/models/models.routes";
 import { settingsRoutes } from "./modules/settings/settings.routes";
 import { aiRoutes } from "./modules/ai/ai.routes";
 import { todosRoutes } from "./modules/todos/todos.routes";
+import { imagesRoutes } from "./modules/images/images.routes";
 
 export const app = new Elysia()
     .use(
@@ -24,4 +25,5 @@ export const app = new Elysia()
     .use(modelsRoutes)
     .use(settingsRoutes)
     .use(todosRoutes)
+    .use(imagesRoutes)
     .use(aiRoutes);

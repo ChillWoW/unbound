@@ -116,6 +116,12 @@ const openaiModels: SupportedModelDefinition[] = [
 
 const googleModels: SupportedModelDefinition[] = [
     {
+        id: "google/gemini-3.1-flash-image-preview",
+        name: "Gemini 3.1 Flash Image Preview",
+        provider: "google",
+        description: "Google's fast multimodal image generation and editing model"
+    },
+    {
         id: "google/gemini-3.1-pro-preview",
         name: "Gemini 3.1 Pro Preview",
         provider: "google",
@@ -153,6 +159,15 @@ const anthropicModels: SupportedModelDefinition[] = [
     }
 ];
 
+const bytedanceSeedModels: SupportedModelDefinition[] = [
+    {
+        id: "bytedance-seed/seedream-4.5",
+        name: "Seedream 4.5",
+        provider: "bytedance-seed",
+        description: "ByteDance's latest high-fidelity image generation model"
+    }
+];
+
 const zaiModels: SupportedModelDefinition[] = [
     {
         id: "z-ai/glm-5",
@@ -185,6 +200,7 @@ const supportedModelDefinitions: SupportedModelDefinition[] = [
     ...openaiModels,
     ...googleModels,
     ...anthropicModels,
+    ...bytedanceSeedModels,
     ...zaiModels
 ];
 

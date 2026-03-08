@@ -3,6 +3,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/features/auth/use-auth";
 import { useChat } from "@/features/chat/chat-context";
 import { ChatInput } from "@/features/chat/components/chat-input";
+import type { ChatSubmitOptions } from "@/features/chat/components/chat-input";
 
 export const Route = createFileRoute("/_chat/")({
     component: HomePage
@@ -41,7 +42,8 @@ function HomePage() {
 
     async function handleSubmit(
         value: string,
-        attachments: import("@/features/chat/components/chat-input").ChatAttachment[]
+        attachments: import("@/features/chat/components/chat-input").ChatAttachment[],
+        options: ChatSubmitOptions
     ) {
         setError(null);
 
@@ -51,7 +53,11 @@ function HomePage() {
         }
 
         try {
-            const conversation = await createConversation(value, attachments);
+            const conversation = await createConversation(
+                value,
+                attachments,
+                options
+            );
             setDraft("");
             await navigate({
                 to: "/conversations/$conversationId",

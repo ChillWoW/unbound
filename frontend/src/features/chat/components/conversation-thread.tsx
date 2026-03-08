@@ -14,6 +14,7 @@ import type {
     ChatModel,
     ConversationDetail,
     ConversationMessage,
+    ImageMessagePart,
     MessageMetadata,
     MessagePart,
     ReasoningMessagePart,
@@ -21,6 +22,7 @@ import type {
 } from "../types";
 import { useChat } from "../chat-context";
 import { type ChatAttachment } from "./chat-input";
+import type { ChatSubmitOptions } from "./chat-input";
 import { InputDock } from "./input-dock";
 import { MarkdownRenderer } from "@/components/markdown/markdown-renderer";
 
@@ -500,6 +502,17 @@ function AssistantMessage({
                         />
                     );
                 }
+                if (part.type === "image") {
+                    return (
+                        <div key={`image-${i}`} className="my-2">
+                            <ImageViewer
+                                src={`data:${part.mimeType};base64,${part.data}`}
+                                alt="Generated image"
+                                imgClassName="max-h-96 w-auto max-w-full rounded-md"
+                            />
+                        </div>
+                    );
+                }
                 return null;
             })}
 
@@ -546,7 +559,8 @@ interface ConversationThreadProps {
     onStop?: () => void;
     onSubmit: (
         value: string,
-        attachments: ChatAttachment[]
+        attachments: ChatAttachment[],
+        options: ChatSubmitOptions
     ) => Promise<void> | void;
     onThinkingChange?: (enabled: boolean) => void;
     selectedModelId: string | null;
@@ -663,8 +677,7 @@ export function ConversationThread({
                         if (message.role === "user") {
                             const text = getMessageText(message.parts);
                             const images = message.parts.filter(
-                                (p): p is import("../types").ImageMessagePart =>
-                                    p.type === "image"
+                                (p): p is ImageMessagePart => p.type === "image"
                             );
                             return (
                                 <div

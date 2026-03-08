@@ -7,6 +7,7 @@ import type {
     ModelsResponse,
     TodoItem
 } from "./types";
+import type { ImageGenerationConfig } from "./generation-options";
 
 export const chatApi = {
     generateResponse(conversationId: string, modelId: string, thinking: boolean, signal?: AbortSignal) {
@@ -17,6 +18,26 @@ export const chatApi = {
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",
                 body: JSON.stringify({ modelId, thinking }),
+                signal
+            }
+        );
+    },
+
+    generateImage(
+        conversationId: string,
+        input: {
+            modelId: string;
+            imageConfig?: ImageGenerationConfig;
+        },
+        signal?: AbortSignal
+    ) {
+        return fetch(
+            `${API_BASE_URL}/api/conversations/${conversationId}/generate-image`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify(input),
                 signal
             }
         );
