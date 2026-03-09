@@ -204,14 +204,6 @@ function ModelInfoButton({ model }: { model: ChatModel }) {
                             </div>
                         </div>
                     )}
-
-                    {model.source !== "openrouter" && (
-                        <div className="border-t border-dark-600 px-3 py-2">
-                            <span className="text-[11px] text-dark-300">
-                                Direct API
-                            </span>
-                        </div>
-                    )}
                 </div>
             </PopoverContent>
         </Popover>
@@ -240,15 +232,19 @@ export function ModelSelector({
     const [activeProvider, setActiveProvider] = useState<string | null>(null);
     const [selectedModalities, setSelectedModalities] = useState<string[]>([]);
 
+    const noProvidersConfigured =
+        models.length === 0 && configuredProviders.length === 0;
+
     const selectedModel = useMemo(() => {
         return models.find((model) => model.id === selectedModelId);
     }, [selectedModelId, models]);
 
     const ModelIcon = useMemo(() => {
         if (!selectedModelId) return null;
-        return ICONS[
-            models.find((model) => model.id === selectedModelId)?.provider ?? ""
-        ];
+        const model = models.find((m) => m.id === selectedModelId);
+        if (!model) return null;
+        if (model.source === "openrouter") return OpenRouter;
+        return ICONS[model.provider] ?? null;
     }, [selectedModelId, models]);
 
     const providers = useMemo(() => {
@@ -256,9 +252,18 @@ export function ModelSelector({
         for (const p of ALWAYS_VISIBLE_PROVIDERS) {
             fromModels.add(p);
         }
-        return Array.from(fromModels).sort((a, b) =>
-            formatProviderName(a).localeCompare(formatProviderName(b))
-        );
+        const all = Array.from(fromModels);
+        const direct = all
+            .filter((p) => DIRECT_API_PROVIDERS.has(p))
+            .sort((a, b) =>
+                formatProviderName(a).localeCompare(formatProviderName(b))
+            );
+        const others = all
+            .filter((p) => !DIRECT_API_PROVIDERS.has(p))
+            .sort((a, b) =>
+                formatProviderName(a).localeCompare(formatProviderName(b))
+            );
+        return [...direct, ...others];
     }, [models]);
 
     const configuredProviderSet = useMemo(
@@ -349,10 +354,7 @@ export function ModelSelector({
                 ? models.find((model) => model.id === selectedModelId)?.provider
                 : null;
 
-            if (
-                selectedProvider &&
-                providerEnabledMap[selectedProvider]
-            ) {
+            if (selectedProvider && providerEnabledMap[selectedProvider]) {
                 return selectedProvider;
             }
 
@@ -392,6 +394,10 @@ export function ModelSelector({
         );
     };
 
+    const firstOtherIndex = providers.findIndex(
+        (p) => !DIRECT_API_PROVIDERS.has(p)
+    );
+
     return (
         <Popover
             open={open}
@@ -409,7 +415,10 @@ export function ModelSelector({
                     <ModelIcon className="size-4 opacity-70" title="" />
                 )}
                 <span className="truncate">
-                    {selectedModel?.name ?? "Select a model"}
+                    {selectedModel?.name ??
+                        (noProvidersConfigured
+                            ? "No providers configured"
+                            : "Select a model")}
                 </span>
 
                 {selectedModel?.free && (
@@ -421,57 +430,66 @@ export function ModelSelector({
 
             <PopoverContent
                 side="top"
-                className="flex h-96 w-[28rem] flex-col overflow-hidden p-0"
+                className="flex h-96 w-[48rem] flex-col overflow-hidden p-0"
             >
                 <div className="flex min-h-0 flex-1">
                     <div className="flex shrink-0 flex-col items-center gap-1 overflow-y-auto overflow-x-hidden hide-scrollbar border-r border-dark-600 bg-dark-900 p-2">
-                        {providers.map((provider) => {
+                        {providers.map((provider, index) => {
                             const ProviderIcon = ICONS[provider];
                             const isActive = provider === activeProvider;
-                            const hasModels = providerHasModels[provider];
                             const isEnabled =
                                 providerEnabledMap[provider] &&
                                 isProviderConfigured(provider);
                             const isUnconfigured =
-                                !hasModels &&
                                 !isProviderConfigured(provider);
 
                             const tooltipText = isUnconfigured
-                                ? `${formatProviderName(provider)} - Configure API key in Settings`
+                                ? `${formatProviderName(provider)} — configure in Settings`
                                 : formatProviderName(provider);
 
+                            const showSeparator =
+                                firstOtherIndex !== -1 &&
+                                index === firstOtherIndex;
+
                             return (
-                                <Tooltip
+                                <div
                                     key={provider}
-                                    content={tooltipText}
-                                    side="right"
-                                    delay={300}
+                                    className="flex w-full flex-col items-center"
                                 >
-                                    <button
-                                        type="button"
-                                        disabled={!isEnabled}
-                                        className={cn(
-                                            "inline-flex size-8 shrink-0 items-center justify-center rounded-md transition-colors",
-                                            isActive
-                                                ? "bg-dark-800 text-dark-50"
-                                                : "text-dark-200 hover:bg-dark-800 hover:text-dark-50",
-                                            !isEnabled &&
-                                                "cursor-not-allowed opacity-40 hover:bg-transparent hover:text-dark-200"
-                                        )}
-                                        onClick={() =>
-                                            setActiveProvider(provider)
-                                        }
+                                    {showSeparator && (
+                                        <div className="w-6 h-px bg-dark-600 my-1" />
+                                    )}
+                                    <Tooltip
+                                        content={tooltipText}
+                                        side="right"
+                                        delay={300}
                                     >
-                                        {ProviderIcon ? (
-                                            <ProviderIcon
-                                                className="size-4"
-                                                title=""
-                                            />
-                                        ) : (
-                                            <GearIcon className="size-4" />
-                                        )}
-                                    </button>
-                                </Tooltip>
+                                        <button
+                                            type="button"
+                                            disabled={!isEnabled}
+                                            className={cn(
+                                                "inline-flex size-8 shrink-0 items-center justify-center rounded-md transition-colors",
+                                                isActive
+                                                    ? "bg-dark-800 text-dark-50"
+                                                    : "text-dark-200 hover:bg-dark-800 hover:text-dark-50",
+                                                !isEnabled &&
+                                                    "cursor-not-allowed opacity-40 hover:bg-transparent hover:text-dark-200"
+                                            )}
+                                            onClick={() =>
+                                                setActiveProvider(provider)
+                                            }
+                                        >
+                                            {ProviderIcon ? (
+                                                <ProviderIcon
+                                                    className="size-4"
+                                                    title=""
+                                                />
+                                            ) : (
+                                                <GearIcon className="size-4" />
+                                            )}
+                                        </button>
+                                    </Tooltip>
+                                </div>
                             );
                         })}
                     </div>
@@ -624,22 +642,22 @@ export function ModelSelector({
                                             }}
                                         >
                                             <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                                                {ProviderIcon && (
-                                                    <ProviderIcon
-                                                        className="size-3.5 shrink-0 opacity-70"
+                                                {model.source ===
+                                                "openrouter" ? (
+                                                    <OpenRouter
+                                                        className="size-4 shrink-0 opacity-70"
                                                         title=""
                                                     />
-                                                )}
+                                                ) : ProviderIcon ? (
+                                                    <ProviderIcon
+                                                        className="size-4 shrink-0 opacity-70"
+                                                        title=""
+                                                    />
+                                                ) : null}
                                                 <span className="min-w-0 flex-1 truncate text-left">
                                                     {model.name}
                                                 </span>
                                             </div>
-
-                                            {model.source !== "openrouter" && (
-                                                <span className="shrink-0 rounded-md bg-dark-700 px-1.5 py-0.5 text-[10px] text-dark-300">
-                                                    Direct
-                                                </span>
-                                            )}
 
                                             {model.free && (
                                                 <div className="shrink-0 rounded-md bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-100">
