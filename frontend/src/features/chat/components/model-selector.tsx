@@ -41,6 +41,7 @@ const ICONS: Record<string, React.ComponentType<any>> = {
     "arcee-ai": Arcee,
     minimax: Minimax,
     moonshot: Moonshot,
+    kimi: Moonshot,
     "x-ai": XAI,
     openai: OpenAI,
     google: Google,
@@ -49,9 +50,14 @@ const ICONS: Record<string, React.ComponentType<any>> = {
     openrouter: OpenRouter
 };
 
-const ALWAYS_VISIBLE_PROVIDERS = ["openai", "anthropic", "google"];
+const ALWAYS_VISIBLE_PROVIDERS = ["openai", "anthropic", "google", "kimi"];
 
-const DIRECT_API_PROVIDERS = new Set<string>(["openai", "anthropic", "google"]);
+const DIRECT_API_PROVIDERS = new Set<string>([
+    "openai",
+    "anthropic",
+    "google",
+    "kimi"
+]);
 
 function formatPricing(raw: string): string {
     const perToken = parseFloat(raw);

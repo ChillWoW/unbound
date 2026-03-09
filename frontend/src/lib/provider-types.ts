@@ -1,1 +1,6 @@
-export type ProviderType = "openrouter" | "openai" | "anthropic" | "google";
+export type ProviderType =
+    | "openrouter"
+    | "openai"
+    | "anthropic"
+    | "google"
+    | "kimi";

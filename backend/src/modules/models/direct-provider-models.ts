@@ -182,11 +182,35 @@ const googleDirectModels: DirectModelDefinition[] = [
     }
 ];
 
+const kimiDirectModels: DirectModelDefinition[] = [
+    {
+        id: "kimi-k2-thinking",
+        name: "Kimi K2 Thinking",
+        provider: "kimi",
+        source: "kimi",
+        description: "Kimi's reasoning model with extended thinking",
+        contextLength: 262144,
+        inputModalities: ["text"],
+        outputModalities: ["text"]
+    },
+    {
+        id: "k2p5",
+        name: "Kimi K2.5",
+        provider: "kimi",
+        source: "kimi",
+        description: "Kimi's latest and most capable coding model",
+        contextLength: 262144,
+        inputModalities: ["text", "image"],
+        outputModalities: ["text"]
+    }
+];
+
 const allDirectModels: Record<ProviderType, DirectModelDefinition[]> = {
     openrouter: [],
     openai: openaiDirectModels,
     anthropic: anthropicDirectModels,
-    google: googleDirectModels
+    google: googleDirectModels,
+    kimi: kimiDirectModels
 };
 
 export function getDirectProviderModels(

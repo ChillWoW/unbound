@@ -13,6 +13,8 @@ export const userSettings = pgTable("user_settings", {
     anthropicApiKeyPreview: text("anthropic_api_key_preview"),
     googleApiKeyCiphertext: text("google_api_key_ciphertext"),
     googleApiKeyPreview: text("google_api_key_preview"),
+    kimiApiKeyCiphertext: text("kimi_api_key_ciphertext"),
+    kimiApiKeyPreview: text("kimi_api_key_preview"),
     createdAt: timestamp("created_at", { withTimezone: true })
         .defaultNow()
         .notNull(),

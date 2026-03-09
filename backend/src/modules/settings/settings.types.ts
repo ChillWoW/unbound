@@ -21,14 +21,16 @@ const CIPHERTEXT_FIELDS = {
     openrouter: "openrouterApiKeyCiphertext",
     openai: "openaiApiKeyCiphertext",
     anthropic: "anthropicApiKeyCiphertext",
-    google: "googleApiKeyCiphertext"
+    google: "googleApiKeyCiphertext",
+    kimi: "kimiApiKeyCiphertext"
 } as const satisfies Record<ProviderType, keyof UserSettingsRecord>;
 
 const PREVIEW_FIELDS = {
     openrouter: "openrouterApiKeyPreview",
     openai: "openaiApiKeyPreview",
     anthropic: "anthropicApiKeyPreview",
-    google: "googleApiKeyPreview"
+    google: "googleApiKeyPreview",
+    kimi: "kimiApiKeyPreview"
 } as const satisfies Record<ProviderType, keyof UserSettingsRecord>;
 
 export function getCiphertextField(provider: ProviderType) {
@@ -65,7 +67,8 @@ export function toUserSettingsSummary(
             openrouter: providerKeyStatus(settings, "openrouter"),
             openai: providerKeyStatus(settings, "openai"),
             anthropic: providerKeyStatus(settings, "anthropic"),
-            google: providerKeyStatus(settings, "google")
+            google: providerKeyStatus(settings, "google"),
+            kimi: providerKeyStatus(settings, "kimi")
         }
     };
 }

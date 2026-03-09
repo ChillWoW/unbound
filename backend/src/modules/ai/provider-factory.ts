@@ -18,5 +18,10 @@ export function createModelInstance(
             return createAnthropic({ apiKey })(modelId);
         case "google":
             return createGoogleGenerativeAI({ apiKey })(modelId);
+        case "kimi":
+            return createAnthropic({
+                apiKey,
+                baseURL: "https://api.kimi.com/coding/v1"
+            })(modelId);
     }
 }

@@ -7,9 +7,10 @@ import {
     XCircleIcon,
     type IconWeight
 } from "@phosphor-icons/react";
-import { OpenRouter, OpenAI, Anthropic, Google } from "@lobehub/icons";
+import { OpenRouter, OpenAI, Anthropic, Google, Moonshot } from "@lobehub/icons";
 import { Button, Input } from "@/components/ui";
 import { useAuth } from "@/features/auth/use-auth";
+import { useChat } from "@/features/chat/chat-context";
 import { settingsApi } from "@/features/settings/api";
 import type {
     ProviderType,
@@ -24,7 +25,8 @@ const defaultSettings: UserSettingsSummary = {
         openrouter: { configured: false, preview: null, updatedAt: null },
         openai: { configured: false, preview: null, updatedAt: null },
         anthropic: { configured: false, preview: null, updatedAt: null },
-        google: { configured: false, preview: null, updatedAt: null }
+        google: { configured: false, preview: null, updatedAt: null },
+        kimi: { configured: false, preview: null, updatedAt: null }
     }
 };
 
@@ -64,6 +66,13 @@ const PROVIDERS: ProviderConfig[] = [
         description: "Gemini Pro, Flash and other Google models",
         placeholder: "AIza...",
         icon: Google
+    },
+    {
+        id: "kimi",
+        label: "Kimi",
+        description: "Kimi Code models through Kimi's coding API",
+        placeholder: "sk-kimi-...",
+        icon: Moonshot
     }
 ];
 
@@ -277,6 +286,7 @@ function ProviderKeyCard({
 
 function SettingsPage() {
     const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
+    const { loadModels } = useChat();
     const [activeCategory, setActiveCategory] = useState<Category>("api-keys");
     const [settings, setSettings] =
         useState<UserSettingsSummary>(defaultSettings);
@@ -321,11 +331,13 @@ function SettingsPage() {
             apiKey
         );
         setSettings(response.settings);
+        void loadModels().catch(() => undefined);
     }
 
     async function handleRemoveKey(provider: ProviderType) {
         const response = await settingsApi.removeProviderApiKey(provider);
         setSettings(response.settings);
+        void loadModels().catch(() => undefined);
     }
 
     if (!isAuthLoading && !isAuthenticated) {

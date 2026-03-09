@@ -50,6 +50,10 @@ function supportsAnthropicReasoning(modelId: string): boolean {
     );
 }
 
+function supportsKimiReasoning(modelId: string): boolean {
+    return modelId === "kimi-k2-thinking" || modelId === "k2p5";
+}
+
 function supportsGoogleReasoning(modelId: string): boolean {
     return modelId.startsWith("gemini-");
 }
@@ -89,6 +93,17 @@ function buildProviderOptions(
                     thinkingConfig: {
                         thinkingLevel: "high",
                         includeThoughts: true
+                    }
+                }
+            };
+
+        case "kimi":
+            if (!supportsKimiReasoning(modelId)) return undefined;
+            return {
+                anthropic: {
+                    thinking: {
+                        type: "enabled",
+                        budgetTokens: 12000
                     }
                 }
             };

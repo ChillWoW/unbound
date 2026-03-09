@@ -2,7 +2,8 @@ export const PROVIDER_TYPES = [
     "openrouter",
     "openai",
     "anthropic",
-    "google"
+    "google",
+    "kimi"
 ] as const;
 
 export type ProviderType = (typeof PROVIDER_TYPES)[number];
@@ -15,11 +16,13 @@ export const PROVIDER_LABELS: Record<ProviderType, string> = {
     openrouter: "OpenRouter",
     openai: "OpenAI",
     anthropic: "Anthropic",
-    google: "Google"
+    google: "Google",
+    kimi: "Kimi"
 };
 
 export const DIRECT_PROVIDERS: Exclude<ProviderType, "openrouter">[] = [
     "openai",
     "anthropic",
-    "google"
+    "google",
+    "kimi"
 ];
