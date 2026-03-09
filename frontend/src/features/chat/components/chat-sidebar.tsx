@@ -282,7 +282,7 @@ function ConversationActionsMenu({
                     <div className="px-2 py-1.5">
                         <Input
                             ref={renameInputRef}
-                            className="border border-dark-600"
+                            className="border border-dark-600 bg-dark-900"
                             value={renameValue}
                             onChange={(event) =>
                                 setRenameValue(event.target.value)
@@ -317,7 +317,7 @@ function ConversationActionsMenu({
 
                         <div className="mt-2 flex justify-end gap-1">
                             <Button
-                                variant="ghost"
+                                variant="outline"
                                 className="h-7 px-2 text-xs"
                                 onClick={handleRenameCancel}
                                 disabled={isRenamingPending}
@@ -325,6 +325,7 @@ function ConversationActionsMenu({
                                 Cancel
                             </Button>
                             <Button
+                                variant="primary"
                                 className="h-7 px-2 text-xs"
                                 onClick={() => void handleRenameSubmit()}
                                 disabled={isRenamingPending}

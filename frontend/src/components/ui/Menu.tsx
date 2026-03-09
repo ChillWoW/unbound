@@ -241,7 +241,7 @@ const MenuContent = React.forwardRef<
                 align={align}
                 sideOffset={sideOffset}
                 alignOffset={alignOffset}
-                className="z-10"
+                className="z-[200]"
             >
                 <Base.Popup
                     ref={ref}
