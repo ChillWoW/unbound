@@ -50,6 +50,10 @@ const ICONS: Record<string, React.ComponentType<any>> = {
     openrouter: OpenRouter
 };
 
+const PROVIDER_ALIASES: Record<string, string> = {
+    moonshot: "kimi"
+};
+
 const ALWAYS_VISIBLE_PROVIDERS = ["openai", "anthropic", "google", "kimi"];
 
 const DIRECT_API_PROVIDERS = new Set<string>([
@@ -256,7 +260,7 @@ export function ModelSelector({
     }, [selectedModelId, models]);
 
     const providers = useMemo(() => {
-        const fromModels = new Set(models.map((m) => m.provider));
+        const fromModels = new Set(models.map((m) => PROVIDER_ALIASES[m.provider] ?? m.provider));
         for (const p of ALWAYS_VISIBLE_PROVIDERS) {
             fromModels.add(p);
         }
@@ -318,7 +322,7 @@ export function ModelSelector({
         const map: Record<string, boolean> = {};
         for (const provider of providers) {
             const hasMatchingModels = models
-                .filter((model) => model.provider === provider)
+                .filter((model) => (PROVIDER_ALIASES[model.provider] ?? model.provider) === provider)
                 .some((model) => modelMatchesModalities(model));
             map[provider] = hasMatchingModels;
         }
@@ -328,7 +332,7 @@ export function ModelSelector({
     const providerHasModels = useMemo(() => {
         const map: Record<string, boolean> = {};
         for (const provider of providers) {
-            map[provider] = models.some((m) => m.provider === provider);
+            map[provider] = models.some((m) => (PROVIDER_ALIASES[m.provider] ?? m.provider) === provider);
         }
         return map;
     }, [providers, models]);
@@ -380,7 +384,7 @@ export function ModelSelector({
 
     const filteredModels = useMemo(() => {
         const scopedModels = activeProvider
-            ? models.filter((model) => model.provider === activeProvider)
+            ? models.filter((model) => (PROVIDER_ALIASES[model.provider] ?? model.provider) === activeProvider)
             : models;
 
         const modalityFilteredModels = scopedModels.filter(
