@@ -33,6 +33,71 @@ function createMessageId(): string {
     return `msg_${randomBytes(10).toString("hex")}`;
 }
 
+type ProviderOptionsMap = Record<string, Record<string, JSONValue>>;
+
+function supportsOpenAIReasoning(modelId: string): boolean {
+    return (
+        modelId.startsWith("gpt-5") ||
+        modelId.startsWith("o3") ||
+        modelId.startsWith("o4")
+    );
+}
+
+function supportsAnthropicReasoning(modelId: string): boolean {
+    return (
+        modelId.startsWith("claude-opus-4") ||
+        modelId.startsWith("claude-sonnet-4")
+    );
+}
+
+function supportsGoogleReasoning(modelId: string): boolean {
+    return modelId.startsWith("gemini-");
+}
+
+function buildProviderOptions(
+    provider: ProviderType,
+    modelId: string,
+    thinking: boolean
+): ProviderOptionsMap | undefined {
+    if (!thinking) return undefined;
+
+    switch (provider) {
+        case "openai":
+            if (!supportsOpenAIReasoning(modelId)) return undefined;
+            return {
+                openai: {
+                    reasoningEffort: "medium",
+                    reasoningSummary: "detailed"
+                }
+            };
+
+        case "anthropic":
+            if (!supportsAnthropicReasoning(modelId)) return undefined;
+            return {
+                anthropic: {
+                    thinking: {
+                        type: "enabled",
+                        budgetTokens: 12000
+                    }
+                }
+            };
+
+        case "google":
+            if (!supportsGoogleReasoning(modelId)) return undefined;
+            return {
+                google: {
+                    thinkingConfig: {
+                        thinkingLevel: "high",
+                        includeThoughts: true
+                    }
+                }
+            };
+
+        default:
+            return undefined;
+    }
+}
+
 function extractErrorMessage(error: unknown): string {
     if (error instanceof Error) return error.message;
     if (typeof error === "string") return error;
@@ -393,6 +458,7 @@ function startBackgroundGeneration(
 ) {
     const model = createModelInstance(provider, modelId, apiKey);
     const assistantMessageId = generation.messageId;
+    const providerOptions = buildProviderOptions(provider, modelId, thinking);
 
     logger.info("Generation started", {
         conversationId: generation.conversationId,
@@ -406,6 +472,7 @@ function startBackgroundGeneration(
     const result = streamText({
         model,
         messages: modelMessages,
+        providerOptions,
         tools,
         stopWhen: stepCountIs(20),
         abortSignal: generation.abortController.signal,
