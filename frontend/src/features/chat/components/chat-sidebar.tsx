@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { ConversationSummary } from "../types";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
+    CaretDownIcon,
     DotsThreeVerticalIcon,
     GearSixIcon,
     MinusIcon,
@@ -122,6 +123,48 @@ function toErrorMessage(error: unknown): string {
 }
 
 const BRAILLE_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+function CollapsibleSection({
+    label,
+    children
+}: {
+    label: string;
+    children: ReactNode;
+}) {
+    const [isOpen, setIsOpen] = useState(true);
+
+    return (
+        <div className="mb-3">
+            <button
+                type="button"
+                onClick={() => setIsOpen((v) => !v)}
+                className="flex w-full items-center gap-0.5"
+            >
+                <div className="px-2 py-2 text-xs font-medium text-dark-200 whitespace-nowrap">
+                    {label}
+                </div>
+                <div className="h-px flex-1 bg-dark-600" />
+                <CaretDownIcon
+                    className={cn(
+                        "mx-1.5 size-3 shrink-0 text-dark-300 transition-transform duration-200",
+                        isOpen ? "rotate-0" : "-rotate-90"
+                    )}
+                    weight="bold"
+                />
+            </button>
+            <div
+                className={cn(
+                    "grid transition-[grid-template-rows] duration-200 ease-out",
+                    isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                )}
+            >
+                <div className="overflow-hidden">
+                    <div className="space-y-0.5">{children}</div>
+                </div>
+            </div>
+        </div>
+    );
+}
 
 function BrailleSpinner({ className }: { className?: string }) {
     const [frame, setFrame] = useState(0);
@@ -618,50 +661,9 @@ export function ChatSidebar({
                             ) : null}
 
                             {favoriteConversations.length > 0 ? (
-                                <div className="mb-3">
-                                    <div className="flex items-center gap-0.5">
-                                        <div className="px-2 py-2 text-xs font-medium text-dark-200">
-                                            Favorites
-                                        </div>
-                                        <div className="w-full h-px bg-dark-600" />
-                                    </div>
-                                    <div className="space-y-0.5">
-                                        {favoriteConversations.map(
-                                            (conversation) => (
-                                                <ConversationListItem
-                                                    key={conversation.id}
-                                                    conversation={conversation}
-                                                    currentPath={currentPath}
-                                                    isGenerating={isConversationSending(
-                                                        conversation.id
-                                                    )}
-                                                    onDeleteRequest={
-                                                        handleDeleteRequest
-                                                    }
-                                                    onNavigate={handleNavigate}
-                                                    onRename={
-                                                        renameConversation
-                                                    }
-                                                    onToggleFavorite={
-                                                        toggleFavoriteConversation
-                                                    }
-                                                />
-                                            )
-                                        )}
-                                    </div>
-                                </div>
-                            ) : null}
-
-                            {groupedConversations.map(({ label, items }) => (
-                                <div key={label} className="mb-3">
-                                    <div className="flex items-center gap-0.5">
-                                        <div className="px-2 py-2 text-xs font-medium text-dark-200">
-                                            {label}
-                                        </div>
-                                        <div className="w-full h-px bg-dark-600" />
-                                    </div>
-                                    <div className="space-y-0.5">
-                                        {items.map((conversation) => (
+                                <CollapsibleSection label="Favorites">
+                                    {favoriteConversations.map(
+                                        (conversation) => (
                                             <ConversationListItem
                                                 key={conversation.id}
                                                 conversation={conversation}
@@ -678,9 +680,32 @@ export function ChatSidebar({
                                                     toggleFavoriteConversation
                                                 }
                                             />
-                                        ))}
-                                    </div>
-                                </div>
+                                        )
+                                    )}
+                                </CollapsibleSection>
+                            ) : null}
+
+                            {groupedConversations.map(({ label, items }) => (
+                                <CollapsibleSection key={label} label={label}>
+                                    {items.map((conversation) => (
+                                        <ConversationListItem
+                                            key={conversation.id}
+                                            conversation={conversation}
+                                            currentPath={currentPath}
+                                            isGenerating={isConversationSending(
+                                                conversation.id
+                                            )}
+                                            onDeleteRequest={
+                                                handleDeleteRequest
+                                            }
+                                            onNavigate={handleNavigate}
+                                            onRename={renameConversation}
+                                            onToggleFavorite={
+                                                toggleFavoriteConversation
+                                            }
+                                        />
+                                    ))}
+                                </CollapsibleSection>
                             ))}
                         </div>
                     </nav>
