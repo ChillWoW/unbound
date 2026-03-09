@@ -9,7 +9,7 @@ import { Toaster as SonnerToaster } from "sonner";
 import { cn } from "@/lib/cn";
 
 const toastSurfaceClassName =
-    "group rounded-md border border-dark-600 bg-dark-800 text-dark-50 shadow-sm";
+    "group rounded-md border border-dark-600 bg-dark-850 text-dark-50 shadow-sm";
 
 export function Toaster() {
     return (
@@ -28,14 +28,24 @@ export function Toaster() {
                         weight="fill"
                     />
                 ),
-                info: <InfoIcon className="size-4 text-primary-400" weight="fill" />,
-                warning: (
-                    <WarningCircleIcon
-                        className="size-4 text-red-300"
+                info: (
+                    <InfoIcon
+                        className="size-4 text-primary-400"
                         weight="fill"
                     />
                 ),
-                error: <XCircleIcon className="size-4 text-red-400" weight="fill" />,
+                warning: (
+                    <WarningCircleIcon
+                        className="size-4 text-amber-400"
+                        weight="fill"
+                    />
+                ),
+                error: (
+                    <XCircleIcon
+                        className="size-4 text-red-400"
+                        weight="fill"
+                    />
+                ),
                 close: <XIcon className="size-3 text-dark-200" weight="bold" />
             }}
             toastOptions={{
