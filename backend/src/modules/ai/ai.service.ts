@@ -457,8 +457,12 @@ function startBackgroundGeneration(
             // Resolve any tool calls that never received a result
             for (let i = 0; i < finalParts.length; i++) {
                 const part = finalParts[i];
+                if (!part) {
+                    continue;
+                }
+
                 if (part.type === "tool-invocation" && part.state === "call") {
-                    finalParts[i] = { ...part, state: "error" };
+                    part.state = "error";
                 }
             }
 

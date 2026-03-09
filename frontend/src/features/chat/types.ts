@@ -78,7 +78,9 @@ export interface ConversationDetail extends ConversationSummary {
     messages: ConversationMessage[];
 }
 
-export type { ProviderType } from "@/lib/provider-types";
+import type { ProviderType } from "@/lib/provider-types";
+
+export type { ProviderType };
 
 export interface ChatModel {
     id: string;

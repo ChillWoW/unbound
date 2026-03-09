@@ -1,4 +1,6 @@
-export type { ProviderType } from "@/lib/provider-types";
+import type { ProviderType } from "@/lib/provider-types";
+
+export type { ProviderType };
 
 export interface ProviderKeyStatus {
     configured: boolean;

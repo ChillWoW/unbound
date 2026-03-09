@@ -14,6 +14,7 @@ export const messages = pgTable(
                 Array<
                     | { type: "text"; text: string }
                     | { type: "image"; data: string; mimeType: string }
+                    | { type: "file"; data: string; mimeType: string }
                     | {
                           type: "tool-invocation";
                           toolInvocationId: string;
