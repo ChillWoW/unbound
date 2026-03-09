@@ -1,4 +1,5 @@
 import { createRootRoute, Outlet } from "@tanstack/react-router";
+import { Toaster } from "@/components/ui";
 import { AuthProvider } from "@/features/auth/auth-context";
 import { ChatProvider } from "@/features/chat/chat-context";
 
@@ -12,6 +13,7 @@ function RootLayout() {
             <AuthProvider>
                 <ChatProvider>
                     <Outlet />
+                    <Toaster />
                 </ChatProvider>
             </AuthProvider>
         </div>

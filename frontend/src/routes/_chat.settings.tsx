@@ -19,6 +19,7 @@ import type {
 } from "@/features/settings/types";
 import { ApiError } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import { notify } from "@/lib/toast";
 
 const defaultSettings: UserSettingsSummary = {
     providers: {
@@ -125,7 +126,6 @@ function ProviderKeyCard({
     const [isSaving, setIsSaving] = useState(false);
     const [isRemoving, setIsRemoving] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [notice, setNotice] = useState<string | null>(null);
 
     const updatedAtLabel = useMemo(() => {
         if (!status.updatedAt) return null;
@@ -141,7 +141,6 @@ function ProviderKeyCard({
     async function handleSave(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
         setError(null);
-        setNotice(null);
 
         const trimmed = apiKey.trim();
         if (!trimmed) {
@@ -153,9 +152,12 @@ function ProviderKeyCard({
         try {
             await onSave(config.id, trimmed);
             setApiKey("");
-            setNotice(`${config.label} API key saved.`);
+            notify.success(
+                `${config.label} connected`,
+                "Provider API key saved successfully."
+            );
         } catch (e) {
-            setError(getErrorMessage(e));
+            notify.error(`Couldn't save ${config.label} key`, getErrorMessage(e));
         } finally {
             setIsSaving(false);
         }
@@ -163,13 +165,18 @@ function ProviderKeyCard({
 
     async function handleRemove() {
         setError(null);
-        setNotice(null);
         setIsRemoving(true);
         try {
             await onRemove(config.id);
-            setNotice(`${config.label} API key removed.`);
+            notify.success(
+                `${config.label} disconnected`,
+                "Provider API key removed successfully."
+            );
         } catch (e) {
-            setError(getErrorMessage(e));
+            notify.error(
+                `Couldn't remove ${config.label} key`,
+                getErrorMessage(e)
+            );
         } finally {
             setIsRemoving(false);
         }
@@ -248,12 +255,6 @@ function ProviderKeyCard({
                     {error ? (
                         <div className="rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
                             {error}
-                        </div>
-                    ) : null}
-
-                    {notice ? (
-                        <div className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
-                            {notice}
                         </div>
                     ) : null}
 

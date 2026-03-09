@@ -7,4 +7,5 @@ export * from "./Modal";
 export * from "./Popover";
 export * from "./Select";
 export * from "./Switch";
+export * from "./Toaster";
 export * from "./Tooltip";

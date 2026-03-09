@@ -30,6 +30,7 @@ import {
 } from "@/components/ui";
 import { useAuth } from "@/features/auth/use-auth";
 import { cn } from "@/lib/cn";
+import { notify } from "@/lib/toast";
 import { useChat } from "../chat-context";
 import { getUserInitials } from "../utils/get-user-initials";
 
@@ -482,7 +483,11 @@ export function ChatSidebar({
 
         try {
             await logout();
+            notify.success("Signed out", "You've been logged out successfully.");
+            await navigate({ to: "/login" });
             handleNavigate();
+        } catch (error) {
+            notify.error("Couldn't sign out", toErrorMessage(error));
         } finally {
             setIsLoggingOut(false);
         }
