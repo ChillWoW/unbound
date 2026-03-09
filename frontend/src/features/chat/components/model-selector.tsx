@@ -59,6 +59,8 @@ const DIRECT_API_PROVIDERS = new Set<string>([
     "kimi"
 ]);
 
+const THINKING_ONLY_MODEL_IDS = new Set(["kimi-k2-thinking"]);
+
 function formatPricing(raw: string): string {
     const perToken = parseFloat(raw);
     if (isNaN(perToken)) return raw;
@@ -631,21 +633,29 @@ export function ModelSelector({
                             <div className="flex flex-col gap-0.5">
                                 {filteredModels.map((model) => {
                                     const ProviderIcon = ICONS[model.provider];
-
-                                    return (
+                                    const requiresThinking =
+                                        THINKING_ONLY_MODEL_IDS.has(model.id);
+                                    const isDisabled =
+                                        requiresThinking && !isThinkingEnabled;
+                                    const row = (
                                         <div
                                             key={`${model.source}-${model.id}`}
                                             className={cn(
-                                                "flex w-full cursor-pointer items-center gap-2.5 rounded-md px-3 py-1.5 text-xs text-dark-100 transition-colors hover:bg-dark-600 hover:text-white",
+                                                "flex w-full items-center gap-2.5 rounded-md px-3 py-1.5 text-xs transition-colors text-dark-100",
+                                                isDisabled
+                                                    ? "cursor-not-allowed opacity-80"
+                                                    : "cursor-pointer hover:bg-dark-600 hover:text-dark-50",
                                                 model.id === selectedModelId &&
                                                     model.source ===
                                                         selectedModel?.source &&
                                                     "bg-dark-600 text-dark-50"
                                             )}
                                             onClick={() => {
+                                                if (isDisabled) return;
                                                 onModelSelected(model);
                                                 setOpen(false);
                                             }}
+                                            aria-disabled={isDisabled}
                                         >
                                             <div className="flex min-w-0 flex-1 items-center gap-2.5">
                                                 {model.source ===
@@ -673,6 +683,20 @@ export function ModelSelector({
 
                                             <ModelInfoButton model={model} />
                                         </div>
+                                    );
+
+                                    if (!isDisabled) {
+                                        return row;
+                                    }
+
+                                    return (
+                                        <Tooltip
+                                            key={`${model.source}-${model.id}`}
+                                            content="Enable Thinking to use this model"
+                                            side="right"
+                                        >
+                                            {row}
+                                        </Tooltip>
                                     );
                                 })}
                             </div>

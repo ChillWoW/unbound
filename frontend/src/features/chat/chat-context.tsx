@@ -87,6 +87,16 @@ interface StoredModelSelection {
     source: ProviderType;
 }
 
+const THINKING_ONLY_MODEL_IDS = new Set(["kimi-k2-thinking"]);
+
+function getSelectableModels(models: ChatModel[], isThinkingEnabled: boolean) {
+    if (isThinkingEnabled) {
+        return models;
+    }
+
+    return models.filter((model) => !THINKING_ONLY_MODEL_IDS.has(model.id));
+}
+
 function readStoredModelSelection(
     userId: string
 ): StoredModelSelection | null {
@@ -301,7 +311,7 @@ function applyToolResult(
 
 export function ChatProvider({ children }: PropsWithChildren) {
     const { isAuthenticated, isLoading, user } = useAuth();
-    const [availableModels, setAvailableModels] = useState<ChatModel[]>([]);
+    const [allModels, setAllModels] = useState<ChatModel[]>([]);
     const [configuredProviders, setConfiguredProviders] = useState<
         ProviderType[]
     >([]);
@@ -339,6 +349,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
     const [isThinkingEnabled, setIsThinkingEnabled] = useState(
         () => localStorage.getItem("thinking-enabled") === "true"
     );
+    const availableModels = useMemo(() => allModels, [allModels]);
     const isThinkingEnabledRef = useRef(false);
     const activeGenerationsRef = useRef<Map<string, AbortController>>(
         new Map()
@@ -437,6 +448,10 @@ export function ChatProvider({ children }: PropsWithChildren) {
             const stored = user
                 ? readStoredModelSelection(user.id)
                 : null;
+            const selectableModels = getSelectableModels(
+                response.models,
+                isThinkingEnabledRef.current
+            );
             const currentId = selectedModelIdRef.current;
 
             let nextId: string | null = null;
@@ -444,25 +459,25 @@ export function ChatProvider({ children }: PropsWithChildren) {
 
             if (
                 currentId &&
-                response.models.some((m) => m.id === currentId)
+                selectableModels.some((m) => m.id === currentId)
             ) {
                 nextId = currentId;
                 nextSource =
                     selectedModelSourceRef.current ??
-                    (response.models.find((m) => m.id === currentId)?.source ??
+                    (selectableModels.find((m) => m.id === currentId)?.source ??
                         null);
             } else if (
                 stored &&
-                response.models.some((m) => m.id === stored.modelId)
+                selectableModels.some((m) => m.id === stored.modelId)
             ) {
                 nextId = stored.modelId;
                 nextSource = stored.source;
-            } else if (response.models.length > 0) {
-                nextId = response.models[0].id;
-                nextSource = response.models[0].source;
+            } else if (selectableModels.length > 0) {
+                nextId = selectableModels[0].id;
+                nextSource = selectableModels[0].source;
             }
 
-            setAvailableModels(response.models);
+            setAllModels(response.models);
             setConfiguredProviders(response.configuredProviders ?? []);
             setSelectedModelIdState(nextId);
             selectedModelSourceRef.current = nextSource;
@@ -473,7 +488,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 });
             }
         } catch (error) {
-            setAvailableModels([]);
+            setAllModels([]);
             setConfiguredProviders([]);
             setSelectedModelIdState(null);
             selectedModelSourceRef.current = null;
@@ -483,6 +498,43 @@ export function ChatProvider({ children }: PropsWithChildren) {
             setIsLoadingModels(false);
         }
     }, [user]);
+
+    useEffect(() => {
+        const selectableModels = getSelectableModels(
+            availableModels,
+            isThinkingEnabled
+        );
+        const currentId = selectedModelIdRef.current;
+
+        if (
+            currentId &&
+            selectableModels.some((model) => model.id === currentId)
+        ) {
+            return;
+        }
+
+        const stored = user ? readStoredModelSelection(user.id) : null;
+        const nextModel =
+            (stored
+                ? selectableModels.find((model) => model.id === stored.modelId)
+                : null) ?? selectableModels[0] ?? null;
+
+        setSelectedModelIdState(nextModel?.id ?? null);
+        selectedModelSourceRef.current = nextModel?.source ?? null;
+
+        if (!user) {
+            return;
+        }
+
+        if (nextModel) {
+            writeStoredModelSelection(user.id, {
+                modelId: nextModel.id,
+                source: nextModel.source
+            });
+        } else {
+            writeStoredModelSelection(user.id, null);
+        }
+    }, [availableModels, isThinkingEnabled, user]);
 
     useEffect(() => {
         if (isLoading) {

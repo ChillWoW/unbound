@@ -10,7 +10,10 @@ import {
 } from "ai";
 import { requireAuth } from "../../middleware/require-auth";
 import { createModelInstance } from "./provider-factory";
-import { isValidProvider, type ProviderType } from "../../lib/provider-registry";
+import {
+    isValidProvider,
+    type ProviderType
+} from "../../lib/provider-registry";
 import { settingsService } from "../settings/settings.service";
 import { conversationsRepository } from "../conversations/conversations.repository";
 import { todosRepository } from "../todos/todos.repository";
@@ -288,14 +291,20 @@ function hasMeaningfulAssistantOutput(parts: MessagePart[]): boolean {
 
 async function reconcileLingeringInProgressTodos(conversationId: string) {
     const todos = await todosRepository.listByConversationId(conversationId);
-    const inProgressTodos = todos.filter((todo) => todo.status === "in_progress");
+    const inProgressTodos = todos.filter(
+        (todo) => todo.status === "in_progress"
+    );
 
     if (inProgressTodos.length === 0) {
         return;
     }
 
     for (const todo of inProgressTodos) {
-        await todosRepository.updateStatus(conversationId, todo.id, "completed");
+        await todosRepository.updateStatus(
+            conversationId,
+            todo.id,
+            "completed"
+        );
     }
 
     logger.info("Auto-completed lingering in_progress todos", {
@@ -374,7 +383,10 @@ function buildErrorParts(
     const parts: MessagePart[] = [];
 
     if (thinking && generation.accumulatedReasoning) {
-        parts.push({ type: "reasoning", text: generation.accumulatedReasoning });
+        parts.push({
+            type: "reasoning",
+            text: generation.accumulatedReasoning
+        });
     }
 
     for (const tp of generation.toolParts) {
@@ -575,7 +587,10 @@ function startBackgroundGeneration(
                 }
             });
 
-            if (status === "complete" && hasMeaningfulAssistantOutput(finalParts)) {
+            if (
+                status === "complete" &&
+                hasMeaningfulAssistantOutput(finalParts)
+            ) {
                 try {
                     await reconcileLingeringInProgressTodos(
                         generation.conversationId
@@ -684,28 +699,37 @@ function startBackgroundGeneration(
 
                 const stoppedParts: MessagePart[] = [];
                 if (thinking && generation.accumulatedReasoning) {
-                    stoppedParts.push({ type: "reasoning", text: generation.accumulatedReasoning });
+                    stoppedParts.push({
+                        type: "reasoning",
+                        text: generation.accumulatedReasoning
+                    });
                 }
                 for (const tp of generation.toolParts) {
                     stoppedParts.push(tp);
                 }
                 if (generation.accumulatedText) {
-                    stoppedParts.push({ type: "text", text: generation.accumulatedText });
+                    stoppedParts.push({
+                        type: "text",
+                        text: generation.accumulatedText
+                    });
                 }
                 if (stoppedParts.length === 0) {
                     stoppedParts.push({ type: "text", text: "" });
                 }
 
-                await conversationsRepository.updateMessage(assistantMessageId, {
-                    parts: stoppedParts,
-                    status: "complete",
-                    metadata: {
-                        model: modelId,
-                        thinkingEnabled: thinking,
-                        generationStartedAt,
-                        generationCompletedAt: new Date().toISOString()
+                await conversationsRepository.updateMessage(
+                    assistantMessageId,
+                    {
+                        parts: stoppedParts,
+                        status: "complete",
+                        metadata: {
+                            model: modelId,
+                            thinkingEnabled: thinking,
+                            generationStartedAt,
+                            generationCompletedAt: new Date().toISOString()
+                        }
                     }
-                });
+                );
 
                 generationManager.complete(generation.conversationId);
                 return;
@@ -733,7 +757,10 @@ function startBackgroundGeneration(
                 }
             });
 
-            generationManager.fail(generation.conversationId, streamErrorMessage);
+            generationManager.fail(
+                generation.conversationId,
+                streamErrorMessage
+            );
         }
     })();
 }
@@ -847,8 +874,10 @@ export const aiService = {
                 messageRecords,
                 buildSystemPrompt(),
                 {
-                    modelContextLength:
-                        modelsService.getModelContextLength(user.id, modelId),
+                    modelContextLength: modelsService.getModelContextLength(
+                        user.id,
+                        modelId
+                    ),
                     thinking
                 },
                 toModelMessages
