@@ -136,7 +136,7 @@ const components: Components = {
     },
     th({ children }) {
         return (
-            <th className="border border-dark-600 bg-dark-800 px-3 py-1.5 text-left font-semibold">
+            <th className="border border-dark-600 bg-dark-850 px-3 py-1.5 text-left font-semibold">
                 {children}
             </th>
         );
