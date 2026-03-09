@@ -375,13 +375,18 @@ function ConversationListItem({
                 onClick={onNavigate}
                 className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-1.5 text-sm"
             >
-                {isGenerating ? (
-                    <BrailleSpinner className="shrink-0 text-xs leading-none text-primary-400" />
-                ) : conversation.hasUnreadAssistantReply ? (
-                    <span className="size-1.5 shrink-0 rounded-full bg-primary-400" />
-                ) : (
-                    <MinusIcon className="size-3 shrink-0 text-dark-400" weight="bold" />
-                )}
+                <div className="w-3 h-full flex items-center justify-center">
+                    {isGenerating ? (
+                        <BrailleSpinner className="shrink-0 text-xs leading-none text-primary-400" />
+                    ) : conversation.hasUnreadAssistantReply ? (
+                        <span className="size-1.5 shrink-0 rounded-full bg-primary-400" />
+                    ) : (
+                        <MinusIcon
+                            className="size-3 shrink-0 text-dark-400"
+                            weight="bold"
+                        />
+                    )}
+                </div>
                 <span className="min-w-0 flex-1 truncate text-inherit">
                     {conversation.title}
                 </span>
@@ -507,7 +512,10 @@ export function ChatSidebar({
 
         try {
             await logout();
-            notify.success("Signed out", "You've been logged out successfully.");
+            notify.success(
+                "Signed out",
+                "You've been logged out successfully."
+            );
             await navigate({ to: "/login" });
             handleNavigate();
         } catch (error) {
@@ -624,7 +632,9 @@ export function ChatSidebar({
                                                     key={conversation.id}
                                                     conversation={conversation}
                                                     currentPath={currentPath}
-                                                    isGenerating={isConversationSending(conversation.id)}
+                                                    isGenerating={isConversationSending(
+                                                        conversation.id
+                                                    )}
                                                     onDeleteRequest={
                                                         handleDeleteRequest
                                                     }
@@ -656,7 +666,9 @@ export function ChatSidebar({
                                                 key={conversation.id}
                                                 conversation={conversation}
                                                 currentPath={currentPath}
-                                                isGenerating={isConversationSending(conversation.id)}
+                                                isGenerating={isConversationSending(
+                                                    conversation.id
+                                                )}
                                                 onDeleteRequest={
                                                     handleDeleteRequest
                                                 }

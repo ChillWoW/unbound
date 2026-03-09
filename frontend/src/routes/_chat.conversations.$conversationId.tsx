@@ -58,7 +58,8 @@ function ConversationPage() {
         if (
             !conversation ||
             !conversation.hasUnreadAssistantReply ||
-            !conversation.latestAssistantMessageId
+            !conversation.latestAssistantMessageId ||
+            isSending
         ) {
             return;
         }
@@ -67,7 +68,7 @@ function ConversationPage() {
             conversationId,
             conversation.latestAssistantMessageId
         );
-    }, [conversation, conversationId, markConversationRead]);
+    }, [conversation, conversationId, isSending, markConversationRead]);
 
     async function handleSubmit(value: string, attachments: import("@/features/chat/components/chat-input").ChatAttachment[]) {
         setSubmissionError(null);
