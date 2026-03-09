@@ -373,7 +373,7 @@ function ConversationListItem({
                     conversationId: conversation.id
                 }}
                 onClick={onNavigate}
-                className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-1.5 text-sm"
+                className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-1 text-sm"
             >
                 <div className="w-3 h-full flex items-center justify-center">
                     {isGenerating ? (
@@ -382,7 +382,7 @@ function ConversationListItem({
                         <span className="size-1.5 shrink-0 rounded-full bg-primary-400" />
                     ) : (
                         <MinusIcon
-                            className="size-3 shrink-0 text-dark-400"
+                            className="size-3 shrink-0 text-dark-300"
                             weight="bold"
                         />
                     )}
