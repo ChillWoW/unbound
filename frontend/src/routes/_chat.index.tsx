@@ -29,6 +29,7 @@ function HomePage() {
     const { isAuthenticated, isLoading } = useAuth();
     const {
         availableModels,
+        configuredProviders,
         createConversation,
         isCreatingConversation,
         isLoadingModels,
@@ -91,6 +92,7 @@ function HomePage() {
                         isModelsLoading={isLoadingModels}
                         isThinkingEnabled={isThinkingEnabled}
                         models={availableModels}
+                        configuredProviders={configuredProviders}
                         modelsError={modelsError}
                         selectedModelId={selectedModelId}
                         onSelectedModelChange={setSelectedModelId}

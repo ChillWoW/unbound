@@ -1,6 +1,8 @@
 import { eq } from "drizzle-orm";
 import { db } from "../../db/client";
 import { userSettings } from "../../db/schema";
+import type { ProviderType } from "../../lib/provider-registry";
+import { getCiphertextField, getPreviewField } from "./settings.types";
 
 export const settingsRepository = {
     async findByUserId(userId: string) {
@@ -13,27 +15,30 @@ export const settingsRepository = {
         return settings ?? null;
     },
 
-    async upsertOpenRouterApiKey(input: {
+    async upsertProviderApiKey(input: {
         userId: string;
-        openRouterApiKeyCiphertext: string;
-        openRouterApiKeyPreview: string;
+        provider: ProviderType;
+        ciphertext: string;
+        preview: string;
     }) {
         const now = new Date();
+        const ciphertextCol = getCiphertextField(input.provider);
+        const previewCol = getPreviewField(input.provider);
+
         const [settings] = await db
             .insert(userSettings)
             .values({
                 userId: input.userId,
-                openRouterApiKeyCiphertext: input.openRouterApiKeyCiphertext,
-                openRouterApiKeyPreview: input.openRouterApiKeyPreview,
+                [ciphertextCol]: input.ciphertext,
+                [previewCol]: input.preview,
                 createdAt: now,
                 updatedAt: now
             })
             .onConflictDoUpdate({
                 target: [userSettings.userId],
                 set: {
-                    openRouterApiKeyCiphertext:
-                        input.openRouterApiKeyCiphertext,
-                    openRouterApiKeyPreview: input.openRouterApiKeyPreview,
+                    [ciphertextCol]: input.ciphertext,
+                    [previewCol]: input.preview,
                     updatedAt: now
                 }
             })
@@ -44,6 +49,20 @@ export const settingsRepository = {
         }
 
         return settings;
+    },
+
+    async clearProviderApiKey(userId: string, provider: ProviderType) {
+        const ciphertextCol = getCiphertextField(provider);
+        const previewCol = getPreviewField(provider);
+
+        await db
+            .update(userSettings)
+            .set({
+                [ciphertextCol]: null,
+                [previewCol]: null,
+                updatedAt: new Date()
+            })
+            .where(eq(userSettings.userId, userId));
     },
 
     async deleteByUserId(userId: string) {

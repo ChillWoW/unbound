@@ -149,7 +149,7 @@ const anthropicModels: SupportedModelDefinition[] = [
         name: "Claude Opus 4.6",
         provider: "anthropic",
         description:
-            "Anthropic's strongest model for coding and long-running profressional tasks"
+            "Anthropic's strongest model for coding and long-running professional tasks"
     }
 ];
 
@@ -199,6 +199,7 @@ export function selectSupportedModels(models: ModelSummary[]): ModelSummary[] {
                 id: definition.id,
                 name: definition.name,
                 provider: definition.provider,
+                source: "openrouter",
                 description: definition.description,
                 contextLength: null,
                 promptPricing: null,
@@ -213,6 +214,7 @@ export function selectSupportedModels(models: ModelSummary[]): ModelSummary[] {
             ...model,
             name: definition.name,
             provider: definition.provider,
+            source: "openrouter",
             description: definition.description,
             free: definition.free
         };

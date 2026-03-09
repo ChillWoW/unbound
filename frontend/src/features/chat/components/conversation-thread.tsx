@@ -16,6 +16,7 @@ import type {
     ConversationMessage,
     MessageMetadata,
     MessagePart,
+    ProviderType,
     ReasoningMessagePart,
     ToolInvocationPart
 } from "../types";
@@ -536,13 +537,14 @@ function AssistantMessage({
 
 interface ConversationThreadProps {
     availableModels: ChatModel[];
+    configuredProviders?: ProviderType[];
     conversation: ConversationDetail;
     error?: string | null;
     isSending?: boolean;
     isLoadingModels?: boolean;
     isThinkingEnabled?: boolean;
     modelsError?: string | null;
-    onModelChange: (modelId: string | null) => void;
+    onModelChange: (modelId: string | null, source?: ProviderType) => void;
     onStop?: () => void;
     onSubmit: (
         value: string,
@@ -554,6 +556,7 @@ interface ConversationThreadProps {
 
 export function ConversationThread({
     availableModels,
+    configuredProviders = [],
     conversation,
     error,
     isSending = false,
@@ -763,6 +766,7 @@ export function ConversationThread({
 
                     <InputDock
                         models={availableModels}
+                        configuredProviders={configuredProviders}
                         selectedModelId={selectedModelId}
                         onSelectedModelChange={onModelChange}
                         isModelsLoading={isLoadingModels}

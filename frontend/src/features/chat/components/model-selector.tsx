@@ -6,7 +6,7 @@ import {
     Switch,
     Tooltip
 } from "@/components/ui";
-import type { ChatModel } from "../types";
+import type { ChatModel, ProviderType } from "../types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     MagnifyingGlassIcon,
@@ -17,7 +17,8 @@ import {
     FileIcon,
     InfoIcon,
     BrainIcon,
-    FunnelIcon
+    FunnelIcon,
+    GearIcon
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/cn";
 import {
@@ -30,7 +31,8 @@ import {
     OpenAI,
     Google,
     Anthropic,
-    ZAI
+    ZAI,
+    OpenRouter
 } from "@lobehub/icons";
 
 const ICONS: Record<string, React.ComponentType<any>> = {
@@ -39,12 +41,25 @@ const ICONS: Record<string, React.ComponentType<any>> = {
     "arcee-ai": Arcee,
     minimax: Minimax,
     moonshot: Moonshot,
+    kimi: Moonshot,
     "x-ai": XAI,
     openai: OpenAI,
     google: Google,
     anthropic: Anthropic,
-    zai: ZAI
+    zai: ZAI,
+    openrouter: OpenRouter
 };
+
+const ALWAYS_VISIBLE_PROVIDERS = ["openai", "anthropic", "google", "kimi"];
+
+const DIRECT_API_PROVIDERS = new Set<string>([
+    "openai",
+    "anthropic",
+    "google",
+    "kimi"
+]);
+
+const THINKING_ONLY_MODEL_IDS = new Set(["kimi-k2-thinking"]);
 
 function formatPricing(raw: string): string {
     const perToken = parseFloat(raw);
@@ -206,6 +221,7 @@ function ModelInfoButton({ model }: { model: ChatModel }) {
 export function ModelSelector({
     selectedModelId,
     models,
+    configuredProviders = [],
     onModelSelected,
     disabled = false,
     isThinkingEnabled = false,
@@ -213,6 +229,7 @@ export function ModelSelector({
 }: {
     selectedModelId: string | null;
     models: ChatModel[];
+    configuredProviders?: ProviderType[];
     onModelSelected: (model: ChatModel) => void;
     disabled?: boolean;
     isThinkingEnabled?: boolean;
@@ -223,24 +240,43 @@ export function ModelSelector({
     const [activeProvider, setActiveProvider] = useState<string | null>(null);
     const [selectedModalities, setSelectedModalities] = useState<string[]>([]);
 
+    const noProvidersConfigured =
+        models.length === 0 && configuredProviders.length === 0;
+
     const selectedModel = useMemo(() => {
         return models.find((model) => model.id === selectedModelId);
     }, [selectedModelId, models]);
 
     const ModelIcon = useMemo(() => {
         if (!selectedModelId) return null;
-        return ICONS[
-            models.find((model) => model.id === selectedModelId)?.provider ?? ""
-        ];
+        const model = models.find((m) => m.id === selectedModelId);
+        if (!model) return null;
+        if (model.source === "openrouter") return OpenRouter;
+        return ICONS[model.provider] ?? null;
     }, [selectedModelId, models]);
 
-    const providers = useMemo(
-        () =>
-            Array.from(new Set(models.map((model) => model.provider))).sort(
-                (a, b) =>
-                    formatProviderName(a).localeCompare(formatProviderName(b))
-            ),
-        [models]
+    const providers = useMemo(() => {
+        const fromModels = new Set(models.map((m) => m.provider));
+        for (const p of ALWAYS_VISIBLE_PROVIDERS) {
+            fromModels.add(p);
+        }
+        const all = Array.from(fromModels);
+        const direct = all
+            .filter((p) => DIRECT_API_PROVIDERS.has(p))
+            .sort((a, b) =>
+                formatProviderName(a).localeCompare(formatProviderName(b))
+            );
+        const others = all
+            .filter((p) => !DIRECT_API_PROVIDERS.has(p))
+            .sort((a, b) =>
+                formatProviderName(a).localeCompare(formatProviderName(b))
+            );
+        return [...direct, ...others];
+    }, [models]);
+
+    const configuredProviderSet = useMemo(
+        () => new Set(configuredProviders),
+        [configuredProviders]
     );
 
     const allModalities = useMemo(() => {
@@ -281,12 +317,32 @@ export function ModelSelector({
     const providerEnabledMap = useMemo(() => {
         const map: Record<string, boolean> = {};
         for (const provider of providers) {
-            map[provider] = models
+            const hasMatchingModels = models
                 .filter((model) => model.provider === provider)
                 .some((model) => modelMatchesModalities(model));
+            map[provider] = hasMatchingModels;
         }
         return map;
     }, [providers, models, modelMatchesModalities]);
+
+    const providerHasModels = useMemo(() => {
+        const map: Record<string, boolean> = {};
+        for (const provider of providers) {
+            map[provider] = models.some((m) => m.provider === provider);
+        }
+        return map;
+    }, [providers, models]);
+
+    const isProviderConfigured = useCallback(
+        (provider: string) => {
+            if (providerHasModels[provider]) return true;
+            if (DIRECT_API_PROVIDERS.has(provider)) {
+                return configuredProviderSet.has(provider as ProviderType);
+            }
+            return configuredProviderSet.has("openrouter");
+        },
+        [providerHasModels, configuredProviderSet]
+    );
 
     const availableProviders = useMemo(
         () => providers.filter((provider) => providerEnabledMap[provider]),
@@ -294,28 +350,33 @@ export function ModelSelector({
     );
 
     useEffect(() => {
-        if (providers.length === 0 || availableProviders.length === 0) {
+        if (providers.length === 0) {
             setActiveProvider(null);
             return;
         }
 
         setActiveProvider((current) => {
-            if (current && availableProviders.includes(current)) return current;
+            if (current && providerEnabledMap[current]) return current;
 
             const selectedProvider = selectedModelId
                 ? models.find((model) => model.id === selectedModelId)?.provider
                 : null;
 
-            if (
-                selectedProvider &&
-                availableProviders.includes(selectedProvider)
-            ) {
+            if (selectedProvider && providerEnabledMap[selectedProvider]) {
                 return selectedProvider;
             }
 
-            return availableProviders[0];
+            if (availableProviders.length > 0) return availableProviders[0];
+
+            return providers[0];
         });
-    }, [providers, availableProviders, selectedModelId, models]);
+    }, [
+        providers,
+        availableProviders,
+        providerEnabledMap,
+        selectedModelId,
+        models
+    ]);
 
     const filteredModels = useMemo(() => {
         const scopedModels = activeProvider
@@ -341,6 +402,10 @@ export function ModelSelector({
         );
     };
 
+    const firstOtherIndex = providers.findIndex(
+        (p) => !DIRECT_API_PROVIDERS.has(p)
+    );
+
     return (
         <Popover
             open={open}
@@ -358,7 +423,10 @@ export function ModelSelector({
                     <ModelIcon className="size-4 opacity-70" title="" />
                 )}
                 <span className="truncate">
-                    {selectedModel?.name ?? "Select a model"}
+                    {selectedModel?.name ??
+                        (noProvidersConfigured
+                            ? "No providers configured"
+                            : "Select a model")}
                 </span>
 
                 {selectedModel?.free && (
@@ -370,43 +438,66 @@ export function ModelSelector({
 
             <PopoverContent
                 side="top"
-                className="flex h-96 w-[28rem] flex-col overflow-hidden p-0"
+                className="flex h-96 w-[48rem] flex-col overflow-hidden p-0"
             >
                 <div className="flex min-h-0 flex-1">
                     <div className="flex shrink-0 flex-col items-center gap-1 overflow-y-auto overflow-x-hidden hide-scrollbar border-r border-dark-600 bg-dark-900 p-2">
-                        {providers.map((provider) => {
+                        {providers.map((provider, index) => {
                             const ProviderIcon = ICONS[provider];
                             const isActive = provider === activeProvider;
-                            const isEnabled = providerEnabledMap[provider];
+                            const isEnabled =
+                                providerEnabledMap[provider] &&
+                                isProviderConfigured(provider);
+                            const isUnconfigured =
+                                !isProviderConfigured(provider);
+
+                            const tooltipText = isUnconfigured
+                                ? `${formatProviderName(provider)} — configure in Settings`
+                                : formatProviderName(provider);
+
+                            const showSeparator =
+                                firstOtherIndex !== -1 &&
+                                index === firstOtherIndex;
 
                             return (
-                                <Tooltip
+                                <div
                                     key={provider}
-                                    content={formatProviderName(provider)}
-                                    side="right"
-                                    delay={300}
+                                    className="flex w-full flex-col items-center"
                                 >
-                                    <button
-                                        type="button"
-                                        disabled={!isEnabled}
-                                        className={cn(
-                                            "inline-flex size-8 shrink-0 items-center justify-center rounded-md transition-colors",
-                                            isActive
-                                                ? "bg-dark-800 text-dark-50"
-                                                : "text-dark-200 hover:bg-dark-800 hover:text-dark-50",
-                                            !isEnabled &&
-                                                "cursor-not-allowed opacity-40 hover:bg-transparent hover:text-dark-200"
-                                        )}
-                                        onClick={() =>
-                                            setActiveProvider(provider)
-                                        }
+                                    {showSeparator && (
+                                        <div className="w-6 h-px bg-dark-600 my-1" />
+                                    )}
+                                    <Tooltip
+                                        content={tooltipText}
+                                        side="right"
+                                        delay={300}
                                     >
-                                        <ProviderIcon
-                                            className="size-4"
-                                            title=""
-                                        />
-                                    </button>
-                                </Tooltip>
+                                        <button
+                                            type="button"
+                                            disabled={!isEnabled}
+                                            className={cn(
+                                                "inline-flex size-8 shrink-0 items-center justify-center rounded-md transition-colors",
+                                                isActive
+                                                    ? "bg-dark-800 text-dark-50"
+                                                    : "text-dark-200 hover:bg-dark-800 hover:text-dark-50",
+                                                !isEnabled &&
+                                                    "cursor-not-allowed opacity-40 hover:bg-transparent hover:text-dark-200"
+                                            )}
+                                            onClick={() =>
+                                                setActiveProvider(provider)
+                                            }
+                                        >
+                                            {ProviderIcon ? (
+                                                <ProviderIcon
+                                                    className="size-4"
+                                                    title=""
+                                                />
+                                            ) : (
+                                                <GearIcon className="size-4" />
+                                            )}
+                                        </button>
+                                    </Tooltip>
+                                </div>
                             );
                         })}
                     </div>
@@ -529,9 +620,12 @@ export function ModelSelector({
 
                         <div className="min-h-0 flex-1 overflow-y-auto p-1">
                             {filteredModels.length === 0 && (
-                                <div className="flex h-full items-center justify-center">
+                                <div className="flex h-full flex-col items-center justify-center gap-1">
                                     <p className="text-center text-xs text-dark-200">
-                                        No models found
+                                        {activeProvider &&
+                                        !isProviderConfigured(activeProvider)
+                                            ? "Configure API key in Settings"
+                                            : "No models found"}
                                     </p>
                                 </div>
                             )}
@@ -539,27 +633,43 @@ export function ModelSelector({
                             <div className="flex flex-col gap-0.5">
                                 {filteredModels.map((model) => {
                                     const ProviderIcon = ICONS[model.provider];
-
-                                    return (
+                                    const requiresThinking =
+                                        THINKING_ONLY_MODEL_IDS.has(model.id);
+                                    const isDisabled =
+                                        requiresThinking && !isThinkingEnabled;
+                                    const row = (
                                         <div
-                                            key={model.id}
+                                            key={`${model.source}-${model.id}`}
                                             className={cn(
-                                                "flex w-full cursor-pointer items-center gap-2.5 rounded-md px-3 py-1.5 text-xs text-dark-100 transition-colors hover:bg-dark-600 hover:text-white",
+                                                "flex w-full items-center gap-2.5 rounded-md px-3 py-1.5 text-xs transition-colors text-dark-100",
+                                                isDisabled
+                                                    ? "cursor-not-allowed opacity-80"
+                                                    : "cursor-pointer hover:bg-dark-600 hover:text-dark-50",
                                                 model.id === selectedModelId &&
+                                                    model.source ===
+                                                        selectedModel?.source &&
                                                     "bg-dark-600 text-dark-50"
                                             )}
                                             onClick={() => {
+                                                if (isDisabled) return;
                                                 onModelSelected(model);
                                                 setOpen(false);
                                             }}
+                                            aria-disabled={isDisabled}
                                         >
                                             <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                                                {ProviderIcon && (
-                                                    <ProviderIcon
-                                                        className="size-3.5 shrink-0 opacity-70"
+                                                {model.source ===
+                                                "openrouter" ? (
+                                                    <OpenRouter
+                                                        className="size-4 shrink-0 opacity-70"
                                                         title=""
                                                     />
-                                                )}
+                                                ) : ProviderIcon ? (
+                                                    <ProviderIcon
+                                                        className="size-4 shrink-0 opacity-70"
+                                                        title=""
+                                                    />
+                                                ) : null}
                                                 <span className="min-w-0 flex-1 truncate text-left">
                                                     {model.name}
                                                 </span>
@@ -573,6 +683,20 @@ export function ModelSelector({
 
                                             <ModelInfoButton model={model} />
                                         </div>
+                                    );
+
+                                    if (!isDisabled) {
+                                        return row;
+                                    }
+
+                                    return (
+                                        <Tooltip
+                                            key={`${model.source}-${model.id}`}
+                                            content="Enable Thinking to use this model"
+                                            side="right"
+                                        >
+                                            {row}
+                                        </Tooltip>
                                     );
                                 })}
                             </div>

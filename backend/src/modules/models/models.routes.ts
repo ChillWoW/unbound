@@ -1,12 +1,12 @@
 import { Elysia } from "elysia";
-import { ModelsError } from "./models.types";
+import { AppError } from "../../lib/app-error";
 import { modelsService } from "./models.service";
 
 function handleModelsError(
     error: unknown,
     set: { status?: number | string }
 ) {
-    if (error instanceof ModelsError) {
+    if (error instanceof AppError) {
         set.status = error.status;
         return { message: error.message };
     }
@@ -18,8 +18,11 @@ export const modelsRoutes = new Elysia({ prefix: "/api/models" }).get(
     "/",
     async ({ request, set }) => {
         try {
-            const models = await modelsService.listModels(request);
-            return { models };
+            const result = await modelsService.listModels(request);
+            return {
+                models: result.models,
+                configuredProviders: result.configuredProviders
+            };
         } catch (error) {
             return handleModelsError(error, set);
         }

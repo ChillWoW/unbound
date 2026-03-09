@@ -19,6 +19,7 @@ import type {
     ConversationMessage,
     ConversationSummary,
     MessagePart,
+    ProviderType,
     TodoItem,
     ToolInvocationPart
 } from "./types";
@@ -81,31 +82,66 @@ function clearPartialMessage(messageId: string) {
     window.localStorage.removeItem(getPartialMessageStorageKey(messageId));
 }
 
-function readStoredSelectedModelId(userId: string): string | null {
-    if (typeof window === "undefined") {
-        return null;
-    }
-
-    return window.localStorage.getItem(getSelectedModelStorageKey(userId));
+interface StoredModelSelection {
+    modelId: string;
+    source: ProviderType;
 }
 
-function writeStoredSelectedModelId(userId: string, modelId: string | null) {
-    if (typeof window === "undefined") {
-        return;
+const THINKING_ONLY_MODEL_IDS = new Set(["kimi-k2-thinking"]);
+
+function getSelectableModels(models: ChatModel[], isThinkingEnabled: boolean) {
+    if (isThinkingEnabled) {
+        return models;
     }
+
+    return models.filter((model) => !THINKING_ONLY_MODEL_IDS.has(model.id));
+}
+
+function readStoredModelSelection(
+    userId: string
+): StoredModelSelection | null {
+    if (typeof window === "undefined") return null;
+
+    const raw = window.localStorage.getItem(
+        getSelectedModelStorageKey(userId)
+    );
+    if (!raw) return null;
+
+    try {
+        const parsed = JSON.parse(raw);
+        if (
+            parsed &&
+            typeof parsed.modelId === "string" &&
+            typeof parsed.source === "string"
+        ) {
+            return parsed as StoredModelSelection;
+        }
+    } catch {
+        // backward compat: old format stored a plain modelId string
+    }
+
+    return { modelId: raw, source: "openrouter" };
+}
+
+function writeStoredModelSelection(
+    userId: string,
+    selection: StoredModelSelection | null
+) {
+    if (typeof window === "undefined") return;
 
     const key = getSelectedModelStorageKey(userId);
 
-    if (!modelId) {
+    if (!selection) {
         window.localStorage.removeItem(key);
         return;
     }
 
-    window.localStorage.setItem(key, modelId);
+    window.localStorage.setItem(key, JSON.stringify(selection));
 }
 
 interface ChatContextValue {
     availableModels: ChatModel[];
+    configuredProviders: ProviderType[];
     conversations: ConversationSummary[];
     conversationsError: string | null;
     createConversation: (
@@ -141,7 +177,10 @@ interface ChatContextValue {
         prompt: string,
         attachments?: ChatAttachment[]
     ) => Promise<ConversationDetail>;
-    setSelectedModelId: (modelId: string | null) => void;
+    setSelectedModelId: (
+        modelId: string | null,
+        source?: ProviderType
+    ) => void;
     setThinkingEnabled: (enabled: boolean) => void;
     stopGeneration: (conversationId: string) => void;
     toggleFavoriteConversation: (
@@ -272,7 +311,10 @@ function applyToolResult(
 
 export function ChatProvider({ children }: PropsWithChildren) {
     const { isAuthenticated, isLoading, user } = useAuth();
-    const [availableModels, setAvailableModels] = useState<ChatModel[]>([]);
+    const [allModels, setAllModels] = useState<ChatModel[]>([]);
+    const [configuredProviders, setConfiguredProviders] = useState<
+        ProviderType[]
+    >([]);
     const [conversations, setConversations] = useState<ConversationSummary[]>(
         []
     );
@@ -302,9 +344,12 @@ export function ChatProvider({ children }: PropsWithChildren) {
         null
     );
     const selectedModelIdRef = useRef<string | null>(null);
+    const selectedModelSourceRef = useRef<ProviderType | null>(null);
+    const availableModelsRef = useRef<ChatModel[]>([]);
     const [isThinkingEnabled, setIsThinkingEnabled] = useState(
         () => localStorage.getItem("thinking-enabled") === "true"
     );
+    const availableModels = useMemo(() => allModels, [allModels]);
     const isThinkingEnabledRef = useRef(false);
     const activeGenerationsRef = useRef<Map<string, AbortController>>(
         new Map()
@@ -313,6 +358,10 @@ export function ChatProvider({ children }: PropsWithChildren) {
     useEffect(() => {
         selectedModelIdRef.current = selectedModelId;
     }, [selectedModelId]);
+
+    useEffect(() => {
+        availableModelsRef.current = availableModels;
+    }, [availableModels]);
 
     useEffect(() => {
         isThinkingEnabledRef.current = isThinkingEnabled;
@@ -396,35 +445,96 @@ export function ChatProvider({ children }: PropsWithChildren) {
 
         try {
             const response = await chatApi.listModels();
-            const storedModelId = user
-                ? readStoredSelectedModelId(user.id)
+            const stored = user
+                ? readStoredModelSelection(user.id)
                 : null;
-            const currentSelectedModelId = selectedModelIdRef.current;
-            const nextSelectedModelId =
-                currentSelectedModelId &&
-                response.models.some(
-                    (model) => model.id === currentSelectedModelId
-                )
-                    ? currentSelectedModelId
-                    : storedModelId &&
-                        response.models.some(
-                            (model) => model.id === storedModelId
-                        )
-                      ? storedModelId
-                      : (response.models[0]?.id ?? null);
+            const selectableModels = getSelectableModels(
+                response.models,
+                isThinkingEnabledRef.current
+            );
+            const currentId = selectedModelIdRef.current;
 
-            setAvailableModels(response.models);
-            setSelectedModelIdState(nextSelectedModelId);
-            if (user) writeStoredSelectedModelId(user.id, nextSelectedModelId);
+            let nextId: string | null = null;
+            let nextSource: ProviderType | null = null;
+
+            if (
+                currentId &&
+                selectableModels.some((m) => m.id === currentId)
+            ) {
+                nextId = currentId;
+                nextSource =
+                    selectedModelSourceRef.current ??
+                    (selectableModels.find((m) => m.id === currentId)?.source ??
+                        null);
+            } else if (
+                stored &&
+                selectableModels.some((m) => m.id === stored.modelId)
+            ) {
+                nextId = stored.modelId;
+                nextSource = stored.source;
+            } else if (selectableModels.length > 0) {
+                nextId = selectableModels[0].id;
+                nextSource = selectableModels[0].source;
+            }
+
+            setAllModels(response.models);
+            setConfiguredProviders(response.configuredProviders ?? []);
+            setSelectedModelIdState(nextId);
+            selectedModelSourceRef.current = nextSource;
+            if (user && nextId && nextSource) {
+                writeStoredModelSelection(user.id, {
+                    modelId: nextId,
+                    source: nextSource
+                });
+            }
         } catch (error) {
-            setAvailableModels([]);
+            setAllModels([]);
+            setConfiguredProviders([]);
             setSelectedModelIdState(null);
+            selectedModelSourceRef.current = null;
             setModelsError(getErrorMessage(error));
             throw error;
         } finally {
             setIsLoadingModels(false);
         }
     }, [user]);
+
+    useEffect(() => {
+        const selectableModels = getSelectableModels(
+            availableModels,
+            isThinkingEnabled
+        );
+        const currentId = selectedModelIdRef.current;
+
+        if (
+            currentId &&
+            selectableModels.some((model) => model.id === currentId)
+        ) {
+            return;
+        }
+
+        const stored = user ? readStoredModelSelection(user.id) : null;
+        const nextModel =
+            (stored
+                ? selectableModels.find((model) => model.id === stored.modelId)
+                : null) ?? selectableModels[0] ?? null;
+
+        setSelectedModelIdState(nextModel?.id ?? null);
+        selectedModelSourceRef.current = nextModel?.source ?? null;
+
+        if (!user) {
+            return;
+        }
+
+        if (nextModel) {
+            writeStoredModelSelection(user.id, {
+                modelId: nextModel.id,
+                source: nextModel.source
+            });
+        } else {
+            writeStoredModelSelection(user.id, null);
+        }
+    }, [availableModels, isThinkingEnabled, user]);
 
     useEffect(() => {
         if (isLoading) {
@@ -463,7 +573,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
     }, []);
 
     const runGeneration = useCallback(
-        async (conversationId: string, modelId: string) => {
+        async (conversationId: string, modelId: string, provider: string) => {
             const thinking = isThinkingEnabledRef.current;
             const abortController = new AbortController();
             activeGenerationsRef.current.set(conversationId, abortController);
@@ -495,6 +605,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 streamResponse = await chatApi.generateResponse(
                     conversationId,
                     modelId,
+                    provider,
                     thinking,
                     abortController.signal
                 );
@@ -954,6 +1065,12 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 throw new Error("No model selected.");
             }
 
+            const provider =
+                selectedModelSourceRef.current ??
+                availableModelsRef.current.find((m) => m.id === modelId)
+                    ?.source ??
+                "openrouter";
+
             setIsCreatingConversation(true);
 
             try {
@@ -969,7 +1086,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 const conversationId = response.conversation.id;
 
                 setConversationSending(conversationId, true);
-                runGeneration(conversationId, modelId)
+                runGeneration(conversationId, modelId, provider)
                     .catch(() => undefined)
                     .finally(() =>
                         setConversationSending(conversationId, false)
@@ -1057,6 +1174,12 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 throw new Error("No model selected.");
             }
 
+            const provider =
+                selectedModelSourceRef.current ??
+                availableModelsRef.current.find((m) => m.id === modelId)
+                    ?.source ??
+                "openrouter";
+
             setConversationSending(conversationId, true);
 
             try {
@@ -1070,7 +1193,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 );
                 upsertConversation(persistResponse.conversation);
 
-                await runGeneration(conversationId, modelId);
+                await runGeneration(conversationId, modelId, provider);
 
                 const finalConversation = conversationDetails[conversationId];
                 if (finalConversation) return finalConversation;
@@ -1214,14 +1337,17 @@ export function ChatProvider({ children }: PropsWithChildren) {
     );
 
     const setSelectedModelId = useCallback(
-        (modelId: string | null) => {
+        (modelId: string | null, source?: ProviderType) => {
             setSelectedModelIdState(modelId);
+            selectedModelSourceRef.current = source ?? null;
 
-            if (!user) {
-                return;
+            if (!user) return;
+
+            if (modelId && source) {
+                writeStoredModelSelection(user.id, { modelId, source });
+            } else {
+                writeStoredModelSelection(user.id, null);
             }
-
-            writeStoredSelectedModelId(user.id, modelId);
         },
         [user]
     );
@@ -1229,6 +1355,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
     const value = useMemo<ChatContextValue>(
         () => ({
             availableModels,
+            configuredProviders,
             conversations,
             conversationsError,
             createConversation,
@@ -1258,6 +1385,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
         }),
         [
             availableModels,
+            configuredProviders,
             conversations,
             conversationsError,
             createConversation,

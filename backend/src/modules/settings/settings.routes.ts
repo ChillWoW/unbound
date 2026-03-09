@@ -2,9 +2,14 @@ import { Elysia, t } from "elysia";
 import { UnauthorizedError } from "../../middleware/require-auth";
 import { settingsService } from "./settings.service";
 import { SettingsError } from "./settings.types";
+import { isValidProvider } from "../../lib/provider-registry";
 
-const openRouterApiKeyBody = t.Object({
+const providerKeyBody = t.Object({
     apiKey: t.String({ minLength: 1, maxLength: 500 })
+});
+
+const providerParams = t.Object({
+    provider: t.String({ minLength: 1, maxLength: 20 })
 });
 
 function handleSettingsError(
@@ -34,30 +39,48 @@ export const settingsRoutes = new Elysia({ prefix: "/api/settings" })
         }
     })
     .put(
-        "/openrouter-key",
-        async ({ body, request, set }) => {
+        "/provider-keys/:provider",
+        async ({ body, params, request, set }) => {
+            if (!isValidProvider(params.provider)) {
+                set.status = 400;
+                return { message: `Invalid provider: ${params.provider}` };
+            }
+
             try {
-                const settings = await settingsService.setOpenRouterApiKey(
+                const settings = await settingsService.setProviderApiKey(
                     request,
+                    params.provider,
                     body
                 );
-
                 return { settings };
             } catch (error) {
                 return handleSettingsError(error, set);
             }
         },
         {
-            body: openRouterApiKeyBody
+            body: providerKeyBody,
+            params: providerParams
         }
     )
-    .delete("/openrouter-key", async ({ request, set }) => {
-        try {
-            const settings =
-                await settingsService.clearOpenRouterApiKey(request);
+    .delete(
+        "/provider-keys/:provider",
+        async ({ params, request, set }) => {
+            if (!isValidProvider(params.provider)) {
+                set.status = 400;
+                return { message: `Invalid provider: ${params.provider}` };
+            }
 
-            return { settings };
-        } catch (error) {
-            return handleSettingsError(error, set);
+            try {
+                const settings = await settingsService.clearProviderApiKey(
+                    request,
+                    params.provider
+                );
+                return { settings };
+            } catch (error) {
+                return handleSettingsError(error, set);
+            }
+        },
+        {
+            params: providerParams
         }
-    });
+    );

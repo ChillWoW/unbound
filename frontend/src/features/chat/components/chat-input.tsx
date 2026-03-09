@@ -10,7 +10,7 @@ import {
 } from "@phosphor-icons/react";
 import { Button, Tooltip } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import type { ChatModel, ConversationMessage } from "../types";
+import type { ChatModel, ConversationMessage, ProviderType } from "../types";
 import { ModelSelector } from "./model-selector";
 
 const IMAGE_MIME_TYPES: Record<string, true> = {
@@ -229,6 +229,7 @@ function AttachmentChip({
 
 export interface ChatInputProps {
     className?: string;
+    configuredProviders?: ProviderType[];
     conversationMessages?: ConversationMessage[];
     disabled?: boolean;
     isSubmitting?: boolean;
@@ -236,7 +237,10 @@ export interface ChatInputProps {
     isThinkingEnabled?: boolean;
     models?: ChatModel[];
     modelsError?: string | null;
-    onSelectedModelChange?: (modelId: string | null) => void;
+    onSelectedModelChange?: (
+        modelId: string | null,
+        source?: ProviderType
+    ) => void;
     onThinkingChange?: (enabled: boolean) => void;
     showContextBadge?: boolean;
     toolbarSlot?: ReactNode;
@@ -253,6 +257,7 @@ export interface ChatInputProps {
 
 export function ChatInput({
     className,
+    configuredProviders = [],
     conversationMessages = [],
     disabled = false,
     isSubmitting = false,
@@ -513,8 +518,12 @@ export function ChatInput({
                         <ModelSelector
                             selectedModelId={selectedModelId}
                             models={models}
+                            configuredProviders={configuredProviders}
                             onModelSelected={(model) =>
-                                onSelectedModelChange?.(model.id)
+                                onSelectedModelChange?.(
+                                    model.id,
+                                    model.source
+                                )
                             }
                             disabled={isModelSelectDisabled}
                             isThinkingEnabled={isThinkingEnabled}

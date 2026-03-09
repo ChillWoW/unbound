@@ -9,14 +9,14 @@ import type {
 } from "./types";
 
 export const chatApi = {
-    generateResponse(conversationId: string, modelId: string, thinking: boolean, signal?: AbortSignal) {
+    generateResponse(conversationId: string, modelId: string, provider: string, thinking: boolean, signal?: AbortSignal) {
         return fetch(
             `${API_BASE_URL}/api/conversations/${conversationId}/generate`,
             {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",
-                body: JSON.stringify({ modelId, thinking }),
+                body: JSON.stringify({ modelId, provider, thinking }),
                 signal
             }
         );

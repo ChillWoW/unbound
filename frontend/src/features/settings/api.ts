@@ -1,18 +1,21 @@
-import api from "@/lib/api";
-import type { SettingsResponse } from "./types";
+import { api } from "@/lib/api";
+import type { ProviderType, SettingsResponse } from "./types";
 
 export const settingsApi = {
     getSettings() {
         return api.get<SettingsResponse>("/api/settings");
     },
 
-    removeOpenRouterApiKey() {
-        return api.delete<SettingsResponse>("/api/settings/openrouter-key");
+    updateProviderApiKey(provider: ProviderType, apiKey: string) {
+        return api.put<SettingsResponse>(
+            `/api/settings/provider-keys/${provider}`,
+            { body: { apiKey } }
+        );
     },
 
-    updateOpenRouterApiKey(apiKey: string) {
-        return api.put<SettingsResponse>("/api/settings/openrouter-key", {
-            body: { apiKey }
-        });
+    removeProviderApiKey(provider: ProviderType) {
+        return api.delete<SettingsResponse>(
+            `/api/settings/provider-keys/${provider}`
+        );
     }
 };

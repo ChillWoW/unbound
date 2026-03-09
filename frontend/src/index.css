@@ -118,12 +118,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-    background: var(--color-dark-700);
+    background: var(--color-dark-500);
     border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: var(--color-dark-600);
+    background: var(--color-dark-400);
 }
 
 .hide-scrollbar {

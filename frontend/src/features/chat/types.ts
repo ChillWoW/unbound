@@ -78,10 +78,15 @@ export interface ConversationDetail extends ConversationSummary {
     messages: ConversationMessage[];
 }
 
+import type { ProviderType } from "@/lib/provider-types";
+
+export type { ProviderType };
+
 export interface ChatModel {
     id: string;
     name: string;
     provider: string;
+    source: ProviderType;
     description: string | null;
     contextLength: number | null;
     promptPricing: string | null;
@@ -97,6 +102,7 @@ export interface ConversationsResponse {
 
 export interface ModelsResponse {
     models: ChatModel[];
+    configuredProviders: ProviderType[];
 }
 
 export interface ConversationResponse {

@@ -8,8 +8,12 @@ import {
     type ToolResultPart,
     type UserModelMessage
 } from "ai";
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { requireAuth } from "../../middleware/require-auth";
+import { createModelInstance } from "./provider-factory";
+import {
+    isValidProvider,
+    type ProviderType
+} from "../../lib/provider-registry";
 import { settingsService } from "../settings/settings.service";
 import { conversationsRepository } from "../conversations/conversations.repository";
 import { todosRepository } from "../todos/todos.repository";
@@ -30,6 +34,86 @@ import { logger } from "../../lib/logger";
 
 function createMessageId(): string {
     return `msg_${randomBytes(10).toString("hex")}`;
+}
+
+type ProviderOptionsMap = Record<string, Record<string, JSONValue>>;
+
+function supportsOpenAIReasoning(modelId: string): boolean {
+    return (
+        modelId.startsWith("gpt-5") ||
+        modelId.startsWith("o3") ||
+        modelId.startsWith("o4")
+    );
+}
+
+function supportsAnthropicReasoning(modelId: string): boolean {
+    return (
+        modelId.startsWith("claude-opus-4") ||
+        modelId.startsWith("claude-sonnet-4")
+    );
+}
+
+function supportsKimiReasoning(modelId: string): boolean {
+    return modelId === "kimi-k2-thinking" || modelId === "k2p5";
+}
+
+function supportsGoogleReasoning(modelId: string): boolean {
+    return modelId.startsWith("gemini-");
+}
+
+function buildProviderOptions(
+    provider: ProviderType,
+    modelId: string,
+    thinking: boolean
+): ProviderOptionsMap | undefined {
+    if (!thinking) return undefined;
+
+    switch (provider) {
+        case "openai":
+            if (!supportsOpenAIReasoning(modelId)) return undefined;
+            return {
+                openai: {
+                    reasoningEffort: "medium",
+                    reasoningSummary: "detailed"
+                }
+            };
+
+        case "anthropic":
+            if (!supportsAnthropicReasoning(modelId)) return undefined;
+            return {
+                anthropic: {
+                    thinking: {
+                        type: "enabled",
+                        budgetTokens: 12000
+                    }
+                }
+            };
+
+        case "google":
+            if (!supportsGoogleReasoning(modelId)) return undefined;
+            return {
+                google: {
+                    thinkingConfig: {
+                        thinkingLevel: "high",
+                        includeThoughts: true
+                    }
+                }
+            };
+
+        case "kimi":
+            if (!supportsKimiReasoning(modelId)) return undefined;
+            return {
+                anthropic: {
+                    thinking: {
+                        type: "enabled",
+                        budgetTokens: 12000
+                    }
+                }
+            };
+
+        default:
+            return undefined;
+    }
 }
 
 function extractErrorMessage(error: unknown): string {
@@ -207,14 +291,20 @@ function hasMeaningfulAssistantOutput(parts: MessagePart[]): boolean {
 
 async function reconcileLingeringInProgressTodos(conversationId: string) {
     const todos = await todosRepository.listByConversationId(conversationId);
-    const inProgressTodos = todos.filter((todo) => todo.status === "in_progress");
+    const inProgressTodos = todos.filter(
+        (todo) => todo.status === "in_progress"
+    );
 
     if (inProgressTodos.length === 0) {
         return;
     }
 
     for (const todo of inProgressTodos) {
-        await todosRepository.updateStatus(conversationId, todo.id, "completed");
+        await todosRepository.updateStatus(
+            conversationId,
+            todo.id,
+            "completed"
+        );
     }
 
     logger.info("Auto-completed lingering in_progress todos", {
@@ -293,7 +383,10 @@ function buildErrorParts(
     const parts: MessagePart[] = [];
 
     if (thinking && generation.accumulatedReasoning) {
-        parts.push({ type: "reasoning", text: generation.accumulatedReasoning });
+        parts.push({
+            type: "reasoning",
+            text: generation.accumulatedReasoning
+        });
     }
 
     for (const tp of generation.toolParts) {
@@ -384,25 +477,29 @@ function startBackgroundGeneration(
     generation: GenerationEntry,
     modelMessages: ModelMessage[],
     modelId: string,
+    provider: ProviderType,
     apiKey: string,
     generationStartedAt: string,
     thinking: boolean,
     tools: ReturnType<typeof createTools>
 ) {
-    const openrouter = createOpenRouter({ apiKey });
+    const model = createModelInstance(provider, modelId, apiKey);
     const assistantMessageId = generation.messageId;
+    const providerOptions = buildProviderOptions(provider, modelId, thinking);
 
     logger.info("Generation started", {
         conversationId: generation.conversationId,
         messageId: assistantMessageId,
         modelId,
+        provider,
         thinking,
         messageCount: modelMessages.length
     });
 
     const result = streamText({
-        model: openrouter(modelId),
+        model,
         messages: modelMessages,
+        providerOptions,
         tools,
         stopWhen: stepCountIs(20),
         abortSignal: generation.abortController.signal,
@@ -454,8 +551,12 @@ function startBackgroundGeneration(
             // Resolve any tool calls that never received a result
             for (let i = 0; i < finalParts.length; i++) {
                 const part = finalParts[i];
+                if (!part) {
+                    continue;
+                }
+
                 if (part.type === "tool-invocation" && part.state === "call") {
-                    finalParts[i] = { ...part, state: "error" };
+                    part.state = "error";
                 }
             }
 
@@ -486,7 +587,10 @@ function startBackgroundGeneration(
                 }
             });
 
-            if (status === "complete" && hasMeaningfulAssistantOutput(finalParts)) {
+            if (
+                status === "complete" &&
+                hasMeaningfulAssistantOutput(finalParts)
+            ) {
                 try {
                     await reconcileLingeringInProgressTodos(
                         generation.conversationId
@@ -595,28 +699,37 @@ function startBackgroundGeneration(
 
                 const stoppedParts: MessagePart[] = [];
                 if (thinking && generation.accumulatedReasoning) {
-                    stoppedParts.push({ type: "reasoning", text: generation.accumulatedReasoning });
+                    stoppedParts.push({
+                        type: "reasoning",
+                        text: generation.accumulatedReasoning
+                    });
                 }
                 for (const tp of generation.toolParts) {
                     stoppedParts.push(tp);
                 }
                 if (generation.accumulatedText) {
-                    stoppedParts.push({ type: "text", text: generation.accumulatedText });
+                    stoppedParts.push({
+                        type: "text",
+                        text: generation.accumulatedText
+                    });
                 }
                 if (stoppedParts.length === 0) {
                     stoppedParts.push({ type: "text", text: "" });
                 }
 
-                await conversationsRepository.updateMessage(assistantMessageId, {
-                    parts: stoppedParts,
-                    status: "complete",
-                    metadata: {
-                        model: modelId,
-                        thinkingEnabled: thinking,
-                        generationStartedAt,
-                        generationCompletedAt: new Date().toISOString()
+                await conversationsRepository.updateMessage(
+                    assistantMessageId,
+                    {
+                        parts: stoppedParts,
+                        status: "complete",
+                        metadata: {
+                            model: modelId,
+                            thinkingEnabled: thinking,
+                            generationStartedAt,
+                            generationCompletedAt: new Date().toISOString()
+                        }
                     }
-                });
+                );
 
                 generationManager.complete(generation.conversationId);
                 return;
@@ -644,7 +757,10 @@ function startBackgroundGeneration(
                 }
             });
 
-            generationManager.fail(generation.conversationId, streamErrorMessage);
+            generationManager.fail(
+                generation.conversationId,
+                streamErrorMessage
+            );
         }
     })();
 }
@@ -703,6 +819,7 @@ export const aiService = {
         request: Request,
         conversationId: string,
         modelId: string,
+        provider: string,
         thinking = false
     ): Promise<Response> {
         const user = await requireAuth(request);
@@ -714,14 +831,24 @@ export const aiService = {
             );
         }
 
-        const apiKey =
-            await settingsService.getDecryptedOpenRouterApiKeyForUser(user.id);
+        const resolvedProvider: ProviderType = isValidProvider(provider)
+            ? provider
+            : "openrouter";
+
+        const apiKey = await settingsService.getDecryptedApiKeyForUser(
+            user.id,
+            resolvedProvider
+        );
 
         if (!apiKey) {
-            logger.warn("Generation rejected: no API key", { conversationId, userId: user.id });
+            logger.warn("Generation rejected: no API key", {
+                conversationId,
+                userId: user.id,
+                provider: resolvedProvider
+            });
             throw new ConversationError(
                 400,
-                "Add your OpenRouter API key in settings to use AI features."
+                `Add your ${resolvedProvider === "openrouter" ? "OpenRouter" : resolvedProvider.charAt(0).toUpperCase() + resolvedProvider.slice(1)} API key in settings to use this model.`
             );
         }
 
@@ -747,8 +874,10 @@ export const aiService = {
                 messageRecords,
                 buildSystemPrompt(),
                 {
-                    modelContextLength:
-                        modelsService.getModelContextLength(modelId),
+                    modelContextLength: modelsService.getModelContextLength(
+                        user.id,
+                        modelId
+                    ),
                     thinking
                 },
                 toModelMessages
@@ -806,6 +935,7 @@ export const aiService = {
             generation,
             messagesWithSystemPrompt,
             modelId,
+            resolvedProvider,
             apiKey,
             generationStartedAt,
             thinking,

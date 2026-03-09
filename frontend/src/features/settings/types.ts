@@ -1,7 +1,15 @@
+import type { ProviderType } from "@/lib/provider-types";
+
+export type { ProviderType };
+
+export interface ProviderKeyStatus {
+    configured: boolean;
+    preview: string | null;
+    updatedAt: string | null;
+}
+
 export interface UserSettingsSummary {
-    hasOpenRouterApiKey: boolean;
-    openRouterApiKeyPreview: string | null;
-    openRouterApiKeyUpdatedAt: string | null;
+    providers: Record<ProviderType, ProviderKeyStatus>;
 }
 
 export interface SettingsResponse {
