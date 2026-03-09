@@ -458,6 +458,12 @@ export function ChatProvider({ children }: PropsWithChildren) {
             let nextSource: ProviderType | null = null;
 
             if (
+                stored &&
+                selectableModels.some((m) => m.id === stored.modelId)
+            ) {
+                nextId = stored.modelId;
+                nextSource = stored.source;
+            } else if (
                 currentId &&
                 selectableModels.some((m) => m.id === currentId)
             ) {
@@ -466,12 +472,6 @@ export function ChatProvider({ children }: PropsWithChildren) {
                     selectedModelSourceRef.current ??
                     (selectableModels.find((m) => m.id === currentId)?.source ??
                         null);
-            } else if (
-                stored &&
-                selectableModels.some((m) => m.id === stored.modelId)
-            ) {
-                nextId = stored.modelId;
-                nextSource = stored.source;
             } else if (selectableModels.length > 0) {
                 nextId = selectableModels[0].id;
                 nextSource = selectableModels[0].source;
@@ -500,6 +500,8 @@ export function ChatProvider({ children }: PropsWithChildren) {
     }, [user]);
 
     useEffect(() => {
+        if (availableModels.length === 0) return;
+
         const selectableModels = getSelectableModels(
             availableModels,
             isThinkingEnabled
