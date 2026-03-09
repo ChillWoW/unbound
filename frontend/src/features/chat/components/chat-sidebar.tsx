@@ -4,6 +4,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import {
     DotsThreeVerticalIcon,
     GearSixIcon,
+    MinusIcon,
     PencilSimpleIcon,
     PlusIcon,
     SidebarSimpleIcon,
@@ -58,6 +59,7 @@ interface ConversationActionsMenuProps {
 interface ConversationListItemProps {
     conversation: ConversationSummary;
     currentPath: string;
+    isGenerating: boolean;
     onDeleteRequest: (conversation: ConversationSummary) => void;
     onNavigate: () => void;
     onRename: (conversationId: string, title: string) => Promise<void>;
@@ -117,6 +119,22 @@ function toErrorMessage(error: unknown): string {
     }
 
     return "Something went wrong. Please try again.";
+}
+
+const BRAILLE_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+function BrailleSpinner({ className }: { className?: string }) {
+    const [frame, setFrame] = useState(0);
+
+    useEffect(() => {
+        const id = setInterval(
+            () => setFrame((f) => (f + 1) % BRAILLE_FRAMES.length),
+            80
+        );
+        return () => clearInterval(id);
+    }, []);
+
+    return <span className={className}>{BRAILLE_FRAMES[frame]}</span>;
 }
 
 function ConversationActionsMenu({
@@ -332,6 +350,7 @@ function ConversationActionsMenu({
 function ConversationListItem({
     conversation,
     currentPath,
+    isGenerating,
     onDeleteRequest,
     onNavigate,
     onRename,
@@ -356,12 +375,16 @@ function ConversationListItem({
                 onClick={onNavigate}
                 className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-1.5 text-sm"
             >
+                {isGenerating ? (
+                    <BrailleSpinner className="shrink-0 text-xs leading-none text-primary-400" />
+                ) : conversation.hasUnreadAssistantReply ? (
+                    <span className="size-1.5 shrink-0 rounded-full bg-primary-400" />
+                ) : (
+                    <MinusIcon className="size-3 shrink-0 text-dark-400" weight="bold" />
+                )}
                 <span className="min-w-0 flex-1 truncate text-inherit">
                     {conversation.title}
                 </span>
-                {conversation.hasUnreadAssistantReply ? (
-                    <span className="size-1.5 shrink-0 rounded-full bg-primary-400" />
-                ) : null}
             </Link>
 
             <ConversationActionsMenu
@@ -388,6 +411,7 @@ export function ChatSidebar({
         conversations,
         conversationsError,
         deleteConversation,
+        isConversationSending,
         isLoadingConversations,
         renameConversation,
         toggleFavoriteConversation
@@ -600,6 +624,7 @@ export function ChatSidebar({
                                                     key={conversation.id}
                                                     conversation={conversation}
                                                     currentPath={currentPath}
+                                                    isGenerating={isConversationSending(conversation.id)}
                                                     onDeleteRequest={
                                                         handleDeleteRequest
                                                     }
@@ -631,6 +656,7 @@ export function ChatSidebar({
                                                 key={conversation.id}
                                                 conversation={conversation}
                                                 currentPath={currentPath}
+                                                isGenerating={isConversationSending(conversation.id)}
                                                 onDeleteRequest={
                                                     handleDeleteRequest
                                                 }
