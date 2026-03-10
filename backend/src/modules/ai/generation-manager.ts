@@ -3,6 +3,7 @@ import type { ToolInvocationPart } from "../conversations/conversations.types";
 
 export type SSEEvent =
     | { type: "message-start"; messageId: string }
+    | { type: "conversation-title"; title: string; titleSource: string }
     | { type: "text-delta"; text: string }
     | { type: "reasoning"; text: string }
     | {

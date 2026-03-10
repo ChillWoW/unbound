@@ -297,6 +297,32 @@ export const conversationsRepository = {
         return updated ?? null;
     },
 
+    async updateConversationTitleIfSourceMatches(input: {
+        userId: string;
+        conversationId: string;
+        expectedTitleSource: string;
+        title: string;
+        titleSource: string;
+    }) {
+        const [updated] = await db
+            .update(conversations)
+            .set({
+                title: input.title,
+                titleSource: input.titleSource,
+                updatedAt: new Date()
+            })
+            .where(
+                and(
+                    eq(conversations.id, input.conversationId),
+                    eq(conversations.userId, input.userId),
+                    eq(conversations.titleSource, input.expectedTitleSource)
+                )
+            )
+            .returning();
+
+        return updated ?? null;
+    },
+
     async deleteConversationByIdForUser(userId: string, conversationId: string) {
         const [deleted] = await db
             .delete(conversations)

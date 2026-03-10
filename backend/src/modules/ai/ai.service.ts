@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
-import { streamText, stepCountIs, type ModelMessage } from "ai";
+import { generateText, streamText, stepCountIs, type ModelMessage } from "ai";
+import { env } from "../../config/env";
 import { requireAuth } from "../../middleware/require-auth";
 import { createModelInstance } from "./provider-factory";
 import {
@@ -89,19 +90,23 @@ async function reconcileLingeringInProgressTodos(conversationId: string) {
     });
 }
 
-function aggregateUsage(
-    steps: Array<Record<string, unknown>>
-): { promptTokens: number; completionTokens: number; totalTokens: number } {
+function aggregateUsage(steps: Array<Record<string, unknown>>): {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+} {
     let promptTokens = 0;
     let completionTokens = 0;
 
     for (const step of steps) {
-        const usage = step.usage as
-            | Record<string, unknown>
-            | undefined;
+        const usage = step.usage as Record<string, unknown> | undefined;
         if (!usage) continue;
-        promptTokens += (typeof usage.promptTokens === "number" ? usage.promptTokens : 0);
-        completionTokens += (typeof usage.completionTokens === "number" ? usage.completionTokens : 0);
+        promptTokens +=
+            typeof usage.promptTokens === "number" ? usage.promptTokens : 0;
+        completionTokens +=
+            typeof usage.completionTokens === "number"
+                ? usage.completionTokens
+                : 0;
     }
 
     return {
@@ -112,6 +117,150 @@ function aggregateUsage(
 }
 
 const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
+const TITLE_GENERATION_MODEL_ID = "qwen/qwen3.5-9b";
+const MAX_GENERATED_TITLE_LENGTH = 120;
+const TITLE_MAX_OUTPUT_TOKENS = 32;
+
+function extractTextFromParts(parts: MessagePart[]): string {
+    return parts
+        .filter(
+            (part): part is Extract<MessagePart, { type: "text" }> =>
+                part.type === "text"
+        )
+        .map((part) => part.text)
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+function getInitialConversationPrompt(
+    messages: MessagePart[][]
+): string | null {
+    if (messages.length !== 1) {
+        return null;
+    }
+
+    const prompt = extractTextFromParts(messages[0] ?? []);
+    return prompt || null;
+}
+
+function normalizeGeneratedTitle(value: string): string | null {
+    const normalized = value
+        .replace(/[\r\n]+/g, " ")
+        .replace(/^\s*["'`]+|["'`]+\s*$/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    if (!normalized) {
+        return null;
+    }
+
+    if (normalized.length <= MAX_GENERATED_TITLE_LENGTH) {
+        return normalized;
+    }
+
+    return `${normalized.slice(0, MAX_GENERATED_TITLE_LENGTH - 3).trimEnd()}...`;
+}
+
+async function requestGeneratedConversationTitle(
+    initialPrompt: string,
+    apiKey: string
+): Promise<string | null> {
+    const model = createModelInstance(
+        "openrouter",
+        TITLE_GENERATION_MODEL_ID,
+        apiKey
+    );
+
+    const result = await generateText({
+        model,
+        system: "You generate short conversation titles. Return only the title, no quotes, no markdown, no extra text.",
+        prompt: `Create a concise conversation title from this first user message only. Keep it under 8 words.\n\nUser message:\n${initialPrompt}`,
+        temperature: 0.3,
+        maxOutputTokens: TITLE_MAX_OUTPUT_TOKENS,
+        providerOptions: {
+            openrouter: {
+                reasoning: {
+                    effort: "none"
+                }
+            }
+        }
+    });
+
+    return normalizeGeneratedTitle(result.text);
+}
+
+async function generateConversationTitleInBackground(input: {
+    generation: GenerationEntry;
+    userId: string;
+    conversationId: string;
+    currentTitleSource: string;
+    initialPrompt: string | null;
+}) {
+    if (!env.openrouterTitleApiKey) {
+        return;
+    }
+
+    if (input.currentTitleSource !== "prompt" || !input.initialPrompt) {
+        return;
+    }
+
+    try {
+        logger.info("Conversation title generation started", {
+            conversationId: input.conversationId,
+            modelId: TITLE_GENERATION_MODEL_ID
+        });
+        const title = await requestGeneratedConversationTitle(
+            input.initialPrompt,
+            env.openrouterTitleApiKey
+        );
+
+        if (!title) {
+            logger.warn("Conversation title generation returned empty title", {
+                conversationId: input.conversationId,
+                modelId: TITLE_GENERATION_MODEL_ID
+            });
+            return;
+        }
+
+        const updated =
+            await conversationsRepository.updateConversationTitleIfSourceMatches(
+                {
+                    userId: input.userId,
+                    conversationId: input.conversationId,
+                    expectedTitleSource: "prompt",
+                    title,
+                    titleSource: "ai"
+                }
+            );
+
+        if (!updated || input.generation.finished) {
+            logger.info("Conversation title update skipped", {
+                conversationId: input.conversationId,
+                updated: Boolean(updated),
+                generationFinished: input.generation.finished
+            });
+            return;
+        }
+
+        logger.info("Conversation title updated", {
+            conversationId: input.conversationId,
+            title: updated.title,
+            titleSource: updated.titleSource
+        });
+        input.generation.emitter.emit("event", {
+            type: "conversation-title",
+            title: updated.title,
+            titleSource: updated.titleSource
+        } satisfies SSEEvent);
+    } catch (error) {
+        logger.warn("Conversation title generation failed", {
+            conversationId: input.conversationId,
+            modelId: TITLE_GENERATION_MODEL_ID,
+            error: error instanceof Error ? error.message : String(error)
+        });
+    }
+}
 
 function startBackgroundGeneration(
     generation: GenerationEntry,
@@ -267,7 +416,11 @@ function startBackgroundGeneration(
                 durationMs
             });
 
-            const errorParts = buildAccumulatedParts(generation, thinking, true);
+            const errorParts = buildAccumulatedParts(
+                generation,
+                thinking,
+                true
+            );
 
             await conversationsRepository.updateMessage(assistantMessageId, {
                 parts: errorParts,
@@ -371,7 +524,11 @@ function startBackgroundGeneration(
                 error: streamErrorMessage
             });
 
-            const errorParts = buildAccumulatedParts(generation, thinking, true);
+            const errorParts = buildAccumulatedParts(
+                generation,
+                thinking,
+                true
+            );
 
             await conversationsRepository.updateMessage(assistantMessageId, {
                 parts: errorParts,
@@ -446,6 +603,11 @@ export const aiService = {
             await conversationsRepository.listMessagesByConversationId(
                 conversationId
             );
+        const initialPrompt = getInitialConversationPrompt(
+            messageRecords
+                .filter((message) => message.role === "user")
+                .map((message) => message.parts)
+        );
 
         let messagesWithSystemPrompt: ModelMessage[];
 
@@ -510,6 +672,14 @@ export const aiService = {
             user.id,
             assistantMessageId
         );
+
+        void generateConversationTitleInBackground({
+            generation,
+            userId: user.id,
+            conversationId,
+            currentTitleSource: conversation.titleSource,
+            initialPrompt
+        });
 
         const tools = createTools(conversationId, user.id);
         const modelMaxOutputTokens = modelsService.getModelMaxOutputTokens(

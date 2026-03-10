@@ -575,6 +575,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
     const activeGenerationsRef = useRef<Map<string, AbortController>>(
         new Map()
     );
+    const titleRefreshTimersRef = useRef<Map<string, number>>(new Map());
 
     useEffect(() => {
         selectedModelIdRef.current = selectedModelId;
@@ -618,6 +619,82 @@ export function ChatProvider({ children }: PropsWithChildren) {
             }
         },
         []
+    );
+
+    const applyConversationTitleUpdate = useCallback(
+        (conversationId: string, title: string, titleSource: string) => {
+            setConversations((current) =>
+                current.map((conversation) =>
+                    conversation.id === conversationId
+                        ? { ...conversation, title, titleSource }
+                        : conversation
+                )
+            );
+
+            setConversationDetails((current) => {
+                const conversation = current[conversationId];
+
+                if (!conversation) {
+                    return current;
+                }
+
+                return {
+                    ...current,
+                    [conversationId]: {
+                        ...conversation,
+                        title,
+                        titleSource
+                    }
+                };
+            });
+        },
+        []
+    );
+
+    const stopTitleRefresh = useCallback((conversationId: string) => {
+        const timer = titleRefreshTimersRef.current.get(conversationId);
+
+        if (timer !== undefined) {
+            window.clearTimeout(timer);
+            titleRefreshTimersRef.current.delete(conversationId);
+        }
+    }, []);
+
+    const refreshConversationTitle = useCallback(
+        async (conversationId: string, attemptsLeft = 8) => {
+            stopTitleRefresh(conversationId);
+
+            if (attemptsLeft <= 0) {
+                return;
+            }
+
+            const currentConversation =
+                conversationDetails[conversationId] ??
+                conversations.find((item) => item.id === conversationId);
+
+            if (!currentConversation || currentConversation.titleSource !== "prompt") {
+                return;
+            }
+
+            const timer = window.setTimeout(async () => {
+                try {
+                    const response = await chatApi.getConversation(conversationId);
+                    upsertConversation(response.conversation);
+
+                    if (response.conversation.titleSource === "prompt") {
+                        void refreshConversationTitle(
+                            conversationId,
+                            attemptsLeft - 1
+                        );
+                    }
+                } catch {
+                    void refreshConversationTitle(conversationId, attemptsLeft - 1);
+                }
+            }, 1000);
+
+            titleRefreshTimersRef.current.set(conversationId, timer);
+        },
+        [conversationDetails, conversations, stopTitleRefresh, upsertConversation]
     );
 
     const setConversationLoading = useCallback(
@@ -865,9 +942,9 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 }
             );
 
-            await parseAIStream(streamResponse, {
-                onMessageStart(messageId) {
-                    streamState.messageId = messageId;
+                await parseAIStream(streamResponse, {
+                    onMessageStart(messageId) {
+                        streamState.messageId = messageId;
                     setConversationDetails((current) => {
                         const existing = current[conversationId];
                         if (!existing) return current;
@@ -881,11 +958,19 @@ export function ChatProvider({ children }: PropsWithChildren) {
                                         : m
                                 )
                             }
-                        };
-                    });
-                },
-                ...callbacks
-            }).catch((error: unknown) => {
+                            };
+                        });
+                    },
+                    onConversationTitle(title, titleSource) {
+                        stopTitleRefresh(conversationId);
+                        applyConversationTitleUpdate(
+                            conversationId,
+                            title,
+                            titleSource
+                        );
+                    },
+                    ...callbacks
+                }).catch((error: unknown) => {
                 if (!(error instanceof Error && error.name === "AbortError")) {
                     throw error;
                 }
@@ -931,8 +1016,18 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 finalResponse.conversation.latestAssistantMessageId ?? ""
             );
             upsertConversation(finalResponse.conversation);
+            if (finalResponse.conversation.titleSource === "prompt") {
+                void refreshConversationTitle(conversationId);
+            } else {
+                stopTitleRefresh(conversationId);
+            }
         },
-        [upsertConversation]
+        [
+            applyConversationTitleUpdate,
+            refreshConversationTitle,
+            stopTitleRefresh,
+            upsertConversation
+        ]
     );
 
     const reconnectToGeneration = useCallback(
@@ -1005,6 +1100,14 @@ export function ChatProvider({ children }: PropsWithChildren) {
                             return current;
                         });
                     },
+                    onConversationTitle(title, titleSource) {
+                        stopTitleRefresh(conversationId);
+                        applyConversationTitleUpdate(
+                            conversationId,
+                            title,
+                            titleSource
+                        );
+                    },
                     onReconnectState(state: ReconnectState) {
                         streamState.parts.length = 0;
                         if (state.reasoning) {
@@ -1040,6 +1143,11 @@ export function ChatProvider({ children }: PropsWithChildren) {
                     const finalResponse =
                         await chatApi.getConversation(conversationId);
                     upsertConversation(finalResponse.conversation);
+                    if (finalResponse.conversation.titleSource === "prompt") {
+                        void refreshConversationTitle(conversationId);
+                    } else {
+                        stopTitleRefresh(conversationId);
+                    }
                 }
             } catch {
                 // reconnection is best-effort
@@ -1048,7 +1156,13 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 setConversationSending(conversationId, false);
             }
         },
-        [setConversationSending, upsertConversation]
+        [
+            applyConversationTitleUpdate,
+            refreshConversationTitle,
+            setConversationSending,
+            stopTitleRefresh,
+            upsertConversation
+        ]
     );
 
     const createConversation = useCallback(
@@ -1080,6 +1194,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 const conversationId = response.conversation.id;
 
                 setConversationSending(conversationId, true);
+                void refreshConversationTitle(conversationId);
                 runGeneration(conversationId, modelId, provider)
                     .catch(() => undefined)
                     .finally(() =>
@@ -1093,7 +1208,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 setIsCreatingConversation(false);
             }
         },
-        [runGeneration, setConversationSending, upsertConversation]
+        [refreshConversationTitle, runGeneration, setConversationSending, upsertConversation]
     );
 
     const loadConversation = useCallback(
@@ -1318,6 +1433,8 @@ export function ChatProvider({ children }: PropsWithChildren) {
                     return rest;
                 });
 
+                stopTitleRefresh(conversationId);
+
                 setConversationTodos((current) => {
                     const { [conversationId]: _removedTodos, ...rest } =
                         current;
@@ -1327,7 +1444,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 throw new Error(getErrorMessage(error));
             }
         },
-        [stopGeneration]
+        [stopGeneration, stopTitleRefresh]
     );
 
     const setSelectedModelId = useCallback(

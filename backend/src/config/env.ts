@@ -24,6 +24,11 @@ function getNumberEnv(name: string, fallback: number): number {
     return parsed;
 }
 
+function getOptionalEnv(name: string): string | null {
+    const value = process.env[name]?.trim();
+    return value ? value : null;
+}
+
 function getHex32ByteEnv(name: string): Buffer {
     const value = getRequiredEnv(name).trim();
 
@@ -48,5 +53,6 @@ export const env = {
         "SESSION_MAX_AGE_SECONDS",
         60 * 60 * 24 * 30
     ),
-    settingsEncryptionKey: getHex32ByteEnv("SETTINGS_ENCRYPTION_KEY")
+    settingsEncryptionKey: getHex32ByteEnv("SETTINGS_ENCRYPTION_KEY"),
+    openrouterTitleApiKey: getOptionalEnv("OPENROUTER_TITLE_API_KEY")
 } as const;

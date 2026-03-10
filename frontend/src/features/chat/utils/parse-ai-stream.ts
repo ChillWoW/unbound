@@ -13,6 +13,7 @@ export interface ReconnectState {
 
 export interface StreamCallbacks {
     onMessageStart?: (messageId: string) => void;
+    onConversationTitle?: (title: string, titleSource: string) => void;
     onTextDelta?: (text: string) => void;
     onReasoning?: (text: string) => void;
     onToolCall?: (toolCall: {
@@ -78,6 +79,13 @@ export async function parseAIStream(
 
                     case "text-delta":
                         callbacks.onTextDelta?.(event.text as string);
+                        break;
+
+                    case "conversation-title":
+                        callbacks.onConversationTitle?.(
+                            event.title as string,
+                            event.titleSource as string
+                        );
                         break;
 
                     case "reasoning":

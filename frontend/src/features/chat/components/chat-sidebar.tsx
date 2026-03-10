@@ -401,6 +401,18 @@ function ConversationListItem({
     onToggleFavorite
 }: ConversationListItemProps) {
     const isActive = currentPath === `/conversations/${conversation.id}`;
+    const titleRef = useRef<HTMLSpanElement>(null);
+    const [isTitleTruncated, setIsTitleTruncated] = useState(false);
+
+    useEffect(() => {
+        const element = titleRef.current;
+
+        if (!element) {
+            return;
+        }
+
+        setIsTitleTruncated(element.scrollWidth > element.clientWidth);
+    }, [conversation.title]);
 
     return (
         <div
@@ -411,30 +423,40 @@ function ConversationListItem({
                     : "text-dark-100 hover:bg-dark-700 hover:text-dark-50"
             )}
         >
-            <Link
-                to="/conversations/$conversationId"
-                params={{
-                    conversationId: conversation.id
-                }}
-                onClick={onNavigate}
-                className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-1 text-sm"
+            <Tooltip
+                content={conversation.title}
+                delay={500}
+                side="right"
+                disabled={!isTitleTruncated}
             >
-                <div className="w-3 h-full flex items-center justify-center">
-                    {isGenerating ? (
-                        <BrailleSpinner className="shrink-0 text-xs leading-none text-primary-400" />
-                    ) : conversation.hasUnreadAssistantReply ? (
-                        <span className="size-1.5 shrink-0 rounded-full bg-primary-400" />
-                    ) : (
-                        <MinusIcon
-                            className="size-3 shrink-0 text-dark-300"
-                            weight="bold"
-                        />
-                    )}
-                </div>
-                <span className="min-w-0 flex-1 truncate text-inherit">
-                    {conversation.title}
-                </span>
-            </Link>
+                <Link
+                    to="/conversations/$conversationId"
+                    params={{
+                        conversationId: conversation.id
+                    }}
+                    onClick={onNavigate}
+                    className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-1 text-sm"
+                >
+                    <div className="w-3 h-full flex items-center justify-center">
+                        {isGenerating ? (
+                            <BrailleSpinner className="shrink-0 text-xs leading-none text-primary-400" />
+                        ) : conversation.hasUnreadAssistantReply ? (
+                            <span className="size-1.5 shrink-0 rounded-full bg-primary-400" />
+                        ) : (
+                            <MinusIcon
+                                className="size-3 shrink-0 text-dark-300"
+                                weight="bold"
+                            />
+                        )}
+                    </div>
+                    <span
+                        ref={titleRef}
+                        className="min-w-0 flex-1 truncate text-inherit"
+                    >
+                        {conversation.title}
+                    </span>
+                </Link>
+            </Tooltip>
 
             <ConversationActionsMenu
                 conversation={conversation}
