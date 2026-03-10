@@ -54,5 +54,9 @@ export const env = {
         60 * 60 * 24 * 30
     ),
     settingsEncryptionKey: getHex32ByteEnv("SETTINGS_ENCRYPTION_KEY"),
-    openrouterTitleApiKey: getOptionalEnv("OPENROUTER_TITLE_API_KEY")
+    openrouterTitleApiKey: getOptionalEnv("OPENROUTER_TITLE_API_KEY"),
+    emailEnabled: process.env.EMAIL_ENABLED === "true",
+    emailFrom: getOptionalEnv("EMAIL_FROM"),
+    emailReplyTo: getOptionalEnv("EMAIL_REPLY_TO"),
+    resendApiKey: getOptionalEnv("RESEND_API_KEY")
 } as const;
