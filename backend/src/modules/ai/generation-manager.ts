@@ -1,10 +1,31 @@
 import { EventEmitter } from "node:events";
-import type { MessagePart } from "../conversations/conversations.types";
+import type { ToolInvocationPart } from "../conversations/conversations.types";
 
-export interface SSEEvent {
-    type: string;
-    [key: string]: unknown;
-}
+export type SSEEvent =
+    | { type: "message-start"; messageId: string }
+    | { type: "text-delta"; text: string }
+    | { type: "reasoning"; text: string }
+    | {
+          type: "tool-call";
+          toolCallId: string;
+          toolName: string;
+          args: Record<string, unknown>;
+      }
+    | {
+          type: "tool-result";
+          toolCallId: string;
+          toolName: string;
+          result: unknown;
+      }
+    | { type: "finish"; finishReason: string }
+    | { type: "error"; error: string }
+    | {
+          type: "reconnect-state";
+          text: string;
+          reasoning: string;
+          toolParts: ToolInvocationPart[];
+      }
+    | { type: "done" };
 
 export interface GenerationEntry {
     conversationId: string;
@@ -15,7 +36,7 @@ export interface GenerationEntry {
     finished: boolean;
     accumulatedText: string;
     accumulatedReasoning: string;
-    toolParts: MessagePart[];
+    toolParts: ToolInvocationPart[];
 }
 
 class GenerationManager {
@@ -64,7 +85,7 @@ class GenerationManager {
         const entry = this.active.get(conversationId);
         if (!entry) return;
         entry.finished = true;
-        entry.emitter.emit("event", { type: "done" });
+        entry.emitter.emit("event", { type: "done" } satisfies SSEEvent);
         setTimeout(() => this.remove(conversationId), 5000);
     }
 
@@ -75,8 +96,8 @@ class GenerationManager {
         entry.emitter.emit("event", {
             type: "error",
             error: error ?? "Generation failed"
-        });
-        entry.emitter.emit("event", { type: "done" });
+        } satisfies SSEEvent);
+        entry.emitter.emit("event", { type: "done" } satisfies SSEEvent);
         setTimeout(() => this.remove(conversationId), 5000);
     }
 

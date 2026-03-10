@@ -8,6 +8,7 @@ export interface ModelSummary {
     source: ProviderType;
     description: string | null;
     contextLength: number | null;
+    maxOutputTokens: number | null;
     promptPricing: string | null;
     completionPricing: string | null;
     inputModalities: string[];
@@ -20,6 +21,9 @@ interface OpenRouterModelRecord {
     name?: unknown;
     description?: unknown;
     context_length?: unknown;
+    top_provider?: {
+        max_completion_tokens?: unknown;
+    } | null;
     pricing?: {
         prompt?: unknown;
         completion?: unknown;
@@ -83,6 +87,9 @@ function toModelSummary(value: unknown): ModelSummary | null {
         source: "openrouter",
         description: toStringOrNull(model.description),
         contextLength: toNumberOrNull(model.context_length),
+        maxOutputTokens: toNumberOrNull(
+            model.top_provider?.max_completion_tokens
+        ),
         promptPricing: toStringOrNull(model.pricing?.prompt),
         completionPricing: toStringOrNull(model.pricing?.completion),
         inputModalities: toStringArray(model.architecture?.input_modalities),

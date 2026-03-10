@@ -401,15 +401,31 @@ function UserMessageMetadataDisplay({
     );
 }
 
-function formatGenerationError(raw: string | undefined): string {
+const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
+    openrouter: "OpenRouter",
+    openai: "OpenAI",
+    anthropic: "Anthropic",
+    google: "Google",
+    kimi: "Kimi"
+};
+
+function formatGenerationError(
+    raw: string | undefined,
+    provider?: string
+): string {
     if (!raw) return "Generation failed. Please try again.";
+
+    const providerName = provider
+        ? (PROVIDER_DISPLAY_NAMES[provider] ?? provider)
+        : "your provider";
+
     const lower = raw.toLowerCase();
     if (
         lower.includes("api key") ||
         lower.includes("unauthorized") ||
         lower.includes("401")
     )
-        return "Invalid or missing API key. Check your OpenRouter key in settings.";
+        return `Invalid or missing API key. Check your ${providerName} key in settings.`;
     if (
         lower.includes("rate limit") ||
         lower.includes("rate-limit") ||
@@ -424,7 +440,7 @@ function formatGenerationError(raw: string | undefined): string {
         lower.includes("credits") ||
         lower.includes("balance")
     )
-        return "Insufficient credits or quota on your OpenRouter account.";
+        return `Insufficient credits or quota on your ${providerName} account.`;
     if (
         lower.includes("context length") ||
         lower.includes("too long") ||
@@ -515,7 +531,10 @@ function AssistantMessage({
                     <span>
                         {formatGenerationError(
                             message.metadata?.errorMessage ??
-                                message.errorMessage
+                                message.errorMessage,
+                            typeof message.metadata?.provider === "string"
+                                ? message.metadata.provider
+                                : undefined
                         )}
                     </span>
                 </div>

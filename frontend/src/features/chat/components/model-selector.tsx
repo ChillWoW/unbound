@@ -137,6 +137,7 @@ function ModelInfoButton({ model }: { model: ChatModel }) {
     const hasInfo =
         model.description ||
         model.contextLength ||
+        model.maxOutputTokens ||
         model.promptPricing ||
         model.completionPricing ||
         model.inputModalities.length > 0;
@@ -187,6 +188,12 @@ function ModelInfoButton({ model }: { model: ChatModel }) {
                             {model.contextLength && (
                                 <InfoRow label="Context">
                                     {formatContextLength(model.contextLength)}
+                                </InfoRow>
+                            )}
+
+                            {model.maxOutputTokens && (
+                                <InfoRow label="Max output tokens">
+                                    {formatContextLength(model.maxOutputTokens)}
                                 </InfoRow>
                             )}
 
@@ -260,7 +267,9 @@ export function ModelSelector({
     }, [selectedModelId, models]);
 
     const providers = useMemo(() => {
-        const fromModels = new Set(models.map((m) => PROVIDER_ALIASES[m.provider] ?? m.provider));
+        const fromModels = new Set(
+            models.map((m) => PROVIDER_ALIASES[m.provider] ?? m.provider)
+        );
         for (const p of ALWAYS_VISIBLE_PROVIDERS) {
             fromModels.add(p);
         }
@@ -322,7 +331,11 @@ export function ModelSelector({
         const map: Record<string, boolean> = {};
         for (const provider of providers) {
             const hasMatchingModels = models
-                .filter((model) => (PROVIDER_ALIASES[model.provider] ?? model.provider) === provider)
+                .filter(
+                    (model) =>
+                        (PROVIDER_ALIASES[model.provider] ?? model.provider) ===
+                        provider
+                )
                 .some((model) => modelMatchesModalities(model));
             map[provider] = hasMatchingModels;
         }
@@ -332,7 +345,9 @@ export function ModelSelector({
     const providerHasModels = useMemo(() => {
         const map: Record<string, boolean> = {};
         for (const provider of providers) {
-            map[provider] = models.some((m) => (PROVIDER_ALIASES[m.provider] ?? m.provider) === provider);
+            map[provider] = models.some(
+                (m) => (PROVIDER_ALIASES[m.provider] ?? m.provider) === provider
+            );
         }
         return map;
     }, [providers, models]);
@@ -384,7 +399,11 @@ export function ModelSelector({
 
     const filteredModels = useMemo(() => {
         const scopedModels = activeProvider
-            ? models.filter((model) => (PROVIDER_ALIASES[model.provider] ?? model.provider) === activeProvider)
+            ? models.filter(
+                  (model) =>
+                      (PROVIDER_ALIASES[model.provider] ?? model.provider) ===
+                      activeProvider
+              )
             : models;
 
         const modalityFilteredModels = scopedModels.filter(

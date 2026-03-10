@@ -348,9 +348,17 @@ function upsertToolInvocationPart(
         return;
     }
 
+    const preservedArgs =
+        incoming.state === "result" &&
+        Object.keys(incoming.args).length === 0 &&
+        Object.keys(existing.args).length > 0
+            ? existing.args
+            : incoming.args;
+
     parts[idx] = {
         ...existing,
         ...incoming,
+        args: preservedArgs,
         result: incoming.state === "result" ? incoming.result : undefined
     };
 }
@@ -367,6 +375,159 @@ function applyToolResult(
         state: "result",
         result: toolResult.result
     });
+}
+
+interface StreamState {
+    parts: MessagePart[];
+    messageId: string;
+}
+
+interface StreamCallbackDeps {
+    conversationId: string;
+    abortSignal: AbortSignal;
+    setConversationDetails: React.Dispatch<
+        React.SetStateAction<Record<string, ConversationDetail>>
+    >;
+    setConversationTodos: React.Dispatch<
+        React.SetStateAction<Record<string, TodoItem[]>>
+    >;
+}
+
+function createStreamCallbacks(state: StreamState, deps: StreamCallbackDeps) {
+    let rafId: number | null = null;
+    let dirty = false;
+
+    function flushToState() {
+        dirty = false;
+        const snapshot: MessagePart[] = [...state.parts];
+        const mid = state.messageId;
+        deps.setConversationDetails((current) => {
+            const existing = current[deps.conversationId];
+            if (!existing) return current;
+            return {
+                ...current,
+                [deps.conversationId]: {
+                    ...existing,
+                    messages: existing.messages.map((m) =>
+                        m.id === mid ? { ...m, parts: snapshot } : m
+                    )
+                }
+            };
+        });
+    }
+
+    function scheduleFlush() {
+        dirty = true;
+        if (rafId === null) {
+            rafId = requestAnimationFrame(() => {
+                rafId = null;
+                if (dirty) flushToState();
+            });
+        }
+    }
+
+    function flushNow() {
+        if (rafId !== null) {
+            cancelAnimationFrame(rafId);
+            rafId = null;
+        }
+        if (dirty) flushToState();
+    }
+
+    const callbacks = {
+        onReasoning(text: string) {
+            const last = state.parts[state.parts.length - 1];
+            if (last?.type === "reasoning") {
+                state.parts[state.parts.length - 1] = {
+                    type: "reasoning",
+                    text: last.text + text
+                };
+            } else {
+                state.parts.push({ type: "reasoning", text });
+            }
+            scheduleFlush();
+        },
+        onTextDelta(text: string) {
+            const last = state.parts[state.parts.length - 1];
+            if (last?.type === "text") {
+                state.parts[state.parts.length - 1] = {
+                    type: "text",
+                    text: last.text + text
+                };
+            } else {
+                state.parts.push({ type: "text", text });
+            }
+            scheduleFlush();
+        },
+        onToolCall(toolCall: {
+            toolCallId: string;
+            toolName: string;
+            args: Record<string, unknown>;
+        }) {
+            upsertToolInvocationPart(state.parts, {
+                type: "tool-invocation",
+                toolInvocationId: toolCall.toolCallId,
+                toolName: toolCall.toolName,
+                args: toolCall.args,
+                state: "call"
+            });
+            flushNow();
+            deps.setConversationTodos((current) => {
+                const currentTodos = current[deps.conversationId] ?? [];
+                const preview = previewTodosFromToolCall(
+                    toolCall.toolName,
+                    toolCall.args,
+                    currentTodos
+                );
+                if (!preview) return current;
+                return { ...current, [deps.conversationId]: preview };
+            });
+        },
+        onToolResult(toolResult: {
+            toolCallId: string;
+            toolName: string;
+            result: unknown;
+        }) {
+            applyToolResult(state.parts, toolResult);
+            flushNow();
+            const todos = extractTodosFromToolResult(
+                toolResult.toolName,
+                toolResult.result
+            );
+            if (todos) {
+                deps.setConversationTodos((current) => ({
+                    ...current,
+                    [deps.conversationId]: todos
+                }));
+            }
+        },
+        onError(error: string) {
+            if (deps.abortSignal.aborted) return;
+            flushNow();
+            const mid = state.messageId;
+            deps.setConversationDetails((current) => {
+                const existing = current[deps.conversationId];
+                if (!existing) return current;
+                return {
+                    ...current,
+                    [deps.conversationId]: {
+                        ...existing,
+                        messages: existing.messages.map((m) =>
+                            m.id === mid
+                                ? {
+                                      ...m,
+                                      status: "failed" as const,
+                                      errorMessage: error
+                                  }
+                                : m
+                        )
+                    }
+                };
+            });
+        }
+    };
+
+    return { callbacks, flushNow };
 }
 
 export function ChatProvider({ children }: PropsWithChildren) {
@@ -689,14 +850,24 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 throw new Error(errorMessage);
             }
 
-            let realMessageId = optimisticId;
-            const streamParts: MessagePart[] = [];
+            const streamState: StreamState = {
+                parts: [],
+                messageId: optimisticId
+            };
 
-            const buildParts = (): MessagePart[] => [...streamParts];
+            const { callbacks, flushNow } = createStreamCallbacks(
+                streamState,
+                {
+                    conversationId,
+                    abortSignal: abortController.signal,
+                    setConversationDetails,
+                    setConversationTodos
+                }
+            );
 
             await parseAIStream(streamResponse, {
                 onMessageStart(messageId) {
-                    realMessageId = messageId;
+                    streamState.messageId = messageId;
                     setConversationDetails((current) => {
                         const existing = current[conversationId];
                         if (!existing) return current;
@@ -713,160 +884,26 @@ export function ChatProvider({ children }: PropsWithChildren) {
                         };
                     });
                 },
-                onReasoning(text) {
-                    const lastPart = streamParts[streamParts.length - 1];
-                    if (lastPart?.type === "reasoning") {
-                        streamParts[streamParts.length - 1] = { type: "reasoning", text: lastPart.text + text };
-                    } else {
-                        streamParts.push({ type: "reasoning", text });
-                    }
-                    const currentParts = buildParts();
-                    setConversationDetails((current) => {
-                        const existing = current[conversationId];
-                        if (!existing) return current;
-                        return {
-                            ...current,
-                            [conversationId]: {
-                                ...existing,
-                                messages: existing.messages.map((m) =>
-                                    m.id === realMessageId
-                                        ? { ...m, parts: currentParts }
-                                        : m
-                                )
-                            }
-                        };
-                    });
-                },
-                onTextDelta(text) {
-                    const lastPart = streamParts[streamParts.length - 1];
-                    if (lastPart?.type === "text") {
-                        streamParts[streamParts.length - 1] = { type: "text", text: lastPart.text + text };
-                    } else {
-                        streamParts.push({ type: "text", text });
-                    }
-                    const currentParts = buildParts();
-                    setConversationDetails((current) => {
-                        const existing = current[conversationId];
-                        if (!existing) return current;
-                        return {
-                            ...current,
-                            [conversationId]: {
-                                ...existing,
-                                messages: existing.messages.map((m) =>
-                                    m.id === realMessageId
-                                        ? { ...m, parts: currentParts }
-                                        : m
-                                )
-                            }
-                        };
-                    });
-                },
-                onToolCall(toolCall) {
-                    upsertToolInvocationPart(streamParts, {
-                        type: "tool-invocation",
-                        toolInvocationId: toolCall.toolCallId,
-                        toolName: toolCall.toolName,
-                        args: toolCall.args,
-                        state: "call"
-                    });
-                    const currentParts = buildParts();
-                    setConversationDetails((current) => {
-                        const existing = current[conversationId];
-                        if (!existing) return current;
-                        return {
-                            ...current,
-                            [conversationId]: {
-                                ...existing,
-                                messages: existing.messages.map((m) =>
-                                    m.id === realMessageId
-                                        ? { ...m, parts: currentParts }
-                                        : m
-                                )
-                            }
-                        };
-                    });
-                    setConversationTodos((current) => {
-                        const currentTodos = current[conversationId] ?? [];
-                        const preview = previewTodosFromToolCall(
-                            toolCall.toolName,
-                            toolCall.args,
-                            currentTodos
-                        );
-                        if (!preview) return current;
-                        return { ...current, [conversationId]: preview };
-                    });
-                },
-                onToolResult(toolResult) {
-                    applyToolResult(streamParts, toolResult);
-                    const currentParts = buildParts();
-                    setConversationDetails((current) => {
-                        const existing = current[conversationId];
-                        if (!existing) return current;
-                        return {
-                            ...current,
-                            [conversationId]: {
-                                ...existing,
-                                messages: existing.messages.map((m) =>
-                                    m.id === realMessageId
-                                        ? { ...m, parts: currentParts }
-                                        : m
-                                )
-                            }
-                        };
-                    });
-
-                    const todos = extractTodosFromToolResult(
-                        toolResult.toolName,
-                        toolResult.result
-                    );
-                    if (todos) {
-                        setConversationTodos((current) => ({
-                            ...current,
-                            [conversationId]: todos
-                        }));
-                    }
-                },
-                onError(error) {
-                    if (abortController.signal.aborted) return;
-                    setConversationDetails((current) => {
-                        const existing = current[conversationId];
-                        if (!existing) return current;
-                        return {
-                            ...current,
-                            [conversationId]: {
-                                ...existing,
-                                messages: existing.messages.map((m) =>
-                                    m.id === realMessageId
-                                        ? {
-                                              ...m,
-                                              status: "failed",
-                                              errorMessage: error
-                                          }
-                                        : m
-                                )
-                            }
-                        };
-                    });
-                }
+                ...callbacks
             }).catch((error: unknown) => {
                 if (!(error instanceof Error && error.name === "AbortError")) {
                     throw error;
                 }
             });
 
+            flushNow();
             activeGenerationsRef.current.delete(conversationId);
 
-            // Resolve any tools still in "call" state — they'll never get a result
-            for (let i = 0; i < streamParts.length; i++) {
-                const p = streamParts[i];
+            for (let i = 0; i < streamState.parts.length; i++) {
+                const p = streamState.parts[i];
                 if (p.type === "tool-invocation" && p.state === "call") {
-                    streamParts[i] = { ...p, state: "error" };
+                    streamState.parts[i] = { ...p, state: "error" };
                 }
             }
 
             if (abortController.signal.aborted) {
-                const stoppedParts = buildParts();
-                savePartialMessage(realMessageId, stoppedParts);
+                const stoppedParts = [...streamState.parts];
+                savePartialMessage(streamState.messageId, stoppedParts);
                 setConversationDetails((current) => {
                     const existing = current[conversationId];
                     if (!existing) return current;
@@ -875,10 +912,10 @@ export function ChatProvider({ children }: PropsWithChildren) {
                         [conversationId]: {
                             ...existing,
                             messages: existing.messages.map((m) =>
-                                m.id === realMessageId
+                                m.id === streamState.messageId
                                     ? {
                                           ...m,
-                                          status: "complete",
+                                          status: "complete" as const,
                                           parts: stoppedParts
                                       }
                                     : m
@@ -890,7 +927,6 @@ export function ChatProvider({ children }: PropsWithChildren) {
             }
 
             const finalResponse = await chatApi.getConversation(conversationId);
-            // Clear any stale partial save now that generation completed normally
             clearPartialMessage(
                 finalResponse.conversation.latestAssistantMessageId ?? ""
             );
@@ -924,25 +960,31 @@ export function ChatProvider({ children }: PropsWithChildren) {
                     return;
                 }
 
-                const realMessageId =
+                const messageId =
                     response.headers.get("x-message-id") ?? "";
-                let accumulatedText = "";
-                let accumulatedReasoning = "";
-                const toolParts: MessagePart[] = [];
 
-                const buildParts = (): MessagePart[] => [
-                    ...(accumulatedReasoning ? [{ type: "reasoning" as const, text: accumulatedReasoning }] : []),
-                    ...(accumulatedText ? [{ type: "text" as const, text: accumulatedText }] : []),
-                    ...toolParts
-                ];
+                const streamState: StreamState = {
+                    parts: [],
+                    messageId
+                };
+
+                const { callbacks, flushNow } = createStreamCallbacks(
+                    streamState,
+                    {
+                        conversationId,
+                        abortSignal: abortController.signal,
+                        setConversationDetails,
+                        setConversationTodos
+                    }
+                );
 
                 await parseAIStream(response, {
-                    onMessageStart(messageId) {
+                    onMessageStart(mid) {
                         setConversationDetails((current) => {
                             const existing = current[conversationId];
                             if (!existing) return current;
                             const hasMessage = existing.messages.some(
-                                (m) => m.id === messageId
+                                (m) => m.id === mid
                             );
                             if (hasMessage) {
                                 return {
@@ -950,7 +992,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
                                     [conversationId]: {
                                         ...existing,
                                         messages: existing.messages.map((m) =>
-                                            m.id === messageId
+                                            m.id === mid
                                                 ? {
                                                       ...m,
                                                       status: "pending" as const
@@ -964,157 +1006,25 @@ export function ChatProvider({ children }: PropsWithChildren) {
                         });
                     },
                     onReconnectState(state: ReconnectState) {
-                        accumulatedText = state.text;
-                        accumulatedReasoning = state.reasoning || "";
-                        toolParts.length = 0;
+                        streamState.parts.length = 0;
+                        if (state.reasoning) {
+                            streamState.parts.push({
+                                type: "reasoning",
+                                text: state.reasoning
+                            });
+                        }
                         for (const tp of state.toolParts) {
-                            upsertToolInvocationPart(toolParts, tp);
+                            upsertToolInvocationPart(streamState.parts, tp);
                         }
-                        const currentParts = buildParts();
-                        const mid = realMessageId;
-                        setConversationDetails((current) => {
-                            const existing = current[conversationId];
-                            if (!existing) return current;
-                            return {
-                                ...current,
-                                [conversationId]: {
-                                    ...existing,
-                                    messages: existing.messages.map((m) =>
-                                        m.id === mid
-                                            ? { ...m, parts: currentParts }
-                                            : m
-                                    )
-                                }
-                            };
-                        });
-                    },
-                    onReasoning(text) {
-                        accumulatedReasoning += text;
-                        const currentParts = buildParts();
-                        const mid = realMessageId;
-                        setConversationDetails((current) => {
-                            const existing = current[conversationId];
-                            if (!existing) return current;
-                            return {
-                                ...current,
-                                [conversationId]: {
-                                    ...existing,
-                                    messages: existing.messages.map((m) =>
-                                        m.id === mid
-                                            ? { ...m, parts: currentParts }
-                                            : m
-                                    )
-                                }
-                            };
-                        });
-                    },
-                    onTextDelta(text) {
-                        accumulatedText += text;
-                        const currentParts = buildParts();
-                        const mid = realMessageId;
-                        setConversationDetails((current) => {
-                            const existing = current[conversationId];
-                            if (!existing) return current;
-                            return {
-                                ...current,
-                                [conversationId]: {
-                                    ...existing,
-                                    messages: existing.messages.map((m) =>
-                                        m.id === mid
-                                            ? { ...m, parts: currentParts }
-                                            : m
-                                    )
-                                }
-                            };
-                        });
-                    },
-                    onToolCall(toolCall) {
-                        upsertToolInvocationPart(toolParts, {
-                            type: "tool-invocation",
-                            toolInvocationId: toolCall.toolCallId,
-                            toolName: toolCall.toolName,
-                            args: toolCall.args,
-                            state: "call"
-                        });
-                        const currentParts = buildParts();
-                        const mid = realMessageId;
-                        setConversationDetails((current) => {
-                            const existing = current[conversationId];
-                            if (!existing) return current;
-                            return {
-                                ...current,
-                                [conversationId]: {
-                                    ...existing,
-                                    messages: existing.messages.map((m) =>
-                                        m.id === mid
-                                            ? { ...m, parts: currentParts }
-                                            : m
-                                    )
-                                }
-                            };
-                        });
-                        setConversationTodos((current) => {
-                            const currentTodos =
-                                current[conversationId] ?? [];
-                            const preview = previewTodosFromToolCall(
-                                toolCall.toolName,
-                                toolCall.args,
-                                currentTodos
-                            );
-                            if (!preview) return current;
-                            return { ...current, [conversationId]: preview };
-                        });
-                    },
-                    onToolResult(toolResult) {
-                        applyToolResult(toolParts, toolResult);
-                        const currentParts = buildParts();
-                        const mid = realMessageId;
-                        setConversationDetails((current) => {
-                            const existing = current[conversationId];
-                            if (!existing) return current;
-                            return {
-                                ...current,
-                                [conversationId]: {
-                                    ...existing,
-                                    messages: existing.messages.map((m) =>
-                                        m.id === mid
-                                            ? { ...m, parts: currentParts }
-                                            : m
-                                    )
-                                }
-                            };
-                        });
-
-                        const todos = extractTodosFromToolResult(
-                            toolResult.toolName,
-                            toolResult.result
-                        );
-                        if (todos) {
-                            setConversationTodos((current) => ({
-                                ...current,
-                                [conversationId]: todos
-                            }));
+                        if (state.text) {
+                            streamState.parts.push({
+                                type: "text",
+                                text: state.text
+                            });
                         }
+                        flushNow();
                     },
-                    onError() {
-                        if (abortController.signal.aborted) return;
-                        const mid = realMessageId;
-                        setConversationDetails((current) => {
-                            const existing = current[conversationId];
-                            if (!existing) return current;
-                            return {
-                                ...current,
-                                [conversationId]: {
-                                    ...existing,
-                                    messages: existing.messages.map((m) =>
-                                        m.id === mid
-                                            ? { ...m, status: "failed" }
-                                            : m
-                                    )
-                                }
-                            };
-                        });
-                    }
+                    ...callbacks
                 }).catch((error: unknown) => {
                     if (
                         !(error instanceof Error && error.name === "AbortError")
@@ -1123,6 +1033,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
                     }
                 });
 
+                flushNow();
                 activeGenerationsRef.current.delete(conversationId);
 
                 if (!abortController.signal.aborted) {

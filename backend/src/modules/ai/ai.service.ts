@@ -1,13 +1,5 @@
 import { randomBytes } from "node:crypto";
-import {
-    streamText,
-    stepCountIs,
-    type AssistantModelMessage,
-    type JSONValue,
-    type ModelMessage,
-    type ToolResultPart,
-    type UserModelMessage
-} from "ai";
+import { streamText, stepCountIs, type ModelMessage } from "ai";
 import { requireAuth } from "../../middleware/require-auth";
 import { createModelInstance } from "./provider-factory";
 import {
@@ -19,8 +11,7 @@ import { conversationsRepository } from "../conversations/conversations.reposito
 import { todosRepository } from "../todos/todos.repository";
 import {
     ConversationError,
-    type MessagePart,
-    type MessageRecord
+    type MessagePart
 } from "../conversations/conversations.types";
 import { createTools } from "./ai.tools";
 import {
@@ -32,88 +23,17 @@ import { buildOptimizedContext } from "./context-manager";
 import { modelsService } from "../models/models.service";
 import { logger } from "../../lib/logger";
 
+import { toModelMessages, buildSystemPrompt } from "./message-converter";
+import { buildProviderOptions } from "./provider-options";
+import {
+    upsertToolInvocationPart,
+    applyToolResult,
+    buildAccumulatedParts
+} from "./message-parts";
+import { encodeSSE, mapChunkToEvent, createSubscriberStream } from "./sse";
+
 function createMessageId(): string {
     return `msg_${randomBytes(10).toString("hex")}`;
-}
-
-type ProviderOptionsMap = Record<string, Record<string, JSONValue>>;
-
-function supportsOpenAIReasoning(modelId: string): boolean {
-    return (
-        modelId.startsWith("gpt-5") ||
-        modelId.startsWith("o3") ||
-        modelId.startsWith("o4")
-    );
-}
-
-function supportsAnthropicReasoning(modelId: string): boolean {
-    return (
-        modelId.startsWith("claude-opus-4") ||
-        modelId.startsWith("claude-sonnet-4")
-    );
-}
-
-function supportsKimiReasoning(modelId: string): boolean {
-    return modelId === "kimi-k2-thinking" || modelId === "k2p5";
-}
-
-function supportsGoogleReasoning(modelId: string): boolean {
-    return modelId.startsWith("gemini-");
-}
-
-function buildProviderOptions(
-    provider: ProviderType,
-    modelId: string,
-    thinking: boolean
-): ProviderOptionsMap | undefined {
-    if (!thinking) return undefined;
-
-    switch (provider) {
-        case "openai":
-            if (!supportsOpenAIReasoning(modelId)) return undefined;
-            return {
-                openai: {
-                    reasoningEffort: "medium",
-                    reasoningSummary: "detailed"
-                }
-            };
-
-        case "anthropic":
-            if (!supportsAnthropicReasoning(modelId)) return undefined;
-            return {
-                anthropic: {
-                    thinking: {
-                        type: "enabled",
-                        budgetTokens: 12000
-                    }
-                }
-            };
-
-        case "google":
-            if (!supportsGoogleReasoning(modelId)) return undefined;
-            return {
-                google: {
-                    thinkingConfig: {
-                        thinkingLevel: "high",
-                        includeThoughts: true
-                    }
-                }
-            };
-
-        case "kimi":
-            if (!supportsKimiReasoning(modelId)) return undefined;
-            return {
-                anthropic: {
-                    thinking: {
-                        type: "enabled",
-                        budgetTokens: 12000
-                    }
-                }
-            };
-
-        default:
-            return undefined;
-    }
 }
 
 function extractErrorMessage(error: unknown): string {
@@ -139,148 +59,6 @@ function extractErrorMessage(error: unknown): string {
     return String(error);
 }
 
-function toToolResultOutput(result: unknown): ToolResultPart["output"] {
-    if (typeof result === "string") {
-        return {
-            type: "text",
-            value: result
-        };
-    }
-
-    return {
-        type: "json",
-        value: (result ?? null) as JSONValue
-    };
-}
-
-function toModelMessages(records: MessageRecord[]): ModelMessage[] {
-    const result: ModelMessage[] = [];
-
-    for (const record of records) {
-        const role = record.role as string;
-        const parts = record.parts as MessagePart[];
-
-        if (role === "user") {
-            const hasMediaParts = parts.some(
-                (p) => p.type === "image" || p.type === "file"
-            );
-
-            if (!hasMediaParts) {
-                const text = parts
-                    .filter((p) => p.type === "text")
-                    .map((p) => p.text)
-                    .join("\n\n");
-
-                if (text) {
-                    result.push({ role: "user", content: text });
-                }
-            } else {
-                const content: Extract<
-                    UserModelMessage["content"],
-                    Array<unknown>
-                > = [];
-
-                for (const p of parts) {
-                    if (p.type === "text" && p.text) {
-                        content.push({ type: "text", text: p.text });
-                    } else if (p.type === "image") {
-                        content.push({
-                            type: "image",
-                            image: p.data,
-                            mediaType: p.mimeType
-                        });
-                    } else if (p.type === "file") {
-                        content.push({
-                            type: "file",
-                            data: p.data,
-                            mediaType: p.mimeType
-                        });
-                    }
-                }
-
-                if (content.length > 0) {
-                    result.push({ role: "user", content });
-                }
-            }
-        } else if (role === "assistant") {
-            const textParts = parts.filter((p) => p.type === "text");
-            const toolParts = parts.filter((p) => p.type === "tool-invocation");
-
-            const content: Extract<
-                AssistantModelMessage["content"],
-                Array<unknown>
-            > = [];
-
-            for (const p of textParts) {
-                if (p.text) content.push({ type: "text", text: p.text });
-            }
-
-            for (const p of toolParts) {
-                content.push({
-                    type: "tool-call",
-                    toolCallId: p.toolInvocationId,
-                    toolName: p.toolName,
-                    input: p.args
-                });
-            }
-
-            if (content.length > 0) {
-                result.push({ role: "assistant", content });
-            }
-
-            // Every tool-call in the assistant message must have a corresponding
-            // tool-result, otherwise the AI SDK rejects the message history.
-            // Synthesize an error result for any tool that never completed.
-            if (toolParts.length > 0) {
-                result.push({
-                    role: "tool",
-                    content: toolParts.map((p) => ({
-                        type: "tool-result" as const,
-                        toolCallId: p.toolInvocationId,
-                        toolName: p.toolName,
-                        output: toToolResultOutput(
-                            p.state === "result" && p.result !== undefined
-                                ? p.result
-                                : { error: "Tool execution failed" }
-                        )
-                    }))
-                });
-            }
-        } else if (role === "system") {
-            const text = parts
-                .filter((p) => p.type === "text")
-                .map((p) => p.text)
-                .join("\n\n");
-
-            if (text) {
-                result.push({ role: "system", content: text });
-            }
-        }
-    }
-
-    return result;
-}
-
-function buildSystemPrompt(now = new Date()): string {
-    const isoDateTime = now.toISOString();
-    const utcDate = new Intl.DateTimeFormat("en-US", {
-        timeZone: "UTC",
-        dateStyle: "full",
-        timeStyle: "long"
-    }).format(now);
-    const serverTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-    return [
-        "You are a helpful assistant named Unbound for this app.",
-        "You have access to multiple tools to help you answer questions and complete tasks.",
-        "When tracking work with todo tools: keep exactly one in_progress item at a time, mark items completed immediately when done, and before your final response leave no stale in_progress items.",
-        "Use these runtime facts as source of truth when answering time-sensitive questions:",
-        `- Current datetime (ISO UTC): ${isoDateTime}`,
-        `- Current datetime (UTC, human): ${utcDate}`,
-        `- Server timezone: ${serverTimezone}`
-    ].join("\n");
-}
-
 function hasMeaningfulAssistantOutput(parts: MessagePart[]): boolean {
     return parts.some(
         (part) =>
@@ -295,9 +73,7 @@ async function reconcileLingeringInProgressTodos(conversationId: string) {
         (todo) => todo.status === "in_progress"
     );
 
-    if (inProgressTodos.length === 0) {
-        return;
-    }
+    if (inProgressTodos.length === 0) return;
 
     for (const todo of inProgressTodos) {
         await todosRepository.updateStatus(
@@ -313,165 +89,29 @@ async function reconcileLingeringInProgressTodos(conversationId: string) {
     });
 }
 
-function encodeSSE(event: SSEEvent): Uint8Array {
-    return new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`);
-}
+function aggregateUsage(
+    steps: Array<Record<string, unknown>>
+): { promptTokens: number; completionTokens: number; totalTokens: number } {
+    let promptTokens = 0;
+    let completionTokens = 0;
 
-type ToolInvocationMessagePart = Extract<
-    MessagePart,
-    { type: "tool-invocation" }
->;
-
-function upsertToolInvocationPart(
-    parts: MessagePart[],
-    incoming: ToolInvocationMessagePart
-) {
-    const idx = parts.findIndex(
-        (p) =>
-            p.type === "tool-invocation" &&
-            p.toolInvocationId === incoming.toolInvocationId
-    );
-
-    if (idx === -1) {
-        parts.push(incoming);
-        return;
+    for (const step of steps) {
+        const usage = step.usage as
+            | Record<string, unknown>
+            | undefined;
+        if (!usage) continue;
+        promptTokens += (typeof usage.promptTokens === "number" ? usage.promptTokens : 0);
+        completionTokens += (typeof usage.completionTokens === "number" ? usage.completionTokens : 0);
     }
 
-    const existing = parts[idx] as ToolInvocationMessagePart;
-
-    if (
-        incoming.state === "call" &&
-        (existing.state === "result" || existing.state === "error")
-    ) {
-        parts[idx] = {
-            ...existing,
-            toolName: incoming.toolName,
-            args: incoming.args
-        };
-        return;
-    }
-
-    parts[idx] = {
-        ...existing,
-        ...incoming,
-        result: incoming.state === "result" ? incoming.result : undefined
+    return {
+        promptTokens,
+        completionTokens,
+        totalTokens: promptTokens + completionTokens
     };
 }
 
-function applyToolResult(
-    parts: MessagePart[],
-    input: {
-        toolCallId: string;
-        toolName: string;
-        output: unknown;
-    }
-) {
-    upsertToolInvocationPart(parts, {
-        type: "tool-invocation",
-        toolInvocationId: input.toolCallId,
-        toolName: input.toolName,
-        args: {},
-        state: "result",
-        result: input.output
-    });
-}
-
-function buildErrorParts(
-    generation: GenerationEntry,
-    thinking: boolean
-): MessagePart[] {
-    const parts: MessagePart[] = [];
-
-    if (thinking && generation.accumulatedReasoning) {
-        parts.push({
-            type: "reasoning",
-            text: generation.accumulatedReasoning
-        });
-    }
-
-    for (const tp of generation.toolParts) {
-        if (tp.type === "tool-invocation" && tp.state === "call") {
-            parts.push({ ...tp, state: "error" });
-        } else {
-            parts.push(tp);
-        }
-    }
-
-    if (generation.accumulatedText) {
-        parts.push({ type: "text", text: generation.accumulatedText });
-    }
-
-    if (parts.length === 0) {
-        parts.push({ type: "text", text: "" });
-    }
-
-    return parts;
-}
-
-function createSubscriberStream(
-    generation: GenerationEntry,
-    isReconnect: boolean
-): Response {
-    const stream = new ReadableStream({
-        start(controller) {
-            controller.enqueue(
-                encodeSSE({
-                    type: "message-start",
-                    messageId: generation.messageId
-                })
-            );
-
-            if (
-                isReconnect &&
-                (generation.accumulatedText ||
-                    generation.accumulatedReasoning ||
-                    generation.toolParts.length > 0)
-            ) {
-                controller.enqueue(
-                    encodeSSE({
-                        type: "reconnect-state",
-                        text: generation.accumulatedText,
-                        reasoning: generation.accumulatedReasoning,
-                        toolParts: generation.toolParts
-                    })
-                );
-            }
-
-            if (generation.finished) {
-                controller.enqueue(encodeSSE({ type: "done" }));
-                controller.close();
-                return;
-            }
-
-            let closed = false;
-
-            const onEvent = (event: SSEEvent) => {
-                if (closed) return;
-                try {
-                    controller.enqueue(encodeSSE(event));
-                    if (event.type === "done") {
-                        closed = true;
-                        controller.close();
-                    }
-                } catch {
-                    closed = true;
-                    generation.emitter.off("event", onEvent);
-                }
-            };
-
-            generation.emitter.on("event", onEvent);
-        }
-    });
-
-    return new Response(stream, {
-        headers: {
-            "Content-Type": "text/event-stream",
-            "Cache-Control": "no-cache",
-            Connection: "keep-alive",
-            "X-Message-Id": generation.messageId
-        }
-    });
-}
+const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
 
 function startBackgroundGeneration(
     generation: GenerationEntry,
@@ -481,7 +121,8 @@ function startBackgroundGeneration(
     apiKey: string,
     generationStartedAt: string,
     thinking: boolean,
-    tools: ReturnType<typeof createTools>
+    tools: ReturnType<typeof createTools>,
+    maxOutputTokens: number | null
 ) {
     const model = createModelInstance(provider, modelId, apiKey);
     const assistantMessageId = generation.messageId;
@@ -501,6 +142,8 @@ function startBackgroundGeneration(
         messages: modelMessages,
         providerOptions,
         tools,
+        maxOutputTokens: maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+        maxRetries: 2,
         stopWhen: stepCountIs(20),
         abortSignal: generation.abortController.signal,
         onFinish: async ({ steps, finishReason }) => {
@@ -548,13 +191,7 @@ function startBackgroundGeneration(
                 finalParts.push({ type: "text", text: "" });
             }
 
-            // Resolve any tool calls that never received a result
-            for (let i = 0; i < finalParts.length; i++) {
-                const part = finalParts[i];
-                if (!part) {
-                    continue;
-                }
-
+            for (const part of finalParts) {
                 if (part.type === "tool-invocation" && part.state === "call") {
                     part.state = "error";
                 }
@@ -565,6 +202,9 @@ function startBackgroundGeneration(
                 new Date(generationCompletedAt).getTime() -
                 new Date(generationStartedAt).getTime();
             const status = finishReason === "error" ? "failed" : "complete";
+            const usage = aggregateUsage(
+                steps as unknown as Array<Record<string, unknown>>
+            );
 
             logger.info("Generation finished", {
                 conversationId: generation.conversationId,
@@ -573,7 +213,8 @@ function startBackgroundGeneration(
                 finishReason,
                 status,
                 steps: steps.length,
-                durationMs
+                durationMs,
+                usage
             });
 
             await conversationsRepository.updateMessage(assistantMessageId, {
@@ -581,9 +222,11 @@ function startBackgroundGeneration(
                 status,
                 metadata: {
                     model: modelId,
+                    provider,
                     thinkingEnabled: thinking,
                     generationStartedAt,
-                    generationCompletedAt
+                    generationCompletedAt,
+                    usage
                 }
             });
 
@@ -624,13 +267,14 @@ function startBackgroundGeneration(
                 durationMs
             });
 
-            const errorParts = buildErrorParts(generation, thinking);
+            const errorParts = buildAccumulatedParts(generation, thinking, true);
 
             await conversationsRepository.updateMessage(assistantMessageId, {
                 parts: errorParts,
                 status: "failed",
                 metadata: {
                     model: modelId,
+                    provider,
                     thinkingEnabled: thinking,
                     generationStartedAt,
                     generationCompletedAt,
@@ -649,9 +293,9 @@ function startBackgroundGeneration(
                 if (!event) continue;
 
                 if (event.type === "text-delta") {
-                    generation.accumulatedText += event.text as string;
+                    generation.accumulatedText += event.text;
                 } else if (event.type === "reasoning" && thinking) {
-                    generation.accumulatedReasoning += event.text as string;
+                    generation.accumulatedReasoning += event.text;
                 } else if (event.type === "tool-call") {
                     logger.debug("Tool call", {
                         conversationId: generation.conversationId,
@@ -661,9 +305,9 @@ function startBackgroundGeneration(
                     });
                     upsertToolInvocationPart(generation.toolParts, {
                         type: "tool-invocation",
-                        toolInvocationId: event.toolCallId as string,
-                        toolName: event.toolName as string,
-                        args: event.args as Record<string, unknown>,
+                        toolInvocationId: event.toolCallId,
+                        toolName: event.toolName,
+                        args: event.args,
                         state: "call"
                     });
                 } else if (event.type === "tool-result") {
@@ -673,8 +317,8 @@ function startBackgroundGeneration(
                         toolCallId: event.toolCallId
                     });
                     applyToolResult(generation.toolParts, {
-                        toolCallId: event.toolCallId as string,
-                        toolName: event.toolName as string,
+                        toolCallId: event.toolCallId,
+                        toolName: event.toolName,
                         output: event.result
                     });
                 }
@@ -683,9 +327,6 @@ function startBackgroundGeneration(
                     generation.emitter.emit("event", event);
                 }
             }
-
-            // Do NOT emit "done" here — generationManager.complete() in onFinish
-            // emits it after the DB save, eliminating the race condition.
         } catch (error) {
             const isAbort =
                 (error instanceof Error && error.name === "AbortError") ||
@@ -697,25 +338,11 @@ function startBackgroundGeneration(
                     messageId: assistantMessageId
                 });
 
-                const stoppedParts: MessagePart[] = [];
-                if (thinking && generation.accumulatedReasoning) {
-                    stoppedParts.push({
-                        type: "reasoning",
-                        text: generation.accumulatedReasoning
-                    });
-                }
-                for (const tp of generation.toolParts) {
-                    stoppedParts.push(tp);
-                }
-                if (generation.accumulatedText) {
-                    stoppedParts.push({
-                        type: "text",
-                        text: generation.accumulatedText
-                    });
-                }
-                if (stoppedParts.length === 0) {
-                    stoppedParts.push({ type: "text", text: "" });
-                }
+                const stoppedParts = buildAccumulatedParts(
+                    generation,
+                    thinking,
+                    false
+                );
 
                 await conversationsRepository.updateMessage(
                     assistantMessageId,
@@ -724,6 +351,7 @@ function startBackgroundGeneration(
                         status: "complete",
                         metadata: {
                             model: modelId,
+                            provider,
                             thinkingEnabled: thinking,
                             generationStartedAt,
                             generationCompletedAt: new Date().toISOString()
@@ -743,13 +371,14 @@ function startBackgroundGeneration(
                 error: streamErrorMessage
             });
 
-            const errorParts = buildErrorParts(generation, thinking);
+            const errorParts = buildAccumulatedParts(generation, thinking, true);
 
             await conversationsRepository.updateMessage(assistantMessageId, {
                 parts: errorParts,
                 status: "failed",
                 metadata: {
                     model: modelId,
+                    provider,
                     thinkingEnabled: thinking,
                     generationStartedAt,
                     generationCompletedAt: new Date().toISOString(),
@@ -763,55 +392,6 @@ function startBackgroundGeneration(
             );
         }
     })();
-}
-
-function mapChunkToEvent(chunk: unknown): SSEEvent | null {
-    const c = chunk as Record<string, unknown>;
-
-    const reasoningText =
-        (typeof c.text === "string" && c.text) ||
-        (typeof c.textDelta === "string" && c.textDelta) ||
-        (typeof c.delta === "string" && c.delta) ||
-        (typeof c.reasoning === "string" && c.reasoning) ||
-        (typeof c.reasoningText === "string" && c.reasoningText) ||
-        (typeof c.reasoningDelta === "string" && c.reasoningDelta) ||
-        null;
-
-    switch (c.type) {
-        case "text-delta":
-            return { type: "text-delta", text: c.text as string };
-
-        case "tool-call":
-            return {
-                type: "tool-call",
-                toolCallId: c.toolCallId as string,
-                toolName: c.toolName as string,
-                args: c.input as Record<string, unknown>
-            };
-
-        case "tool-result":
-            return {
-                type: "tool-result",
-                toolCallId: c.toolCallId as string,
-                toolName: c.toolName as string,
-                result: c.output
-            };
-
-        case "reasoning":
-        case "reasoning-delta":
-            return reasoningText
-                ? { type: "reasoning", text: reasoningText }
-                : null;
-
-        case "error":
-            return { type: "error", error: String(c.error) };
-
-        case "finish":
-            return { type: "finish", finishReason: c.finishReason as string };
-
-        default:
-            return null;
-    }
 }
 
 export const aiService = {
@@ -907,6 +487,7 @@ export const aiService = {
                 ...toModelMessages(messageRecords)
             ];
         }
+
         const assistantMessageId = createMessageId();
         const generationStartedAt = new Date().toISOString();
 
@@ -918,6 +499,7 @@ export const aiService = {
             messageStatus: "pending",
             messageMetadata: {
                 model: modelId,
+                provider: resolvedProvider,
                 thinkingEnabled: thinking,
                 generationStartedAt
             }
@@ -930,6 +512,10 @@ export const aiService = {
         );
 
         const tools = createTools(conversationId, user.id);
+        const modelMaxOutputTokens = modelsService.getModelMaxOutputTokens(
+            user.id,
+            modelId
+        );
 
         startBackgroundGeneration(
             generation,
@@ -939,7 +525,8 @@ export const aiService = {
             apiKey,
             generationStartedAt,
             thinking,
-            tools
+            tools,
+            modelMaxOutputTokens
         );
 
         return createSubscriberStream(generation, false);

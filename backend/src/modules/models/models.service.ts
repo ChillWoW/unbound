@@ -30,17 +30,16 @@ function updateCache(userId: string | null, models: ModelSummary[]) {
     userCache.set(userId, { models, timestamp: Date.now() });
 }
 
-function getCachedContextLength(
+function getCachedModel(
     userId: string,
     modelId: string
-): number | null {
+): ModelSummary | null {
     const entry = userCache.get(userId);
     if (!entry || Date.now() - entry.timestamp > CACHE_TTL_MS) {
         return null;
     }
 
-    const model = entry.models.find((m) => m.id === modelId);
-    return model?.contextLength ?? null;
+    return entry.models.find((m) => m.id === modelId) ?? null;
 }
 
 export const modelsService = {
@@ -134,6 +133,10 @@ export const modelsService = {
     },
 
     getModelContextLength(userId: string, modelId: string): number {
-        return getCachedContextLength(userId, modelId) ?? DEFAULT_CONTEXT_LENGTH;
+        return getCachedModel(userId, modelId)?.contextLength ?? DEFAULT_CONTEXT_LENGTH;
+    },
+
+    getModelMaxOutputTokens(userId: string, modelId: string): number | null {
+        return getCachedModel(userId, modelId)?.maxOutputTokens ?? null;
     }
 };

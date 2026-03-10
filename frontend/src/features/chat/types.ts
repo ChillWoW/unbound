@@ -89,6 +89,7 @@ export interface ChatModel {
     source: ProviderType;
     description: string | null;
     contextLength: number | null;
+    maxOutputTokens: number | null;
     promptPricing: string | null;
     completionPricing: string | null;
     inputModalities: string[];

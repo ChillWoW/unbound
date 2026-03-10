@@ -202,6 +202,7 @@ export function selectSupportedModels(models: ModelSummary[]): ModelSummary[] {
                 source: "openrouter",
                 description: definition.description,
                 contextLength: null,
+                maxOutputTokens: null,
                 promptPricing: null,
                 completionPricing: null,
                 inputModalities: [],
