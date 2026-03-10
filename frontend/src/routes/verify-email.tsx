@@ -74,7 +74,6 @@ function VerifyEmailPage() {
         }
 
         attemptedTokenRef.current = token;
-        let cancelled = false;
 
         async function runVerification() {
             setError(null);
@@ -82,11 +81,6 @@ function VerifyEmailPage() {
 
             try {
                 await verifyEmail(token);
-
-                if (cancelled) {
-                    return;
-                }
-
                 setIsVerifiedByLink(true);
                 notify.success({
                     title: "Email verified",
@@ -94,25 +88,17 @@ function VerifyEmailPage() {
                 });
                 redirectTimerRef.current = window.setTimeout(() => {
                     void navigate({ to: "/" });
-                }, 1500);
+                }, 2000);
             } catch (verifyError) {
-                if (cancelled) {
-                    return;
-                }
-
                 setError(getErrorMessage(verifyError));
             } finally {
-                if (!cancelled) {
-                    setIsVerifying(false);
-                }
+                setIsVerifying(false);
             }
         }
 
         void runVerification();
 
         return () => {
-            cancelled = true;
-
             if (redirectTimerRef.current !== null) {
                 window.clearTimeout(redirectTimerRef.current);
                 redirectTimerRef.current = null;

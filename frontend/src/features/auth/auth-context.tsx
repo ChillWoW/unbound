@@ -4,6 +4,7 @@ import {
     useContext,
     useEffect,
     useMemo,
+    useRef,
     useState,
     type PropsWithChildren
 } from "react";
@@ -20,6 +21,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: PropsWithChildren) {
     const [user, setUser] = useState<AuthUser | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const authGenRef = useRef(0);
 
     const refresh = useCallback(async () => {
         try {
@@ -34,20 +36,21 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     useEffect(() => {
         let isMounted = true;
+        const gen = ++authGenRef.current;
 
         async function loadCurrentUser() {
             try {
                 const response = await authApi.me();
 
-                if (isMounted) {
+                if (isMounted && gen === authGenRef.current) {
                     setUser(response.user);
                 }
             } catch {
-                if (isMounted) {
+                if (isMounted && gen === authGenRef.current) {
                     setUser(null);
                 }
             } finally {
-                if (isMounted) {
+                if (isMounted && gen === authGenRef.current) {
                     setIsLoading(false);
                 }
             }
@@ -62,18 +65,21 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     const login = useCallback(async (input: LoginInput) => {
         const response = await authApi.login(input);
+        authGenRef.current++;
         setUser(response.user);
         return response.user;
     }, []);
 
     const register = useCallback(async (input: RegisterInput) => {
         const response = await authApi.register(input);
+        authGenRef.current++;
         setUser(response.user);
         return response.user;
     }, []);
 
     const logout = useCallback(async () => {
         await authApi.logout();
+        authGenRef.current++;
         setUser(null);
     }, []);
 
@@ -86,6 +92,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     const verifyEmail = useCallback(async (token: string) => {
         const response = await authApi.verifyEmail(token);
+        authGenRef.current++;
         setUser(response.user);
         return response.user;
     }, []);
