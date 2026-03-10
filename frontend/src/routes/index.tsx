@@ -3,9 +3,10 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/features/auth/use-auth";
 import { useChat } from "@/features/chat/chat-context";
 import { ChatInput } from "@/features/chat/components/chat-input";
+import { ChatShell } from "@/features/chat/components/chat-shell";
 
-export const Route = createFileRoute("/_chat/")({
-    component: HomePage
+export const Route = createFileRoute("/")({
+    component: IndexPage
 });
 
 const TITLES = [
@@ -109,5 +110,13 @@ function HomePage() {
                 </div>
             </div>
         </main>
+    );
+}
+
+function IndexPage() {
+    return (
+        <ChatShell>
+            <HomePage />
+        </ChatShell>
     );
 }
