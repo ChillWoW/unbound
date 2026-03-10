@@ -1,53 +1,106 @@
-import type { ReactNode } from "react";
-import { toast, type ExternalToast } from "sonner";
+import { createElement, type ReactNode } from "react";
+import {
+    CheckCircleIcon,
+    InfoIcon,
+    SpinnerGapIcon,
+    WarningCircleIcon,
+    XCircleIcon
+} from "@phosphor-icons/react";
+import {
+    sileo,
+    type SileoOptions,
+    type SileoPosition,
+    type SileoState
+} from "sileo";
 
-type NotifyOptions = Omit<ExternalToast, "description"> & {
-    description?: ReactNode;
+export type ToastData = Omit<SileoOptions, "title" | "description" | "type"> & {
+    title?: string;
+    description?: ReactNode | string;
 };
 
-type PromiseMessages<T> = {
-    loading: ReactNode;
-    success: ReactNode | ((value: T) => ReactNode);
-    error: ReactNode | ((error: unknown) => ReactNode);
-    description?: ReactNode | ((value: T) => ReactNode);
+type PromiseToastData<T> = {
+    loading: ToastData;
+    success: ToastData | ((value: T) => ToastData);
+    error: ToastData | ((error: unknown) => ToastData);
+    action?: ToastData | ((value: T) => ToastData);
+    position?: SileoPosition;
 };
+
+const icons: Record<SileoState, ReactNode> = {
+    success: createElement(CheckCircleIcon, { className: "size-4", weight: "fill" }),
+    error: createElement(XCircleIcon, { className: "size-4", weight: "fill" }),
+    warning: createElement(WarningCircleIcon, {
+        className: "size-4",
+        weight: "fill"
+    }),
+    info: createElement(InfoIcon, { className: "size-4", weight: "fill" }),
+    loading: createElement(SpinnerGapIcon, {
+        className: "size-4 animate-spin",
+        weight: "bold"
+    }),
+    action: createElement(InfoIcon, { className: "size-4", weight: "fill" })
+};
+
+function withType(type: SileoState, data: ToastData = {}): SileoOptions {
+    return {
+        ...data,
+        type,
+        icon: data.icon ?? icons[type]
+    };
+}
+
+function mapPromiseState<T>(
+    type: SileoState,
+    value: ToastData | ((result: T) => ToastData)
+) {
+    if (typeof value === "function") {
+        return (result: T) => withType(type, value(result));
+    }
+
+    return withType(type, value);
+}
 
 export const notify = {
-    success(title: ReactNode, description?: ReactNode, options?: NotifyOptions) {
-        return toast.success(title, { ...options, description });
+    success(data: ToastData) {
+        return sileo.success(withType("success", data));
     },
 
-    error(title: ReactNode, description?: ReactNode, options?: NotifyOptions) {
-        return toast.error(title, { ...options, description });
+    error(data: ToastData) {
+        return sileo.error(withType("error", data));
     },
 
-    info(title: ReactNode, description?: ReactNode, options?: NotifyOptions) {
-        return toast.info(title, { ...options, description });
+    warning(data: ToastData) {
+        return sileo.warning(withType("warning", data));
     },
 
-    message(title: ReactNode, description?: ReactNode, options?: NotifyOptions) {
-        return toast.message(title, { ...options, description });
+    info(data: ToastData) {
+        return sileo.info(withType("info", data));
     },
 
-    loading(title: ReactNode, description?: ReactNode, options?: NotifyOptions) {
-        return toast.loading(title, { ...options, description });
+    message(data: ToastData) {
+        return sileo.show(withType("info", data));
     },
 
-    dismiss(id?: string | number) {
-        return toast.dismiss(id);
+    loading(data: ToastData) {
+        return sileo.show(withType("loading", data));
+    },
+
+    dismiss(id: string) {
+        return sileo.dismiss(id);
     },
 
     promise<T>(
         promise: Promise<T> | (() => Promise<T>),
-        messages: PromiseMessages<T>,
-        options?: Omit<NotifyOptions, "description">
+        messages: PromiseToastData<T>
     ) {
-        return toast.promise(promise, {
-            ...options,
-            loading: messages.loading,
-            success: messages.success,
-            error: messages.error,
-            description: messages.description
+        return sileo.promise(promise, {
+            position: messages.position,
+            loading: withType("loading", messages.loading),
+            success: mapPromiseState("success", messages.success),
+            error: mapPromiseState("error", messages.error),
+            action: messages.action
+                ? mapPromiseState("action", messages.action)
+                : undefined
         });
     }
 };

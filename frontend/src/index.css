@@ -31,6 +31,17 @@
     --color-primary-900: #1f2937;
 }
 
+:root {
+    --sileo-width: min(22rem, calc(100vw - 2rem));
+    --sileo-duration: 520ms;
+    --sileo-state-success: oklch(0.74 0.18 148);
+    --sileo-state-loading: oklch(0.74 0.03 255);
+    --sileo-state-error: oklch(0.65 0.22 24);
+    --sileo-state-warning: oklch(0.82 0.16 82);
+    --sileo-state-info: oklch(0.71 0.12 240);
+    --sileo-state-action: oklch(0.74 0.08 260);
+}
+
 @layer utilities {
     .scrollbar-custom {
         scrollbar-width: thin;

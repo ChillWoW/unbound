@@ -120,20 +120,23 @@ function ProviderRow({
                 if (!status.configured) return;
                 await onRemove(config.id);
                 setApiKey("");
-                notify.success(
-                    `${config.label} disconnected`,
-                    "Provider API key removed."
-                );
+                notify.success({
+                    title: `${config.label} disconnected`,
+                    description: "Provider API key removed."
+                });
             } else {
                 await onSave(config.id, trimmed);
                 setApiKey("");
-                notify.success(
-                    `${config.label} connected`,
-                    "Provider API key saved successfully."
-                );
+                notify.success({
+                    title: `${config.label} connected`,
+                    description: "Provider API key saved successfully."
+                });
             }
         } catch (e) {
-            notify.error(`Couldn't update ${config.label} key`, getErrorMessage(e));
+            notify.error({
+                title: `Couldn't update ${config.label} key`,
+                description: getErrorMessage(e)
+            });
         } finally {
             setIsBusy(false);
         }

@@ -556,14 +556,17 @@ export function ChatSidebar({
 
         try {
             await logout();
-            notify.success(
-                "Signed out",
-                "You've been logged out successfully."
-            );
+            notify.success({
+                title: "Signed out",
+                description: "You've been logged out successfully."
+            });
             await navigate({ to: "/login" });
             handleNavigate();
         } catch (error) {
-            notify.error("Couldn't sign out", toErrorMessage(error));
+            notify.error({
+                title: "Couldn't sign out",
+                description: toErrorMessage(error)
+            });
         } finally {
             setIsLoggingOut(false);
         }

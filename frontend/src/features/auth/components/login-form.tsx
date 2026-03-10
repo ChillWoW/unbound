@@ -38,10 +38,16 @@ export function LoginForm() {
 
         try {
             await login({ email, password });
-            notify.success("Signed in", "Welcome back to Unbound.");
+            notify.success({
+                title: "Signed in",
+                description: "Welcome back to Unbound."
+            });
             await navigate({ to: "/" });
         } catch (submitError) {
-            notify.error("Couldn't sign in", getErrorMessage(submitError));
+            notify.error({
+                title: "Couldn't sign in",
+                description: getErrorMessage(submitError)
+            });
         } finally {
             setIsSubmitting(false);
         }
