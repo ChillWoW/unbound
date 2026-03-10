@@ -8,7 +8,7 @@ interface DirectModelDefinition {
     source: ProviderType;
     description: string;
     contextLength: number;
-    maxOutputTokens: number;
+    maxOutputTokens: number | null;
     inputPerMillion?: number;
     outputPerMillion?: number;
     inputModalities?: string[];
@@ -29,7 +29,7 @@ const openaiDirectModels: DirectModelDefinition[] = [
         description:
             "Version of GPT-5.4 that produces smarter and more precise responses",
         contextLength: 1_050_000,
-        maxOutputTokens: 32_768,
+        maxOutputTokens: 128_000,
         inputPerMillion: 30.0,
         outputPerMillion: 180.0,
         inputModalities: ["text", "image"],
@@ -42,7 +42,7 @@ const openaiDirectModels: DirectModelDefinition[] = [
         source: "openai",
         description: "OpenAI's latest frontier model",
         contextLength: 1_050_000,
-        maxOutputTokens: 32_768,
+        maxOutputTokens: 128_000,
         inputPerMillion: 2.5,
         outputPerMillion: 15.0,
         inputModalities: ["text", "image"],
@@ -55,7 +55,7 @@ const openaiDirectModels: DirectModelDefinition[] = [
         source: "openai",
         description: "OpenAI's most advanced agentic coding model",
         contextLength: 400_000,
-        maxOutputTokens: 32_768,
+        maxOutputTokens: 128_000,
         inputPerMillion: 1.75,
         outputPerMillion: 14.0,
         inputModalities: ["text", "image"],
@@ -68,7 +68,7 @@ const openaiDirectModels: DirectModelDefinition[] = [
         source: "openai",
         description: "OpenAI's previous frontier model",
         contextLength: 400_000,
-        maxOutputTokens: 16_384,
+        maxOutputTokens: 128_000,
         inputPerMillion: 1.75,
         outputPerMillion: 14.0,
         inputModalities: ["text", "image"],
@@ -81,7 +81,7 @@ const openaiDirectModels: DirectModelDefinition[] = [
         source: "openai",
         description: "OpenAI's faster, cost-efficient version of GPT-5",
         contextLength: 400_000,
-        maxOutputTokens: 16_384,
+        maxOutputTokens: 128_000,
         inputPerMillion: 0.25,
         outputPerMillion: 2.0,
         inputModalities: ["text", "image"],
@@ -94,7 +94,7 @@ const openaiDirectModels: DirectModelDefinition[] = [
         source: "openai",
         description: "OpenAI's fastest, most cost-efficient version of GPT-5",
         contextLength: 400_000,
-        maxOutputTokens: 16_384,
+        maxOutputTokens: 128_000,
         inputPerMillion: 0.05,
         outputPerMillion: 0.4,
         inputModalities: ["text", "image"],
@@ -107,7 +107,7 @@ const openaiDirectModels: DirectModelDefinition[] = [
         source: "openai",
         description: "OpenAI's fast, cost-efficient reasoning model",
         contextLength: 200_000,
-        maxOutputTokens: 65_536,
+        maxOutputTokens: 100_000,
         inputPerMillion: 1.1,
         outputPerMillion: 4.4,
         inputModalities: ["text", "image"],
@@ -136,7 +136,7 @@ const anthropicDirectModels: DirectModelDefinition[] = [
         source: "anthropic",
         description: "Anthropic's most intelligent model for coding",
         contextLength: 200_000,
-        maxOutputTokens: 16_384,
+        maxOutputTokens: 128_000,
         inputPerMillion: 5.0,
         outputPerMillion: 25.0,
         inputModalities: ["text", "image"],
@@ -149,7 +149,7 @@ const anthropicDirectModels: DirectModelDefinition[] = [
         source: "anthropic",
         description: "Anthropic's best combination of speed and intelligence",
         contextLength: 200_000,
-        maxOutputTokens: 16_384,
+        maxOutputTokens: 64_000,
         inputPerMillion: 3.0,
         outputPerMillion: 15.0,
         inputModalities: ["text", "image"],
@@ -163,7 +163,7 @@ const anthropicDirectModels: DirectModelDefinition[] = [
         description:
             "Anthropic's fastest model with near-frontier intelligence",
         contextLength: 200_000,
-        maxOutputTokens: 8_192,
+        maxOutputTokens: 64_000,
         inputPerMillion: 1.0,
         outputPerMillion: 5.0,
         inputModalities: ["text", "image"],
@@ -190,7 +190,7 @@ const googleDirectModels: DirectModelDefinition[] = [
         source: "google",
         description: "Google's fastest model for quick responses",
         contextLength: 1_048_576,
-        maxOutputTokens: 32_768,
+        maxOutputTokens: 65_536,
         inputModalities: ["text", "image", "video", "audio", "file"],
         outputModalities: ["text"]
     }
@@ -204,7 +204,7 @@ const kimiDirectModels: DirectModelDefinition[] = [
         source: "kimi",
         description: "Kimi's reasoning model with extended thinking",
         contextLength: 262_144,
-        maxOutputTokens: 8_192,
+        maxOutputTokens: null,
         inputModalities: ["text"],
         outputModalities: ["text"]
     },
@@ -215,7 +215,7 @@ const kimiDirectModels: DirectModelDefinition[] = [
         source: "kimi",
         description: "Kimi's latest and most capable coding model",
         contextLength: 262_144,
-        maxOutputTokens: 8_192,
+        maxOutputTokens: null,
         inputModalities: ["text", "image"],
         outputModalities: ["text"]
     }
