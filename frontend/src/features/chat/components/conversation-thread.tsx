@@ -164,6 +164,23 @@ function ReasoningDisplay({
         return () => el.removeEventListener("scroll", check);
     }, [expanded, part.text]);
 
+    useEffect(() => {
+        if (!expanded || !isStreaming) return;
+
+        const el = reasoningScrollRef.current;
+        if (!el) return;
+
+        const frame = requestAnimationFrame(() => {
+            el.scrollTo({
+                top: el.scrollHeight,
+                behavior: "auto"
+            });
+            setIsScrolledToBottom(true);
+        });
+
+        return () => cancelAnimationFrame(frame);
+    }, [expanded, isStreaming, part.text]);
+
     return (
         <div className="my-2">
             <button
