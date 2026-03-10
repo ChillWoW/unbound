@@ -560,6 +560,11 @@ function AssistantMessage({
     const isPending = message.status === "pending";
     const hasText = message.parts.some((p) => p.type === "text");
     const isWaiting = isPending && message.parts.length === 0;
+    const lastReasoningIndex = message.parts.reduce(
+        (lastIndex, part, index) =>
+            part.type === "reasoning" ? index : lastIndex,
+        -1
+    );
 
     return (
         <div className="group w-full">
@@ -569,7 +574,9 @@ function AssistantMessage({
                         <ReasoningDisplay
                             key={`reasoning-${i}`}
                             part={part}
-                            isStreaming={isPending && !hasText}
+                            isStreaming={
+                                isPending && !hasText && i === lastReasoningIndex
+                            }
                         />
                     );
                 }
