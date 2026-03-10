@@ -6,7 +6,6 @@ import {
     SpinnerIcon,
     XIcon
 } from "@phosphor-icons/react";
-import { Checkbox } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type { TodoItem } from "../types";
 
@@ -14,47 +13,20 @@ function TodoItemRow({ todo }: { todo: TodoItem }) {
     const isCompleted = todo.status === "completed";
     const isCancelled = todo.status === "cancelled";
     const isInProgress = todo.status === "in_progress";
-    const isPending = todo.status === "pending";
 
     return (
         <div className="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 transition-colors">
-            <div className="shrink-0 max-h-5">
+            <div className="shrink-0 inline-flex size-5 items-center justify-center rounded-sm border border-dark-600 bg-dark-800">
                 {isCompleted ? (
-                    <Checkbox
-                        checked
-                        className="pointer-events-none data-[checked]:bg-dark-700 data-[checked]:border-dark-600"
-                        icon={
-                            <CheckIcon
-                                className="size-3 text-dark-100"
-                                weight="bold"
-                            />
-                        }
-                    />
+                    <CheckIcon className="size-3 text-dark-100" weight="bold" />
                 ) : isCancelled ? (
-                    <Checkbox
-                        checked
-                        className="pointer-events-none data-[checked]:bg-dark-700 data-[checked]:border-dark-600"
-                        icon={
-                            <XIcon
-                                className="size-3 text-dark-100"
-                                weight="bold"
-                            />
-                        }
-                    />
+                    <XIcon className="size-3 text-dark-100" weight="bold" />
                 ) : isInProgress ? (
-                    <Checkbox
-                        alwaysShowIcon
-                        className="pointer-events-none"
-                        icon={
-                            <SpinnerIcon
-                                className="size-3 animate-spin text-dark-100"
-                                weight="bold"
-                            />
-                        }
+                    <SpinnerIcon
+                        className="size-3 animate-spin text-dark-100"
+                        weight="bold"
                     />
-                ) : (
-                    <Checkbox className="pointer-events-none" />
-                )}
+                ) : null}
             </div>
 
             <p
@@ -62,8 +34,7 @@ function TodoItemRow({ todo }: { todo: TodoItem }) {
                     "min-w-0 flex-1 text-xs leading-4 break-words transition-colors",
                     isCompleted && "line-through text-dark-200",
                     isCancelled && "line-through text-dark-200 italic",
-                    isInProgress && "text-dark-100",
-                    isPending && "text-dark-100"
+                    (isInProgress || todo.status === "pending") && "text-dark-100"
                 )}
             >
                 {todo.content}

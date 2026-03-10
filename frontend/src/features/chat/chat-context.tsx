@@ -21,6 +21,8 @@ import type {
     MessagePart,
     ProviderType,
     TodoItem,
+    TodoPriority,
+    TodoStatus,
     ToolInvocationPart
 } from "./types";
 
@@ -255,6 +257,64 @@ function extractTodosFromToolResult(
         Array.isArray((result as Record<string, unknown>).todos)
     ) {
         return (result as { todos: TodoItem[] }).todos;
+    }
+    return null;
+}
+
+function previewTodosFromToolCall(
+    toolName: string,
+    args: Record<string, unknown>,
+    currentTodos: TodoItem[]
+): TodoItem[] | null {
+    if (toolName === "todoSetStatus") {
+        const updates = args.updates as
+            | Array<{ todoId: string; status: string }>
+            | undefined;
+        if (!Array.isArray(updates) || updates.length === 0) return null;
+        return currentTodos.map((todo) => {
+            const update = updates.find((u) => u.todoId === todo.id);
+            return update
+                ? { ...todo, status: update.status as TodoStatus }
+                : todo;
+        });
+    }
+    if (toolName === "todoWrite") {
+        const incoming = args.todos as
+            | Array<{
+                  id: string;
+                  content: string;
+                  status: string;
+                  priority?: string;
+              }>
+            | undefined;
+        const merge = args.merge as boolean | undefined;
+        if (!Array.isArray(incoming)) return null;
+        if (!merge) {
+            return incoming.map((t, i) => ({
+                id: t.id,
+                content: t.content,
+                status: t.status as TodoStatus,
+                priority: (t.priority ?? "medium") as TodoPriority,
+                position: i,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            }));
+        }
+        const map = new Map(currentTodos.map((t) => [t.id, t]));
+        let nextPosition = currentTodos.length;
+        for (const t of incoming) {
+            const existing = map.get(t.id);
+            map.set(t.id, {
+                id: t.id,
+                content: t.content,
+                status: t.status as TodoStatus,
+                priority: (t.priority ?? "medium") as TodoPriority,
+                position: existing?.position ?? nextPosition++,
+                createdAt: existing?.createdAt ?? new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            });
+        }
+        return [...map.values()];
     }
     return null;
 }
@@ -725,6 +785,16 @@ export function ChatProvider({ children }: PropsWithChildren) {
                             }
                         };
                     });
+                    setConversationTodos((current) => {
+                        const currentTodos = current[conversationId] ?? [];
+                        const preview = previewTodosFromToolCall(
+                            toolCall.toolName,
+                            toolCall.args,
+                            currentTodos
+                        );
+                        if (!preview) return current;
+                        return { ...current, [conversationId]: preview };
+                    });
                 },
                 onToolResult(toolResult) {
                     applyToolResult(streamParts, toolResult);
@@ -982,6 +1052,17 @@ export function ChatProvider({ children }: PropsWithChildren) {
                                     )
                                 }
                             };
+                        });
+                        setConversationTodos((current) => {
+                            const currentTodos =
+                                current[conversationId] ?? [];
+                            const preview = previewTodosFromToolCall(
+                                toolCall.toolName,
+                                toolCall.args,
+                                currentTodos
+                            );
+                            if (!preview) return current;
+                            return { ...current, [conversationId]: preview };
                         });
                     },
                     onToolResult(toolResult) {
