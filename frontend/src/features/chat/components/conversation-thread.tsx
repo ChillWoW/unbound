@@ -6,7 +6,11 @@ import {
     CopyIcon,
     CheckIcon,
     ClockIcon,
-    WarningCircleIcon
+    GlobeHemisphereWestIcon,
+    ListChecksIcon,
+    MagnifyingGlassIcon,
+    WarningCircleIcon,
+    WrenchIcon
 } from "@phosphor-icons/react";
 import { Button, Tooltip, ImageViewer } from "@/components/ui";
 import { cn } from "@/lib/cn";
@@ -134,6 +138,26 @@ function getModelDisplayName(
     return model?.name ?? modelId.split("/").pop() ?? modelId;
 }
 
+function ToolCallIcon({
+    toolName,
+    className
+}: {
+    toolName: string;
+    className?: string;
+}) {
+    const Icon = TODO_TOOLS.has(toolName)
+        ? ListChecksIcon
+        : toolName === "webSearch"
+          ? MagnifyingGlassIcon
+          : toolName === "scrape"
+            ? GlobeHemisphereWestIcon
+            : WrenchIcon;
+
+    return (
+        <Icon className={cn("size-3.5 shrink-0", className)} weight="bold" />
+    );
+}
+
 function ReasoningDisplay({
     part,
     isStreaming
@@ -186,8 +210,12 @@ function ReasoningDisplay({
             <button
                 type="button"
                 onClick={() => setExpanded(!expanded)}
-                className="flex items-center gap-1 text-xs"
+                className="flex items-center gap-1.5 text-xs"
             >
+                <BrainIcon
+                    className="size-3.5 shrink-0 text-dark-200"
+                    weight="fill"
+                />
                 <span
                     className={cn(
                         "font-medium transition-colors",
@@ -262,6 +290,10 @@ function ToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
                         onClick={() => setExpanded(!expanded)}
                         className="flex items-center gap-1.5 text-xs"
                     >
+                        <ToolCallIcon
+                            toolName={part.toolName}
+                            className="text-dark-200"
+                        />
                         <span className="font-medium text-dark-200 hover:text-dark-50 transition-colors">
                             {label}
                         </span>
@@ -284,15 +316,23 @@ function ToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
 
         return (
             <div className="my-1.5">
-                <span
-                    className={cn(
-                        "text-xs font-medium transition-colors",
-                        isPending
-                            ? "wave-text"
-                            : "text-dark-200 hover:text-dark-50"
-                    )}
-                >
-                    {label}
+                <span className="flex items-center gap-1.5 text-xs">
+                    <ToolCallIcon
+                        toolName={part.toolName}
+                        className={cn(
+                            isPending ? "wave-text" : "text-dark-200"
+                        )}
+                    />
+                    <span
+                        className={cn(
+                            "font-medium transition-colors",
+                            isPending
+                                ? "wave-text"
+                                : "text-dark-200 hover:text-dark-50"
+                        )}
+                    >
+                        {label}
+                    </span>
                 </span>
             </div>
         );
@@ -301,6 +341,16 @@ function ToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
     if (isCompactTool) {
         return (
             <div className="my-1.5 flex items-center gap-2 text-xs text-dark-200">
+                <ToolCallIcon
+                    toolName={part.toolName}
+                    className={cn(
+                        isPending
+                            ? "wave-text"
+                            : isErrored
+                              ? "text-red-300"
+                              : "text-dark-200"
+                    )}
+                />
                 <span
                     className={cn(
                         "font-medium transition-colors",
@@ -334,6 +384,10 @@ function ToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
                 onClick={() => setExpanded(!expanded)}
                 className="flex items-center gap-1.5 text-xs"
             >
+                <ToolCallIcon
+                    toolName={part.toolName}
+                    className={cn(isPending ? "wave-text" : "text-dark-200")}
+                />
                 <span
                     className={cn(
                         "font-medium transition-colors",
@@ -558,7 +612,8 @@ function formatGenerationError(
 
 function StreamingIndicator() {
     return (
-        <div className="py-1">
+        <div className="flex items-center gap-1.5 py-1">
+            <BrainIcon className="wave-text size-3.5 shrink-0" weight="fill" />
             <span className="wave-text text-xs font-medium">
                 Planning next moves
             </span>
@@ -592,7 +647,9 @@ function AssistantMessage({
                             key={`reasoning-${i}`}
                             part={part}
                             isStreaming={
-                                isPending && !hasText && i === lastReasoningIndex
+                                isPending &&
+                                !hasText &&
+                                i === lastReasoningIndex
                             }
                         />
                     );
