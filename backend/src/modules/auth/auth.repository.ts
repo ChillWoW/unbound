@@ -1,6 +1,10 @@
 import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import { db } from "../../db/client";
-import { emailVerificationTokens, sessions } from "../../db/schema";
+import {
+    emailVerificationTokens,
+    passwordResetTokens,
+    sessions
+} from "../../db/schema";
 
 export const authRepository = {
     async createSession(input: {
@@ -36,6 +40,10 @@ export const authRepository = {
 
     async deleteSession(id: string) {
         await db.delete(sessions).where(eq(sessions.id, id));
+    },
+
+    async deleteSessionsByUserId(userId: string) {
+        await db.delete(sessions).where(eq(sessions.userId, userId));
     },
 
     async replaceEmailVerificationToken(input: {
@@ -91,6 +99,64 @@ export const authRepository = {
             .from(emailVerificationTokens)
             .where(eq(emailVerificationTokens.userId, userId))
             .orderBy(desc(emailVerificationTokens.createdAt))
+            .limit(1);
+
+        return token ?? null;
+    },
+
+    async replacePasswordResetToken(input: {
+        userId: string;
+        tokenHash: string;
+        expiresAt: Date;
+    }) {
+        await db
+            .delete(passwordResetTokens)
+            .where(eq(passwordResetTokens.userId, input.userId));
+
+        const [token] = await db
+            .insert(passwordResetTokens)
+            .values({
+                userId: input.userId,
+                tokenHash: input.tokenHash,
+                expiresAt: input.expiresAt
+            })
+            .returning();
+
+        if (!token) {
+            throw new Error("Failed to create password reset token.");
+        }
+
+        return token;
+    },
+
+    async findValidPasswordResetTokenByHash(tokenHash: string) {
+        const [token] = await db
+            .select()
+            .from(passwordResetTokens)
+            .where(
+                and(
+                    eq(passwordResetTokens.tokenHash, tokenHash),
+                    isNull(passwordResetTokens.consumedAt),
+                    gt(passwordResetTokens.expiresAt, new Date())
+                )
+            )
+            .limit(1);
+
+        return token ?? null;
+    },
+
+    async deletePasswordResetTokensForUser(userId: string) {
+        await db
+            .delete(passwordResetTokens)
+            .where(eq(passwordResetTokens.userId, userId));
+    },
+
+    async findLatestPasswordResetTokenForUser(userId: string) {
+        const [token] = await db
+            .select()
+            .from(passwordResetTokens)
+            .where(eq(passwordResetTokens.userId, userId))
+            .orderBy(desc(passwordResetTokens.createdAt))
             .limit(1);
 
         return token ?? null;

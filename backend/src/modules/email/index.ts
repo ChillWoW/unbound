@@ -7,6 +7,7 @@ export type {
     EmailTemplateMap,
     EmailTemplateName,
     NoticeEmailTemplateData,
+    ResetPasswordTemplateData,
     SendEmailInput,
     SendEmailResult,
     SendTemplateEmailInput

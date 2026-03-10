@@ -55,5 +55,18 @@ export const usersRepository = {
             .returning();
 
         return user ?? null;
+    },
+
+    async updatePassword(id: string, passwordHash: string, updatedAt = new Date()) {
+        const [user] = await db
+            .update(users)
+            .set({
+                passwordHash,
+                updatedAt
+            })
+            .where(eq(users.id, id))
+            .returning();
+
+        return user ?? null;
     }
 };

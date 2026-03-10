@@ -45,9 +45,16 @@ export interface VerifyEmailTemplateData {
     verifyUrl: string;
 }
 
+export interface ResetPasswordTemplateData {
+    previewText?: string;
+    name?: string | null;
+    resetUrl: string;
+}
+
 export interface EmailTemplateMap {
     action: ActionEmailTemplateData;
     notice: NoticeEmailTemplateData;
+    resetPassword: ResetPasswordTemplateData;
     verifyEmail: VerifyEmailTemplateData;
 }
 

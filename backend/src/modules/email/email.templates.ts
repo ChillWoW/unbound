@@ -4,6 +4,7 @@ import type {
     EmailTemplateMap,
     EmailTemplateName,
     NoticeEmailTemplateData,
+    ResetPasswordTemplateData,
     VerifyEmailTemplateData
 } from "./email.types";
 
@@ -136,6 +137,37 @@ function renderVerifyEmailTemplate(
     };
 }
 
+function renderResetPasswordTemplate(
+    data: ResetPasswordTemplateData
+): EmailTemplateContent {
+    const greeting = data.name?.trim()
+        ? `Hi ${escapeHtml(data.name.trim())},`
+        : "Hi,";
+
+    return {
+        subject: "Reset your Unbound password",
+        html: renderShell({
+            previewText:
+                data.previewText ??
+                "Use this secure link to reset your Unbound password.",
+            title: "Reset your password",
+            body: [
+                `<p style="margin:0 0 20px;">${greeting}</p>`,
+                '<p style="margin:0 0 20px;">We received a request to reset your password. Use the link below to choose a new one.</p>',
+                `<p style="margin:0 0 20px;"><a href="${escapeHtml(data.resetUrl)}" style="display:inline-block;height:32px;line-height:32px;border-radius:6px;background:#ffffff;color:#141414;padding:0 16px;text-decoration:none;font-size:14px;font-weight:500;">Reset password</a></p>`,
+                `<p style="margin:0 0 20px;">This link expires in 15 minutes and can only be used once.</p>`,
+                `<p style="margin:0;">If the button does not work, open this link:<br /><a href="${escapeHtml(data.resetUrl)}" style="color:#d1d5db;word-break:break-all;">${escapeHtml(data.resetUrl)}</a></p>`
+            ].join("")
+        }),
+        text: [
+            data.name?.trim() ? `Hi ${data.name.trim()},` : "Hi,",
+            "We received a request to reset your password. Use the link below to choose a new one.",
+            "This link expires in 15 minutes and can only be used once.",
+            `Reset password: ${data.resetUrl}`
+        ].join("\n\n")
+    };
+}
+
 const templateRenderers: {
     [TTemplate in EmailTemplateName]: (
         data: EmailTemplateMap[TTemplate]
@@ -143,6 +175,7 @@ const templateRenderers: {
 } = {
     action: renderActionTemplate,
     notice: renderNoticeTemplate,
+    resetPassword: renderResetPasswordTemplate,
     verifyEmail: renderVerifyEmailTemplate
 };
 

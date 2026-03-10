@@ -2,14 +2,24 @@ import api from "@/lib/api";
 import type {
     AuthSuccessResponse,
     CurrentUserResponse,
+    ForgotPasswordInput,
+    ForgotPasswordResponse,
     LoginInput,
     LogoutResponse,
     ResendVerificationInput,
     ResendVerificationResponse,
-    RegisterInput
+    RegisterInput,
+    ResetPasswordInput,
+    ResetPasswordResponse
 } from "./types";
 
 export const authApi = {
+    forgotPassword(input: ForgotPasswordInput) {
+        return api.post<ForgotPasswordResponse>("/api/auth/forgot-password", {
+            body: input
+        });
+    },
+
     login(input: LoginInput) {
         return api.post<AuthSuccessResponse>("/api/auth/login", {
             body: input
@@ -35,6 +45,12 @@ export const authApi = {
 
     register(input: RegisterInput) {
         return api.post<AuthSuccessResponse>("/api/auth/register", {
+            body: input
+        });
+    },
+
+    resetPassword(input: ResetPasswordInput) {
+        return api.post<ResetPasswordResponse>("/api/auth/reset-password", {
             body: input
         });
     },

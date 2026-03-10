@@ -12,8 +12,10 @@ import { authApi } from "./api";
 import type {
     AuthContextValue,
     AuthUser,
+    ForgotPasswordInput,
     LoginInput,
-    RegisterInput
+    RegisterInput,
+    ResetPasswordInput
 } from "./types";
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -63,6 +65,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
         };
     }, []);
 
+    const forgotPassword = useCallback(async (input: ForgotPasswordInput) => {
+        await authApi.forgotPassword(input);
+    }, []);
+
     const login = useCallback(async (input: LoginInput) => {
         const response = await authApi.login(input);
         authGenRef.current++;
@@ -75,6 +81,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
         authGenRef.current++;
         setUser(response.user);
         return response.user;
+    }, []);
+
+    const resetPassword = useCallback(async (input: ResetPasswordInput) => {
+        await authApi.resetPassword(input);
+        authGenRef.current++;
+        setUser(null);
     }, []);
 
     const logout = useCallback(async () => {
@@ -103,20 +115,24 @@ export function AuthProvider({ children }: PropsWithChildren) {
             isAuthenticated: user !== null,
             isVerified: user?.isEmailVerified ?? false,
             isLoading,
+            forgotPassword,
             login,
             logout,
             refresh,
             register,
             resendVerification,
+            resetPassword,
             verifyEmail
         }),
         [
+            forgotPassword,
             isLoading,
             login,
             logout,
             refresh,
             register,
             resendVerification,
+            resetPassword,
             user,
             verifyEmail
         ]

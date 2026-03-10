@@ -8,9 +8,11 @@ import { usersRepository } from "../users/users.repository";
 import { toPublicUser } from "../users/users.types";
 import { authRepository } from "./auth.repository";
 import type {
+    ForgotPasswordInput,
     LoginInput,
     RegisterInput,
     ResendVerificationInput,
+    ResetPasswordInput,
     Session,
     VerifyEmailInput
 } from "./auth.types";
@@ -18,6 +20,8 @@ import { AuthError } from "./auth.types";
 
 const EMAIL_VERIFICATION_TTL_MS = 1000 * 60 * 15;
 const EMAIL_VERIFICATION_RESEND_COOLDOWN_MS = 1000 * 60 * 15;
+const PASSWORD_RESET_TTL_MS = 1000 * 60 * 15;
+const PASSWORD_RESET_RESEND_COOLDOWN_MS = 1000 * 60 * 15;
 
 function normalizeEmail(email: string): string {
     return email.trim().toLowerCase();
@@ -39,12 +43,30 @@ function createEmailVerificationToken(): string {
     return randomBytes(32).toString("hex");
 }
 
+function createPasswordResetToken(): string {
+    return randomBytes(32).toString("hex");
+}
+
 function hashEmailVerificationToken(token: string): string {
+    return createHash("sha256").update(token).digest("hex");
+}
+
+function hashPasswordResetToken(token: string): string {
     return createHash("sha256").update(token).digest("hex");
 }
 
 function createEmailVerificationUrl(token: string): string {
     const url = new URL("/verify-email", env.corsOrigin);
+    url.searchParams.set("token", token);
+    return url.toString();
+}
+
+function createPasswordResetExpiry(): Date {
+    return new Date(Date.now() + PASSWORD_RESET_TTL_MS);
+}
+
+function createPasswordResetUrl(token: string): string {
+    const url = new URL("/reset-password", env.corsOrigin);
     url.searchParams.set("token", token);
     return url.toString();
 }
@@ -107,6 +129,55 @@ async function sendVerificationEmail(user: {
         });
     } catch (error) {
         logger.error("Failed to send verification email.", {
+            userId: user.id,
+            email: user.email,
+            error: error instanceof Error ? error.message : error
+        });
+    }
+}
+
+async function sendPasswordResetEmail(user: {
+    id: string;
+    email: string;
+    name: string | null;
+}) {
+    const latestToken = await authRepository.findLatestPasswordResetTokenForUser(
+        user.id
+    );
+
+    if (
+        latestToken &&
+        Date.now() - latestToken.createdAt.getTime() <
+            PASSWORD_RESET_RESEND_COOLDOWN_MS
+    ) {
+        return;
+    }
+
+    const token = createPasswordResetToken();
+
+    await authRepository.replacePasswordResetToken({
+        userId: user.id,
+        tokenHash: hashPasswordResetToken(token),
+        expiresAt: createPasswordResetExpiry()
+    });
+
+    try {
+        await emailService.sendTemplateEmail({
+            to: user.email,
+            template: "resetPassword",
+            data: {
+                name: user.name,
+                resetUrl: createPasswordResetUrl(token)
+            },
+            tags: [
+                {
+                    name: "type",
+                    value: "password_reset"
+                }
+            ]
+        });
+    } catch (error) {
+        logger.error("Failed to send password reset email.", {
             userId: user.id,
             email: user.email,
             error: error instanceof Error ? error.message : error
@@ -279,6 +350,60 @@ export const authService = {
         if (user && !user.emailVerifiedAt) {
             await sendVerificationEmail(user);
         }
+
+        return { success: true };
+    },
+
+    async forgotPassword(input: ForgotPasswordInput) {
+        const email = normalizeEmail(input.email);
+        const user = await usersRepository.findByEmail(email);
+
+        if (user) {
+            await sendPasswordResetEmail(user);
+        }
+
+        return { success: true };
+    },
+
+    async resetPassword(input: ResetPasswordInput) {
+        const token = input.token.trim();
+
+        if (!token) {
+            throw new AuthError(400, "Reset token is required.");
+        }
+
+        const record = await authRepository.findValidPasswordResetTokenByHash(
+            hashPasswordResetToken(token)
+        );
+
+        if (!record) {
+            throw new AuthError(
+                400,
+                "This password reset link is invalid or has expired."
+            );
+        }
+
+        const user = await usersRepository.findById(record.userId);
+
+        if (!user) {
+            throw new AuthError(
+                400,
+                "This password reset link is invalid or has expired."
+            );
+        }
+
+        const passwordHash = await hashPassword(input.password);
+        const updatedUser = await usersRepository.updatePassword(
+            user.id,
+            passwordHash
+        );
+
+        if (!updatedUser) {
+            throw new Error("Failed to reset password.");
+        }
+
+        await authRepository.deletePasswordResetTokensForUser(user.id);
+        await authRepository.deleteSessionsByUserId(user.id);
 
         return { success: true };
     }

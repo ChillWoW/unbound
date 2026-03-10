@@ -20,6 +20,15 @@ export interface VerifyEmailInput {
     token: string;
 }
 
+export interface ForgotPasswordInput {
+    email: string;
+}
+
+export interface ResetPasswordInput {
+    token: string;
+    password: string;
+}
+
 export interface ResendVerificationInput {
     email?: string;
 }
@@ -37,6 +46,14 @@ export interface VerificationSuccessResponse {
 }
 
 export interface ResendVerificationResponse {
+    success: boolean;
+}
+
+export interface ForgotPasswordResponse {
+    success: boolean;
+}
+
+export interface ResetPasswordResponse {
     success: boolean;
 }
 

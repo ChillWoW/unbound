@@ -18,6 +18,15 @@ const verifyEmailBody = t.Object({
     token: t.String({ minLength: 1, maxLength: 255 })
 });
 
+const forgotPasswordBody = t.Object({
+    email: t.String({ format: "email", maxLength: 255 })
+});
+
+const resetPasswordBody = t.Object({
+    token: t.String({ minLength: 1, maxLength: 255 }),
+    password: t.String({ minLength: 8, maxLength: 255 })
+});
+
 const resendVerificationBody = t.Object({
     email: t.Optional(t.String({ format: "email", maxLength: 255 }))
 });
@@ -83,6 +92,19 @@ export const authRoutes = new Elysia({ prefix: "/api/auth" })
         }
     )
     .post(
+        "/forgot-password",
+        async ({ body, set }) => {
+            try {
+                return await authService.forgotPassword(body);
+            } catch (error) {
+                return handleAuthError(error, set);
+            }
+        },
+        {
+            body: forgotPasswordBody
+        }
+    )
+    .post(
         "/verify-email",
         async ({ body, set }) => {
             try {
@@ -100,6 +122,19 @@ export const authRoutes = new Elysia({ prefix: "/api/auth" })
         },
         {
             body: verifyEmailBody
+        }
+    )
+    .post(
+        "/reset-password",
+        async ({ body, set }) => {
+            try {
+                return await authService.resetPassword(body);
+            } catch (error) {
+                return handleAuthError(error, set);
+            }
+        },
+        {
+            body: resetPasswordBody
         }
     )
     .post(
