@@ -27,6 +27,10 @@ export interface ContextResult {
 const DEFAULT_RECENT_WINDOW = 20;
 const DEFAULT_MEDIA_RETENTION = 2;
 
+function normalizeWhitespace(value: string): string {
+    return value.replace(/\s+/g, " ").trim();
+}
+
 function safeParts(record: MessageRecord): MessagePart[] {
     const raw = record.parts;
     if (!raw || !Array.isArray(raw)) return [];
@@ -135,6 +139,15 @@ function summarizeToolInvocation(
         }
         case "todoDelete":
             return "Deleted todo(s)";
+        case "webSearch": {
+            const query =
+                typeof a.query === "string" ? normalizeWhitespace(a.query) : null;
+            return query ? `Searched web for \"${query}\"` : "Searched the web";
+        }
+        case "scrape": {
+            const url = typeof a.url === "string" ? a.url.trim() : null;
+            return url ? `Scraped ${url}` : "Scraped a page";
+        }
         default:
             return `Used ${toolName}`;
     }

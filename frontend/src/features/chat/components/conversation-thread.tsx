@@ -32,19 +32,61 @@ const TODO_TOOLS = new Set([
     "todoDelete"
 ]);
 
+const COMPACT_TOOLS = new Set(["webSearch", "scrape"]);
+
 const TOOL_LABELS: Record<string, string> = {
     todoWrite: "Updating tasks…",
     todoRead: "Reading tasks…",
     todoSetStatus: "Updating task status…",
-    todoDelete: "Removing tasks…"
+    todoDelete: "Removing tasks…",
+    webSearch: "Searching the web…",
+    scrape: "Scraping page…"
 };
 
 const TOOL_LABELS_DONE: Record<string, string> = {
     todoWrite: "Updated tasks",
     todoRead: "Read tasks",
     todoSetStatus: "Updated task status",
-    todoDelete: "Removed tasks"
+    todoDelete: "Removed tasks",
+    webSearch: "Searched the web",
+    scrape: "Scraped"
 };
+
+function getToolUrl(part: ToolInvocationPart): string | null {
+    const source = part.state === "result" ? part.result : part.args;
+
+    if (!source || typeof source !== "object") {
+        return null;
+    }
+
+    const record = source as Record<string, unknown>;
+
+    if (part.toolName === "webSearch") {
+        const results = Array.isArray(record.results)
+            ? (record.results as Array<Record<string, unknown>>)
+            : [];
+        const firstResult = results.find(
+            (result) => typeof result.url === "string" && result.url.trim()
+        );
+
+        if (firstResult && typeof firstResult.url === "string") {
+            return firstResult.url.trim();
+        }
+    }
+
+    const value = record.url ?? record.proxyUrl;
+
+    return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function formatToolUrl(value: string): string {
+    try {
+        const url = new URL(value);
+        return `${url.hostname}${url.pathname === "/" ? "" : url.pathname}`;
+    } catch {
+        return value;
+    }
+}
 
 function getMessageText(parts: MessagePart[]) {
     return parts
@@ -177,6 +219,8 @@ function ToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
     const isErrored = part.state === "error";
     const hasOutput = part.state === "result" && part.result !== undefined;
     const isTodoTool = TODO_TOOLS.has(part.toolName);
+    const isCompactTool = COMPACT_TOOLS.has(part.toolName);
+    const toolUrl = getToolUrl(part);
 
     const label = isPending
         ? (TOOL_LABELS[part.toolName] ?? `${part.toolName}…`)
@@ -233,6 +277,35 @@ function ToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
                 >
                     {label}
                 </span>
+            </div>
+        );
+    }
+
+    if (isCompactTool) {
+        return (
+            <div className="my-1.5 flex items-center gap-2 text-xs text-dark-200">
+                <span
+                    className={cn(
+                        "font-medium transition-colors",
+                        isPending
+                            ? "wave-text"
+                            : isErrored
+                              ? "text-red-300"
+                              : "text-dark-200 hover:text-dark-50"
+                    )}
+                >
+                    {label}
+                </span>
+                {part.toolName === "webSearch" && toolUrl ? (
+                    <span className="truncate text-dark-300">
+                        {formatToolUrl(toolUrl)}
+                    </span>
+                ) : null}
+                {part.toolName === "scrape" && toolUrl ? (
+                    <span className="truncate text-dark-300">
+                        {formatToolUrl(toolUrl)}
+                    </span>
+                ) : null}
             </div>
         );
     }

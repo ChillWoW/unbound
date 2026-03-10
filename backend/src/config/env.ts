@@ -47,6 +47,7 @@ export const env = {
     debug: process.env.DEBUG === "true",
     port: getNumberEnv("PORT", 1234),
     corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:3500",
+    searxngBaseUrl: getOptionalEnv("SEARXNG_BASE_URL"),
     databaseUrl: getRequiredEnv("DATABASE_URL"),
     sessionCookieName: process.env.SESSION_COOKIE_NAME ?? "unbound_session",
     sessionMaxAgeSeconds: getNumberEnv(
