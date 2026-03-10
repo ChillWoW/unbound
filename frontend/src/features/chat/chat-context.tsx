@@ -532,6 +532,7 @@ function createStreamCallbacks(state: StreamState, deps: StreamCallbackDeps) {
 
 export function ChatProvider({ children }: PropsWithChildren) {
     const { isAuthenticated, isLoading, user } = useAuth();
+    const canUseApp = isAuthenticated && (user?.isEmailVerified ?? false);
     const [allModels, setAllModels] = useState<ChatModel[]>([]);
     const [configuredProviders, setConfiguredProviders] = useState<
         ProviderType[]
@@ -718,7 +719,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
     );
 
     const loadConversations = useCallback(async () => {
-        if (!isAuthenticated) {
+        if (!canUseApp) {
             setConversations([]);
             return;
         }
@@ -735,7 +736,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
         } finally {
             setIsLoadingConversations(false);
         }
-    }, [isAuthenticated]);
+    }, [canUseApp]);
 
     const loadModels = useCallback(async () => {
         setIsLoadingModels(true);
@@ -841,7 +842,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
             return;
         }
 
-        if (!isAuthenticated) {
+        if (!canUseApp) {
             setConversations([]);
             setConversationDetails({});
             setConversationTodos({});
@@ -853,7 +854,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
         }
 
         void loadConversations();
-    }, [isAuthenticated, isLoading, loadConversations]);
+    }, [canUseApp, isLoading, loadConversations]);
 
     useEffect(() => {
         if (isLoading) {

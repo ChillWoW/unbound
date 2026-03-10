@@ -42,5 +42,18 @@ export const usersRepository = {
             .limit(1);
 
         return user ?? null;
+    },
+
+    async markEmailVerified(id: string, verifiedAt = new Date()) {
+        const [user] = await db
+            .update(users)
+            .set({
+                emailVerifiedAt: verifiedAt,
+                updatedAt: verifiedAt
+            })
+            .where(eq(users.id, id))
+            .returning();
+
+        return user ?? null;
     }
 };

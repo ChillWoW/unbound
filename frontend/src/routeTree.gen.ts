@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ChatRouteImport } from './routes/_chat'
@@ -17,6 +18,11 @@ import { Route as ChatSettingsRouteImport } from './routes/_chat.settings'
 import { Route as ChatConversationsIndexRouteImport } from './routes/_chat.conversations.index'
 import { Route as ChatConversationsConversationIdRouteImport } from './routes/_chat.conversations.$conversationId'
 
+const VerifyEmailRoute = VerifyEmailRouteImport.update({
+  id: '/verify-email',
+  path: '/verify-email',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
   path: '/register',
@@ -57,6 +63,7 @@ export interface FileRoutesByFullPath {
   '/': typeof ChatIndexRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/settings': typeof ChatSettingsRoute
   '/conversations/$conversationId': typeof ChatConversationsConversationIdRoute
   '/conversations/': typeof ChatConversationsIndexRoute
@@ -64,6 +71,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/settings': typeof ChatSettingsRoute
   '/': typeof ChatIndexRoute
   '/conversations/$conversationId': typeof ChatConversationsConversationIdRoute
@@ -74,6 +82,7 @@ export interface FileRoutesById {
   '/_chat': typeof ChatRouteWithChildren
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/_chat/settings': typeof ChatSettingsRoute
   '/_chat/': typeof ChatIndexRoute
   '/_chat/conversations/$conversationId': typeof ChatConversationsConversationIdRoute
@@ -85,6 +94,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/register'
+    | '/verify-email'
     | '/settings'
     | '/conversations/$conversationId'
     | '/conversations/'
@@ -92,6 +102,7 @@ export interface FileRouteTypes {
   to:
     | '/login'
     | '/register'
+    | '/verify-email'
     | '/settings'
     | '/'
     | '/conversations/$conversationId'
@@ -101,6 +112,7 @@ export interface FileRouteTypes {
     | '/_chat'
     | '/login'
     | '/register'
+    | '/verify-email'
     | '/_chat/settings'
     | '/_chat/'
     | '/_chat/conversations/$conversationId'
@@ -111,10 +123,18 @@ export interface RootRouteChildren {
   ChatRoute: typeof ChatRouteWithChildren
   LoginRoute: typeof LoginRoute
   RegisterRoute: typeof RegisterRoute
+  VerifyEmailRoute: typeof VerifyEmailRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/verify-email': {
+      id: '/verify-email'
+      path: '/verify-email'
+      fullPath: '/verify-email'
+      preLoaderRoute: typeof VerifyEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/register': {
       id: '/register'
       path: '/register'
@@ -187,6 +207,7 @@ const rootRouteChildren: RootRouteChildren = {
   ChatRoute: ChatRouteWithChildren,
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
+  VerifyEmailRoute: VerifyEmailRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

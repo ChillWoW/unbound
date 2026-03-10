@@ -1,5 +1,5 @@
 import { env } from "../../config/env";
-import { requireAuth } from "../../middleware/require-auth";
+import { requireVerifiedAuth } from "../../middleware/require-auth";
 import { decryptText, encryptText } from "../../lib/encryption";
 import { PROVIDER_LABELS, type ProviderType } from "../../lib/provider-registry";
 import { settingsRepository } from "./settings.repository";
@@ -44,7 +44,7 @@ function createKeyPreview(value: string): string {
 
 export const settingsService = {
     async getSettings(request: Request) {
-        const user = await requireAuth(request);
+        const user = await requireVerifiedAuth(request);
         const settings = await settingsRepository.findByUserId(user.id);
         return toUserSettingsSummary(settings);
     },
@@ -54,7 +54,7 @@ export const settingsService = {
         provider: ProviderType,
         input: { apiKey: string }
     ) {
-        const user = await requireAuth(request);
+        const user = await requireVerifiedAuth(request);
         const label = PROVIDER_LABELS[provider];
         const normalizedApiKey = normalizeApiKey(input.apiKey, label);
         const ciphertext = encryptText(
@@ -74,7 +74,7 @@ export const settingsService = {
     },
 
     async clearProviderApiKey(request: Request, provider: ProviderType) {
-        const user = await requireAuth(request);
+        const user = await requireVerifiedAuth(request);
         await settingsRepository.clearProviderApiKey(user.id, provider);
         const settings = await settingsRepository.findByUserId(user.id);
         return toUserSettingsSummary(settings);

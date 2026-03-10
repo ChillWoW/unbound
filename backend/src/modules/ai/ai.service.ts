@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { generateText, streamText, stepCountIs, type ModelMessage } from "ai";
 import { env } from "../../config/env";
-import { requireAuth } from "../../middleware/require-auth";
+import { requireVerifiedAuth } from "../../middleware/require-auth";
 import { createModelInstance } from "./provider-factory";
 import {
     isValidProvider,
@@ -559,7 +559,7 @@ export const aiService = {
         provider: string,
         thinking = false
     ): Promise<Response> {
-        const user = await requireAuth(request);
+        const user = await requireVerifiedAuth(request);
 
         if (generationManager.isActive(conversationId)) {
             throw new ConversationError(
@@ -706,7 +706,7 @@ export const aiService = {
         request: Request,
         conversationId: string
     ): Promise<Response> {
-        const user = await requireAuth(request);
+        const user = await requireVerifiedAuth(request);
 
         const conversation =
             await conversationsRepository.findConversationByIdForUser(

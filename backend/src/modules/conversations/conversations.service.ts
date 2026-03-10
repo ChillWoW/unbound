@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { requireAuth } from "../../middleware/require-auth";
+import { requireVerifiedAuth } from "../../middleware/require-auth";
 import { generationManager } from "../ai/generation-manager";
 import { conversationsRepository } from "./conversations.repository";
 import {
@@ -130,7 +130,7 @@ async function getConversationDetailOrThrow(
 
 export const conversationsService = {
     async listConversations(request: Request) {
-        const user = await requireAuth(request);
+        const user = await requireVerifiedAuth(request);
         const conversationRecords =
             await conversationsRepository.listConversationsByUserId(user.id);
         const conversationIds = conversationRecords.map(
@@ -162,13 +162,13 @@ export const conversationsService = {
     },
 
     async getConversation(request: Request, conversationId: string) {
-        const user = await requireAuth(request);
+        const user = await requireVerifiedAuth(request);
 
         return getConversationDetailOrThrow(user.id, conversationId);
     },
 
     async createConversation(request: Request, input: { content: string; attachments?: Array<{ data: string; mimeType: string }> }) {
-        const user = await requireAuth(request);
+        const user = await requireVerifiedAuth(request);
         const messageParts = createMessageParts(input.content, input.attachments);
         const title = createConversationTitle(input.content);
 
@@ -195,7 +195,7 @@ export const conversationsService = {
         conversationId: string,
         input: { content: string; attachments?: Array<{ data: string; mimeType: string }> }
     ) {
-        const user = await requireAuth(request);
+        const user = await requireVerifiedAuth(request);
         const conversation =
             await conversationsRepository.findConversationByIdForUser(
                 user.id,
@@ -225,7 +225,7 @@ export const conversationsService = {
         conversationId: string,
         input: { assistantMessageId: string }
     ) {
-        const user = await requireAuth(request);
+        const user = await requireVerifiedAuth(request);
         const conversation =
             await conversationsRepository.findConversationByIdForUser(
                 user.id,
@@ -266,7 +266,7 @@ export const conversationsService = {
         conversationId: string,
         input: { title?: string; isFavorite?: boolean }
     ) {
-        const user = await requireAuth(request);
+        const user = await requireVerifiedAuth(request);
 
         const hasTitleUpdate = input.title !== undefined;
         const hasFavoriteUpdate = input.isFavorite !== undefined;
@@ -306,7 +306,7 @@ export const conversationsService = {
     },
 
     async deleteConversation(request: Request, conversationId: string) {
-        const user = await requireAuth(request);
+        const user = await requireVerifiedAuth(request);
 
         const deleted = await conversationsRepository.deleteConversationByIdForUser(
             user.id,

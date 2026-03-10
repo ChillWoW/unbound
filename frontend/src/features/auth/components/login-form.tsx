@@ -44,6 +44,18 @@ export function LoginForm() {
             });
             await navigate({ to: "/" });
         } catch (submitError) {
+            if (submitError instanceof ApiError && submitError.status === 403) {
+                notify.error({
+                    title: "Verify your email",
+                    description: getErrorMessage(submitError)
+                });
+                await navigate({
+                    to: "/verify-email",
+                    search: { email: email.trim() }
+                });
+                return;
+            }
+
             notify.error({
                 title: "Couldn't sign in",
                 description: getErrorMessage(submitError)

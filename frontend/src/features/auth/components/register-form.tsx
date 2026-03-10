@@ -44,7 +44,10 @@ export function RegisterForm() {
                 email,
                 password
             });
-            await navigate({ to: "/" });
+            await navigate({
+                to: "/verify-email",
+                search: { email: email.trim() }
+            });
         } catch (submitError) {
             setError(getErrorMessage(submitError));
         } finally {

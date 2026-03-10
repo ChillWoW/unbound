@@ -1,5 +1,8 @@
 import { Elysia, t } from "elysia";
-import { UnauthorizedError, requireAuth } from "../../middleware/require-auth";
+import {
+    UnauthorizedError,
+    requireVerifiedAuth
+} from "../../middleware/require-auth";
 import { todosRepository } from "./todos.repository";
 import { conversationsRepository } from "../conversations/conversations.repository";
 import { ConversationError } from "../conversations/conversations.types";
@@ -41,7 +44,7 @@ export const todosRoutes = new Elysia({
         "/:conversationId/todos",
         async ({ params, request, set }) => {
             try {
-                const user = await requireAuth(request);
+                const user = await requireVerifiedAuth(request);
                 const conversation =
                     await conversationsRepository.findConversationByIdForUser(
                         user.id,
@@ -80,7 +83,7 @@ export const todosRoutes = new Elysia({
         "/:conversationId/todos/:todoId",
         async ({ body, params, request, set }) => {
             try {
-                const user = await requireAuth(request);
+                const user = await requireVerifiedAuth(request);
                 const conversation =
                     await conversationsRepository.findConversationByIdForUser(
                         user.id,

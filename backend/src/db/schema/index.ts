@@ -1,5 +1,6 @@
 export * from "./conversations";
 export * from "./conversation-reads";
+export * from "./email-verification-tokens";
 export * from "./messages";
 export * from "./users";
 export * from "./sessions";

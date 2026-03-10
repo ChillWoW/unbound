@@ -39,9 +39,16 @@ export interface NoticeEmailTemplateData {
     outro?: string;
 }
 
+export interface VerifyEmailTemplateData {
+    previewText?: string;
+    name?: string | null;
+    verifyUrl: string;
+}
+
 export interface EmailTemplateMap {
     action: ActionEmailTemplateData;
     notice: NoticeEmailTemplateData;
+    verifyEmail: VerifyEmailTemplateData;
 }
 
 export type EmailTemplateName = keyof EmailTemplateMap;

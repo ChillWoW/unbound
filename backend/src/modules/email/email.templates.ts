@@ -3,7 +3,8 @@ import type {
     EmailTemplateContent,
     EmailTemplateMap,
     EmailTemplateName,
-    NoticeEmailTemplateData
+    NoticeEmailTemplateData,
+    VerifyEmailTemplateData
 } from "./email.types";
 
 function escapeHtml(value: string): string {
@@ -106,13 +107,43 @@ function renderNoticeTemplate(data: NoticeEmailTemplateData): EmailTemplateConte
     };
 }
 
+function renderVerifyEmailTemplate(
+    data: VerifyEmailTemplateData
+): EmailTemplateContent {
+    const greeting = data.name?.trim()
+        ? `Hi ${escapeHtml(data.name.trim())},`
+        : "Hi,";
+
+    return {
+        subject: "Verify your email for Unbound",
+        html: renderShell({
+            previewText:
+                data.previewText ??
+                "Verify your email address to start using Unbound.",
+            title: "Verify your email",
+            body: [
+                `<p style="margin:0 0 20px;">${greeting}</p>`,
+                '<p style="margin:0 0 20px;">Confirm your email address to unlock your Unbound workspace.</p>',
+                `<p style="margin:0 0 20px;"><a href="${escapeHtml(data.verifyUrl)}" style="display:inline-block;height:32px;line-height:32px;border-radius:6px;background:#e5eefc;color:#111827;padding:0 16px;text-decoration:none;font-size:14px;font-weight:500;">Verify email</a></p>`,
+                `<p style="margin:0;">If the button does not work, open this link:<br /><a href="${escapeHtml(data.verifyUrl)}" style="color:#8eb8ff;word-break:break-all;">${escapeHtml(data.verifyUrl)}</a></p>`
+            ].join("")
+        }),
+        text: [
+            data.name?.trim() ? `Hi ${data.name.trim()},` : "Hi,",
+            "Confirm your email address to unlock your Unbound workspace.",
+            `Verify email: ${data.verifyUrl}`
+        ].join("\n\n")
+    };
+}
+
 const templateRenderers: {
     [TTemplate in EmailTemplateName]: (
         data: EmailTemplateMap[TTemplate]
     ) => EmailTemplateContent;
 } = {
     action: renderActionTemplate,
-    notice: renderNoticeTemplate
+    notice: renderNoticeTemplate,
+    verifyEmail: renderVerifyEmailTemplate
 };
 
 export function renderEmailTemplate<TTemplate extends EmailTemplateName>(

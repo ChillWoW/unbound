@@ -1,12 +1,23 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { env } from "../../config/env";
 import { getSessionIdFromRequest } from "../../lib/cookies";
+import { logger } from "../../lib/logger";
 import { hashPassword, verifyPassword } from "../../lib/password";
+import { emailService } from "../email";
 import { usersRepository } from "../users/users.repository";
 import { toPublicUser } from "../users/users.types";
 import { authRepository } from "./auth.repository";
-import type { LoginInput, RegisterInput, Session } from "./auth.types";
+import type {
+    LoginInput,
+    RegisterInput,
+    ResendVerificationInput,
+    Session,
+    VerifyEmailInput
+} from "./auth.types";
 import { AuthError } from "./auth.types";
+
+const EMAIL_VERIFICATION_TTL_MS = 1000 * 60 * 15;
+const EMAIL_VERIFICATION_RESEND_COOLDOWN_MS = 1000 * 60 * 15;
 
 function normalizeEmail(email: string): string {
     return email.trim().toLowerCase();
@@ -20,12 +31,87 @@ function createSessionExpiry(): Date {
     return new Date(Date.now() + env.sessionMaxAgeSeconds * 1000);
 }
 
+function createEmailVerificationExpiry(): Date {
+    return new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS);
+}
+
+function createEmailVerificationToken(): string {
+    return randomBytes(32).toString("hex");
+}
+
+function hashEmailVerificationToken(token: string): string {
+    return createHash("sha256").update(token).digest("hex");
+}
+
+function createEmailVerificationUrl(token: string): string {
+    const url = new URL("/verify-email", env.corsOrigin);
+    url.searchParams.set("token", token);
+    return url.toString();
+}
+
 async function createSessionForUser(userId: string): Promise<Session> {
     return authRepository.createSession({
         id: createSessionId(),
         userId,
         expiresAt: createSessionExpiry()
     });
+}
+
+async function sendVerificationEmail(user: {
+    id: string;
+    email: string;
+    name: string | null;
+}) {
+    const latestToken = await authRepository.findLatestEmailVerificationTokenForUser(
+        user.id
+    );
+
+    if (
+        latestToken &&
+        Date.now() - latestToken.createdAt.getTime() <
+            EMAIL_VERIFICATION_RESEND_COOLDOWN_MS
+    ) {
+        const availableAt = new Date(
+            latestToken.createdAt.getTime() +
+                EMAIL_VERIFICATION_RESEND_COOLDOWN_MS
+        );
+
+        throw new AuthError(
+            429,
+            `A verification email was already sent recently. Please try again after ${availableAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.`
+        );
+    }
+
+    const token = createEmailVerificationToken();
+
+    await authRepository.replaceEmailVerificationToken({
+        userId: user.id,
+        tokenHash: hashEmailVerificationToken(token),
+        expiresAt: createEmailVerificationExpiry()
+    });
+
+    try {
+        await emailService.sendTemplateEmail({
+            to: user.email,
+            template: "verifyEmail",
+            data: {
+                name: user.name,
+                verifyUrl: createEmailVerificationUrl(token)
+            },
+            tags: [
+                {
+                    name: "type",
+                    value: "email_verification"
+                }
+            ]
+        });
+    } catch (error) {
+        logger.error("Failed to send verification email.", {
+            userId: user.id,
+            email: user.email,
+            error: error instanceof Error ? error.message : error
+        });
+    }
 }
 
 export const authService = {
@@ -47,6 +133,7 @@ export const authService = {
             passwordHash
         });
         const session = await createSessionForUser(user.id);
+        await sendVerificationEmail(user);
 
         return {
             user: toPublicUser(user),
@@ -69,6 +156,13 @@ export const authService = {
 
         if (!isValidPassword) {
             throw new AuthError(401, "Invalid email or password.");
+        }
+
+        if (!user.emailVerifiedAt) {
+            throw new AuthError(
+                403,
+                "Please verify your email before signing in."
+            );
         }
 
         const session = await createSessionForUser(user.id);
@@ -115,5 +209,77 @@ export const authService = {
         }
 
         return toPublicUser(user);
+    },
+
+    async verifyEmail(input: VerifyEmailInput) {
+        const token = input.token.trim();
+
+        if (!token) {
+            throw new AuthError(400, "Verification token is required.");
+        }
+
+        const record = await authRepository.findValidEmailVerificationTokenByHash(
+            hashEmailVerificationToken(token)
+        );
+
+        if (!record) {
+            throw new AuthError(
+                400,
+                "This verification link is invalid or has expired."
+            );
+        }
+
+        const user = await usersRepository.findById(record.userId);
+
+        if (!user) {
+            throw new AuthError(
+                400,
+                "This verification link is invalid or has expired."
+            );
+        }
+
+        const verifiedUser = user.emailVerifiedAt
+            ? user
+            : await usersRepository.markEmailVerified(user.id);
+
+        if (!verifiedUser) {
+            throw new Error("Failed to verify email.");
+        }
+
+        await authRepository.deleteEmailVerificationTokensForUser(user.id);
+        const session = await createSessionForUser(user.id);
+
+        return {
+            user: toPublicUser(verifiedUser),
+            session
+        };
+    },
+
+    async resendVerification(request: Request, input: ResendVerificationInput) {
+        const currentUser = await this.getCurrentUser(request);
+
+        if (currentUser && !currentUser.isEmailVerified) {
+            const user = await usersRepository.findById(currentUser.id);
+
+            if (user) {
+                await sendVerificationEmail(user);
+            }
+
+            return { success: true };
+        }
+
+        const email = input.email ? normalizeEmail(input.email) : null;
+
+        if (!email) {
+            throw new AuthError(400, "Email is required.");
+        }
+
+        const user = await usersRepository.findByEmail(email);
+
+        if (user && !user.emailVerifiedAt) {
+            await sendVerificationEmail(user);
+        }
+
+        return { success: true };
     }
 };

@@ -16,12 +16,28 @@ export interface LoginInput {
     password: string;
 }
 
+export interface VerifyEmailInput {
+    token: string;
+}
+
+export interface ResendVerificationInput {
+    email?: string;
+}
+
 export interface AuthSuccessResponse {
     user: PublicUser;
 }
 
 export interface CurrentUserResponse {
     user: PublicUser | null;
+}
+
+export interface VerificationSuccessResponse {
+    user: PublicUser;
+}
+
+export interface ResendVerificationResponse {
+    success: boolean;
 }
 
 export class AuthError extends Error {

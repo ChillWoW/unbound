@@ -77,17 +77,42 @@ export function AuthProvider({ children }: PropsWithChildren) {
         setUser(null);
     }, []);
 
+    const resendVerification = useCallback(
+        async (input?: { email?: string }) => {
+            await authApi.resendVerification(input);
+        },
+        []
+    );
+
+    const verifyEmail = useCallback(async (token: string) => {
+        const response = await authApi.verifyEmail(token);
+        setUser(response.user);
+        return response.user;
+    }, []);
+
     const value = useMemo<AuthContextValue>(
         () => ({
             user,
             isAuthenticated: user !== null,
+            isVerified: user?.isEmailVerified ?? false,
             isLoading,
             login,
             logout,
             refresh,
-            register
+            register,
+            resendVerification,
+            verifyEmail
         }),
-        [isLoading, login, logout, refresh, register, user]
+        [
+            isLoading,
+            login,
+            logout,
+            refresh,
+            register,
+            resendVerification,
+            user,
+            verifyEmail
+        ]
     );
 
     return (

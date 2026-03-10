@@ -7,10 +7,14 @@ export const Route = createFileRoute("/login")({
 });
 
 function LoginPage() {
-    const { isAuthenticated, isLoading } = useAuth();
+    const { isAuthenticated, isLoading, isVerified } = useAuth();
 
-    if (!isLoading && isAuthenticated) {
+    if (!isLoading && isAuthenticated && isVerified) {
         return <Navigate to="/" />;
+    }
+
+    if (!isLoading && isAuthenticated && !isVerified) {
+        return <Navigate to="/verify-email" />;
     }
 
     return <LoginForm />;

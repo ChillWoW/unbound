@@ -14,6 +14,14 @@ const loginBody = t.Object({
     password: t.String({ minLength: 8, maxLength: 255 })
 });
 
+const verifyEmailBody = t.Object({
+    token: t.String({ minLength: 1, maxLength: 255 })
+});
+
+const resendVerificationBody = t.Object({
+    email: t.Optional(t.String({ format: "email", maxLength: 255 }))
+});
+
 function setCookieHeader(
     headers: Record<string, string | number>,
     value: string
@@ -72,6 +80,39 @@ export const authRoutes = new Elysia({ prefix: "/api/auth" })
         },
         {
             body: loginBody
+        }
+    )
+    .post(
+        "/verify-email",
+        async ({ body, set }) => {
+            try {
+                const result = await authService.verifyEmail(body);
+
+                setCookieHeader(
+                    set.headers,
+                    createSessionCookie(result.session.id)
+                );
+
+                return { user: result.user };
+            } catch (error) {
+                return handleAuthError(error, set);
+            }
+        },
+        {
+            body: verifyEmailBody
+        }
+    )
+    .post(
+        "/resend-verification",
+        async ({ body, request, set }) => {
+            try {
+                return await authService.resendVerification(request, body);
+            } catch (error) {
+                return handleAuthError(error, set);
+            }
+        },
+        {
+            body: resendVerificationBody
         }
     )
     .post("/logout", async ({ request, set }) => {

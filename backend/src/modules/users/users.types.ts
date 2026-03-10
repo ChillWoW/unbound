@@ -8,6 +8,8 @@ export interface PublicUser {
     id: string;
     email: string;
     name: string | null;
+    emailVerifiedAt: string | null;
+    isEmailVerified: boolean;
     createdAt: string;
 }
 
@@ -16,6 +18,8 @@ export function toPublicUser(user: User): PublicUser {
         id: user.id,
         email: user.email,
         name: user.name ?? null,
+        emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null,
+        isEmailVerified: user.emailVerifiedAt !== null,
         createdAt: user.createdAt.toISOString()
     };
 }

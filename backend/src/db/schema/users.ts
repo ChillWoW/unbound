@@ -13,6 +13,7 @@ export const users = pgTable(
         email: text("email").notNull(),
         passwordHash: text("password_hash").notNull(),
         name: text("name"),
+        emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
         createdAt: timestamp("created_at", { withTimezone: true })
             .defaultNow()
             .notNull(),
