@@ -297,7 +297,7 @@ export function ChatInput({
         ? selectedModel.inputModalities.includes("file")
         : false;
     const isModelSelectDisabled =
-        disabled || isSubmitting || isModelsLoading || models.length === 0;
+        disabled || isModelsLoading || models.length === 0;
 
     // ── Value helpers ────────────────────────────────────────────────────
 
