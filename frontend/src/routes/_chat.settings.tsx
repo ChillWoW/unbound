@@ -145,7 +145,7 @@ function ProviderRow({
     return (
         <form
             onSubmit={handleSubmit}
-            className="flex items-center gap-4 py-4 border-b border-dark-700 last:border-b-0"
+            className="flex flex-wrap items-center gap-4 py-4 border-b border-dark-700 last:border-b-0"
         >
             {/* Icon */}
             <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-dark-700">
@@ -171,7 +171,7 @@ function ProviderRow({
             </div>
 
             {/* Input + save */}
-            <div className="flex flex-1 items-center gap-2 min-w-0">
+            <div className="flex w-full md:flex-1 items-center gap-2 min-w-0">
                 <Input
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}

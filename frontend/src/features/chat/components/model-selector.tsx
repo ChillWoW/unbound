@@ -1,13 +1,11 @@
 import {
-    Input,
     Popover,
     PopoverContent,
     PopoverTrigger,
-    Switch,
     Tooltip
 } from "@/components/ui";
 import type { ChatModel, ProviderType } from "../types";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     MagnifyingGlassIcon,
     ChatTextIcon,
@@ -16,9 +14,9 @@ import {
     FilmStripIcon,
     FileIcon,
     InfoIcon,
-    BrainIcon,
     FunnelIcon,
-    GearIcon
+    CheckIcon,
+    CaretUpDownIcon
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/cn";
 import {
@@ -102,13 +100,11 @@ function formatProviderName(provider: string): string {
 function ModalityBadge({ modality }: { modality: string }) {
     const entry = MODALITY_ICONS[modality.toLowerCase()];
     if (!entry)
-        return <span className="capitalize text-dark-100">{modality}</span>;
-
+        return <span className="capitalize text-dark-200">{modality}</span>;
     const Icon = entry.icon;
-
     return (
-        <div className="flex items-center gap-1.5 rounded-md bg-dark-700 border border-dark-500 px-2 py-1">
-            <Icon className="size-3 text-dark-100" />
+        <div className="flex items-center gap-1.5 rounded-md border border-dark-600 bg-dark-700 px-2 py-1">
+            <Icon className="size-3 text-dark-200" />
             <span className="text-[11px] font-medium text-dark-100">
                 {entry.label}
             </span>
@@ -125,8 +121,8 @@ function InfoRow({
 }) {
     return (
         <div className="flex items-center justify-between gap-6">
-            <span className="text-[11px] text-dark-200">{label}</span>
-            <span className="text-[11px] font-medium tabular-nums text-dark-50">
+            <span className="text-[11px] text-dark-300">{label}</span>
+            <span className="text-[11px] font-medium tabular-nums text-dark-100">
                 {children}
             </span>
         </div>
@@ -150,7 +146,7 @@ function ModelInfoButton({ model }: { model: ChatModel }) {
     return (
         <Popover>
             <PopoverTrigger
-                className="inline-flex size-5 shrink-0 items-center justify-center rounded-md text-dark-200 transition-colors hover:bg-dark-500 hover:text-white"
+                className="inline-flex size-5 shrink-0 items-center justify-center rounded-md text-dark-300 opacity-0 transition-colors group-hover:opacity-100 hover:bg-dark-600 hover:text-dark-100"
                 onClick={(e) => e.stopPropagation()}
             >
                 <InfoIcon className="size-3.5" />
@@ -171,13 +167,12 @@ function ModelInfoButton({ model }: { model: ChatModel }) {
                                     title=""
                                 />
                             )}
-                            <h3 className="text-xs font-semibold text-dark-50 leading-tight">
+                            <h3 className="text-xs font-semibold leading-tight text-dark-50">
                                 {model.name}
                             </h3>
                         </div>
-
                         {model.description && (
-                            <p className="text-[11px] leading-relaxed text-dark-200">
+                            <p className="text-[11px] leading-relaxed text-dark-300">
                                 {model.description}
                             </p>
                         )}
@@ -190,21 +185,18 @@ function ModelInfoButton({ model }: { model: ChatModel }) {
                                     {formatContextLength(model.contextLength)}
                                 </InfoRow>
                             )}
-
                             {model.maxOutputTokens && (
-                                <InfoRow label="Max output tokens">
+                                <InfoRow label="Max output">
                                     {formatContextLength(model.maxOutputTokens)}
                                 </InfoRow>
                             )}
-
                             {model.promptPricing && (
-                                <InfoRow label="Prompt">
+                                <InfoRow label="Input">
                                     {formatPricing(model.promptPricing)}
                                 </InfoRow>
                             )}
-
                             {model.completionPricing && (
-                                <InfoRow label="Completion">
+                                <InfoRow label="Output">
                                     {formatPricing(model.completionPricing)}
                                 </InfoRow>
                             )}
@@ -212,8 +204,8 @@ function ModelInfoButton({ model }: { model: ChatModel }) {
                     )}
 
                     {model.inputModalities.length > 0 && (
-                        <div className="flex flex-col gap-1 border-t border-dark-600 px-3 py-2">
-                            <span className="text-[11px] text-dark-200">
+                        <div className="flex flex-col gap-1.5 border-t border-dark-600 px-3 py-2">
+                            <span className="text-[11px] text-dark-300">
                                 Input modalities
                             </span>
                             <div className="flex flex-wrap gap-1">
@@ -235,8 +227,7 @@ export function ModelSelector({
     configuredProviders = [],
     onModelSelected,
     disabled = false,
-    isThinkingEnabled = false,
-    onThinkingChange
+    isThinkingEnabled = false
 }: {
     selectedModelId: string | null;
     models: ChatModel[];
@@ -244,19 +235,29 @@ export function ModelSelector({
     onModelSelected: (model: ChatModel) => void;
     disabled?: boolean;
     isThinkingEnabled?: boolean;
-    onThinkingChange?: (enabled: boolean) => void;
 }) {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState("");
-    const [activeProvider, setActiveProvider] = useState<string | null>(null);
     const [selectedModalities, setSelectedModalities] = useState<string[]>([]);
+    const listRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!open) return;
+        const frame = requestAnimationFrame(() => {
+            listRef.current
+                ?.querySelector<HTMLElement>("[data-selected='true']")
+                ?.scrollIntoView({ block: "center" });
+        });
+        return () => cancelAnimationFrame(frame);
+    }, [open]);
 
     const noProvidersConfigured =
         models.length === 0 && configuredProviders.length === 0;
 
-    const selectedModel = useMemo(() => {
-        return models.find((model) => model.id === selectedModelId);
-    }, [selectedModelId, models]);
+    const selectedModel = useMemo(
+        () => models.find((m) => m.id === selectedModelId),
+        [selectedModelId, models]
+    );
 
     const ModelIcon = useMemo(() => {
         if (!selectedModelId) return null;
@@ -266,27 +267,6 @@ export function ModelSelector({
         return ICONS[model.provider] ?? null;
     }, [selectedModelId, models]);
 
-    const providers = useMemo(() => {
-        const fromModels = new Set(
-            models.map((m) => PROVIDER_ALIASES[m.provider] ?? m.provider)
-        );
-        for (const p of ALWAYS_VISIBLE_PROVIDERS) {
-            fromModels.add(p);
-        }
-        const all = Array.from(fromModels);
-        const direct = all
-            .filter((p) => DIRECT_API_PROVIDERS.has(p))
-            .sort((a, b) =>
-                formatProviderName(a).localeCompare(formatProviderName(b))
-            );
-        const others = all
-            .filter((p) => !DIRECT_API_PROVIDERS.has(p))
-            .sort((a, b) =>
-                formatProviderName(a).localeCompare(formatProviderName(b))
-            );
-        return [...direct, ...others];
-    }, [models]);
-
     const configuredProviderSet = useMemo(
         () => new Set(configuredProviders),
         [configuredProviders]
@@ -295,21 +275,18 @@ export function ModelSelector({
     const allModalities = useMemo(() => {
         const priority = ["text", "image", "audio", "video", "file"];
         const seen = new Set(
-            models.flatMap((model) =>
-                model.inputModalities.map((modality) => modality.toLowerCase())
+            models.flatMap((m) =>
+                m.inputModalities.map((mod) => mod.toLowerCase())
             )
         );
-
         return Array.from(seen).sort((a, b) => {
-            const aIndex = priority.indexOf(a);
-            const bIndex = priority.indexOf(b);
-
-            if (aIndex !== -1 || bIndex !== -1) {
-                if (aIndex === -1) return 1;
-                if (bIndex === -1) return -1;
-                return aIndex - bIndex;
+            const ai = priority.indexOf(a);
+            const bi = priority.indexOf(b);
+            if (ai !== -1 || bi !== -1) {
+                if (ai === -1) return 1;
+                if (bi === -1) return -1;
+                return ai - bi;
             }
-
             return a.localeCompare(b);
         });
     }, [models]);
@@ -317,133 +294,94 @@ export function ModelSelector({
     const modelMatchesModalities = useCallback(
         (model: ChatModel) => {
             if (selectedModalities.length === 0) return true;
-            const modelModalities = model.inputModalities.map((m) =>
-                m.toLowerCase()
-            );
-            return selectedModalities.some((modality) =>
-                modelModalities.includes(modality)
-            );
+            const modelMods = model.inputModalities.map((m) => m.toLowerCase());
+            return selectedModalities.some((mod) => modelMods.includes(mod));
         },
         [selectedModalities]
     );
 
-    const providerEnabledMap = useMemo(() => {
-        const map: Record<string, boolean> = {};
-        for (const provider of providers) {
-            const hasMatchingModels = models
-                .filter(
-                    (model) =>
-                        (PROVIDER_ALIASES[model.provider] ?? model.provider) ===
-                        provider
-                )
-                .some((model) => modelMatchesModalities(model));
-            map[provider] = hasMatchingModels;
-        }
-        return map;
-    }, [providers, models, modelMatchesModalities]);
-
-    const providerHasModels = useMemo(() => {
-        const map: Record<string, boolean> = {};
-        for (const provider of providers) {
-            map[provider] = models.some(
-                (m) => (PROVIDER_ALIASES[m.provider] ?? m.provider) === provider
-            );
-        }
-        return map;
-    }, [providers, models]);
-
     const isProviderConfigured = useCallback(
         (provider: string) => {
-            if (providerHasModels[provider]) return true;
-            if (DIRECT_API_PROVIDERS.has(provider)) {
+            const hasModels = models.some(
+                (m) => (PROVIDER_ALIASES[m.provider] ?? m.provider) === provider
+            );
+            if (hasModels) return true;
+            if (DIRECT_API_PROVIDERS.has(provider))
                 return configuredProviderSet.has(provider as ProviderType);
-            }
             return configuredProviderSet.has("openrouter");
         },
-        [providerHasModels, configuredProviderSet]
+        [models, configuredProviderSet]
     );
 
-    const availableProviders = useMemo(
-        () => providers.filter((provider) => providerEnabledMap[provider]),
-        [providers, providerEnabledMap]
-    );
+    // Grouped + filtered models — OpenRouter models get their own group,
+    // direct-API models group by provider.
+    const groups = useMemo(() => {
+        const q = search.trim().toLowerCase();
 
-    useEffect(() => {
-        if (providers.length === 0) {
-            setActiveProvider(null);
-            return;
-        }
-
-        setActiveProvider((current) => {
-            if (current && providerEnabledMap[current]) return current;
-
-            const selectedProvider = selectedModelId
-                ? models.find((model) => model.id === selectedModelId)?.provider
-                : null;
-
-            if (selectedProvider && providerEnabledMap[selectedProvider]) {
-                return selectedProvider;
+        // Collect group keys in a stable order: direct providers first, openrouter last
+        const groupKeys = new Set<string>();
+        for (const p of ALWAYS_VISIBLE_PROVIDERS) groupKeys.add(p);
+        for (const m of models) {
+            if (m.source === "openrouter") {
+                groupKeys.add("openrouter");
+            } else {
+                groupKeys.add(PROVIDER_ALIASES[m.provider] ?? m.provider);
             }
-
-            if (availableProviders.length > 0) return availableProviders[0];
-
-            return providers[0];
+        }
+        const ordered = Array.from(groupKeys).sort((a, b) => {
+            if (a === "openrouter") return 1;
+            if (b === "openrouter") return -1;
+            const aDirect = DIRECT_API_PROVIDERS.has(a);
+            const bDirect = DIRECT_API_PROVIDERS.has(b);
+            if (aDirect !== bDirect) return aDirect ? -1 : 1;
+            return formatProviderName(a).localeCompare(formatProviderName(b));
         });
-    }, [
-        providers,
-        availableProviders,
-        providerEnabledMap,
-        selectedModelId,
-        models
-    ]);
 
-    const filteredModels = useMemo(() => {
-        const scopedModels = activeProvider
-            ? models.filter(
-                  (model) =>
-                      (PROVIDER_ALIASES[model.provider] ?? model.provider) ===
-                      activeProvider
-              )
-            : models;
-
-        const modalityFilteredModels = scopedModels.filter(
-            modelMatchesModalities
-        );
-
-        if (!search.trim()) return modalityFilteredModels;
-        const q = search.toLowerCase();
-        return modalityFilteredModels.filter((m) =>
-            m.name.toLowerCase().includes(q)
-        );
-    }, [models, search, activeProvider, modelMatchesModalities]);
+        return ordered
+            .map((key) => {
+                const groupModels = models
+                    .filter((m) =>
+                        key === "openrouter"
+                            ? m.source === "openrouter"
+                            : m.source !== "openrouter" &&
+                              (PROVIDER_ALIASES[m.provider] ?? m.provider) ===
+                                  key
+                    )
+                    .filter(modelMatchesModalities)
+                    .filter((m) =>
+                        q ? m.name.toLowerCase().includes(q) : true
+                    );
+                return { key, models: groupModels };
+            })
+            .filter((g) => g.models.length > 0);
+    }, [models, search, modelMatchesModalities]);
 
     const toggleModality = (modality: string) => {
-        setSelectedModalities((current) =>
-            current.includes(modality)
-                ? current.filter((item) => item !== modality)
-                : [...current, modality]
+        setSelectedModalities((cur) =>
+            cur.includes(modality)
+                ? cur.filter((m) => m !== modality)
+                : [...cur, modality]
         );
     };
 
-    const firstOtherIndex = providers.findIndex(
-        (p) => !DIRECT_API_PROVIDERS.has(p)
-    );
+    const handleOpenChange = (next: boolean) => {
+        setOpen(next);
+        if (!next) setSearch("");
+    };
 
     return (
-        <Popover
-            open={open}
-            onOpenChange={(nextOpen) => {
-                setOpen(nextOpen);
-            }}
-        >
+        <Popover open={open} onOpenChange={handleOpenChange}>
             <PopoverTrigger
-                className={cn(
-                    "inline-flex h-8 max-w-48 cursor-pointer items-center gap-2.5 rounded-md px-2.5 text-xs outline-none transition-colors hover:bg-dark-700 focus:outline-none focus-visible:outline-none focus-visible:ring-0 text-dark-100 hover:text-dark-50"
-                )}
                 disabled={disabled}
+                className={cn(
+                    "inline-flex h-8 max-w-80 cursor-pointer items-center gap-2 rounded-md px-2.5 text-xs outline-none transition-colors",
+                    "text-dark-100 hover:bg-dark-700 hover:text-dark-50",
+                    open && "bg-dark-700 text-dark-100",
+                    disabled && "pointer-events-none opacity-50"
+                )}
             >
                 {ModelIcon && (
-                    <ModelIcon className="size-4 opacity-70" title="" />
+                    <ModelIcon className="size-4 shrink-0" title="" />
                 )}
                 <span className="truncate">
                     {selectedModel?.name ??
@@ -451,307 +389,285 @@ export function ModelSelector({
                             ? "No providers configured"
                             : "Select a model")}
                 </span>
-
                 {selectedModel?.free && (
-                    <div className="shrink-0 rounded-md bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-100">
+                    <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
                         Free
-                    </div>
+                    </span>
                 )}
+                <CaretUpDownIcon className="size-3 shrink-0" />
             </PopoverTrigger>
 
             <PopoverContent
                 side="top"
-                className="flex h-96 w-[48rem] flex-col overflow-hidden p-0"
+                align="start"
+                sideOffset={6}
+                className="flex w-[42rem] min-h-[400px] flex-col overflow-hidden p-0"
             >
-                <div className="flex min-h-0 flex-1">
-                    <div className="flex shrink-0 flex-col items-center gap-1 overflow-y-auto overflow-x-hidden hide-scrollbar border-r border-dark-600 bg-dark-900 p-2">
-                        {providers.map((provider, index) => {
-                            const ProviderIcon = ICONS[provider];
-                            const isActive = provider === activeProvider;
-                            const isEnabled =
-                                providerEnabledMap[provider] &&
-                                isProviderConfigured(provider);
-                            const isUnconfigured =
-                                !isProviderConfigured(provider);
+                {/* Search + filter row */}
+                <div className="flex shrink-0 items-center gap-2 border-b border-dark-600 px-2.5">
+                    <MagnifyingGlassIcon
+                        className="size-4 shrink-0 text-dark-300"
+                        weight="bold"
+                    />
+                    <input
+                        autoFocus
+                        className="h-9 flex-1 bg-transparent text-sm text-dark-50 placeholder-dark-300 outline-none"
+                        placeholder="Search models…"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                    />
 
-                            const tooltipText = isUnconfigured
-                                ? `${formatProviderName(provider)} — configure in Settings`
-                                : formatProviderName(provider);
-
-                            const showSeparator =
-                                firstOtherIndex !== -1 &&
-                                index === firstOtherIndex;
-
-                            return (
-                                <div
-                                    key={provider}
-                                    className="flex w-full flex-col items-center"
-                                >
-                                    {showSeparator && (
-                                        <div className="w-6 h-px bg-dark-600 my-1" />
-                                    )}
-                                    <Tooltip
-                                        content={tooltipText}
-                                        side="right"
-                                        delay={300}
-                                    >
+                    {allModalities.length > 0 && (
+                        <Popover>
+                            <PopoverTrigger
+                                className={cn(
+                                    "inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors",
+                                    selectedModalities.length > 0
+                                        ? "bg-dark-600 text-dark-100"
+                                        : "text-dark-300 hover:bg-dark-700 hover:text-dark-100"
+                                )}
+                            >
+                                <FunnelIcon
+                                    className="size-3.5"
+                                    weight={
+                                        selectedModalities.length > 0
+                                            ? "fill"
+                                            : "bold"
+                                    }
+                                />
+                            </PopoverTrigger>
+                            <PopoverContent
+                                side="right"
+                                sideOffset={12}
+                                className="p-0"
+                            >
+                                <div className="flex items-center justify-between px-3 pt-2.5 pb-1.5">
+                                    <span className="text-[11px] font-semibold text-dark-300">
+                                        Modality
+                                    </span>
+                                    {selectedModalities.length > 0 && (
                                         <button
                                             type="button"
-                                            disabled={!isEnabled}
-                                            className={cn(
-                                                "inline-flex size-8 shrink-0 items-center justify-center rounded-md transition-colors",
-                                                isActive
-                                                    ? "bg-dark-800 text-dark-50"
-                                                    : "text-dark-200 hover:bg-dark-800 hover:text-dark-50",
-                                                !isEnabled &&
-                                                    "cursor-not-allowed opacity-40 hover:bg-transparent hover:text-dark-200"
-                                            )}
+                                            className="text-[11px] text-dark-200 transition-colors hover:text-dark-50"
                                             onClick={() =>
-                                                setActiveProvider(provider)
+                                                setSelectedModalities([])
                                             }
                                         >
-                                            {ProviderIcon ? (
-                                                <ProviderIcon
-                                                    className="size-4"
-                                                    title=""
-                                                />
-                                            ) : (
-                                                <GearIcon className="size-4" />
-                                            )}
+                                            Clear
                                         </button>
-                                    </Tooltip>
+                                    )}
                                 </div>
-                            );
-                        })}
-                    </div>
-
-                    <div className="flex min-w-0 flex-1 flex-col">
-                        <Input
-                            leftSection={
-                                <MagnifyingGlassIcon
-                                    className="size-4"
-                                    weight="bold"
-                                />
-                            }
-                            rightSection={
-                                allModalities.length > 0 ? (
-                                    <Popover>
-                                        <PopoverTrigger
-                                            className={cn(
-                                                "inline-flex size-6 items-center justify-center rounded-md transition-colors hover:bg-dark-600",
-                                                selectedModalities.length > 0
-                                                    ? "text-dark-50"
-                                                    : "text-dark-200 hover:text-dark-50"
-                                            )}
-                                        >
-                                            <FunnelIcon
-                                                className="size-4"
-                                                weight={
-                                                    selectedModalities.length >
-                                                    0
-                                                        ? "fill"
-                                                        : "bold"
+                                <div className="flex flex-col gap-px px-1.5 pb-1.5">
+                                    {allModalities.map((modality) => {
+                                        const entry = MODALITY_ICONS[modality];
+                                        const Icon = entry?.icon;
+                                        const label = entry?.label ?? modality;
+                                        const isSelected =
+                                            selectedModalities.includes(
+                                                modality
+                                            );
+                                        return (
+                                            <button
+                                                key={modality}
+                                                type="button"
+                                                className={cn(
+                                                    "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs transition-colors",
+                                                    isSelected
+                                                        ? "bg-dark-700 text-dark-50"
+                                                        : "text-dark-200 hover:bg-dark-700 hover:text-dark-50"
+                                                )}
+                                                onClick={() =>
+                                                    toggleModality(modality)
                                                 }
-                                            />
-                                        </PopoverTrigger>
-
-                                        <PopoverContent
-                                            side="right"
-                                            sideOffset={12}
-                                            className="w-52 p-0"
-                                        >
-                                            <div className="flex items-center justify-between px-3 pt-2.5 pb-2">
-                                                <span className="text-[11px] font-semibold text-dark-200">
-                                                    Modality
-                                                </span>
-                                                {selectedModalities.length >
-                                                    0 && (
-                                                    <button
-                                                        type="button"
-                                                        className="text-[11px] text-dark-200 transition-colors hover:text-dark-50"
-                                                        onClick={() =>
-                                                            setSelectedModalities(
-                                                                []
-                                                            )
+                                            >
+                                                {Icon && (
+                                                    <Icon
+                                                        className="size-3.5 shrink-0"
+                                                        weight={
+                                                            isSelected
+                                                                ? "fill"
+                                                                : "regular"
                                                         }
-                                                    >
-                                                        Clear all
-                                                    </button>
-                                                )}
-                                            </div>
-
-                                            <div className="flex flex-col gap-1 px-1.5 pb-1.5">
-                                                {allModalities.map(
-                                                    (modality) => {
-                                                        const entry =
-                                                            MODALITY_ICONS[
-                                                                modality
-                                                            ];
-                                                        const Icon =
-                                                            entry?.icon;
-                                                        const label =
-                                                            entry?.label ??
-                                                            modality;
-                                                        const isSelected =
-                                                            selectedModalities.includes(
-                                                                modality
-                                                            );
-
-                                                        return (
-                                                            <button
-                                                                key={modality}
-                                                                type="button"
-                                                                className={cn(
-                                                                    "flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-xs transition-colors",
-                                                                    isSelected
-                                                                        ? "bg-dark-700 text-dark-50"
-                                                                        : "text-dark-100 hover:bg-dark-700 hover:text-dark-50"
-                                                                )}
-                                                                onClick={() =>
-                                                                    toggleModality(
-                                                                        modality
-                                                                    )
-                                                                }
-                                                            >
-                                                                {Icon && (
-                                                                    <Icon
-                                                                        className="size-3.5 shrink-0"
-                                                                        weight={
-                                                                            isSelected
-                                                                                ? "fill"
-                                                                                : "regular"
-                                                                        }
-                                                                    />
-                                                                )}
-                                                                <span className="capitalize">
-                                                                    {label}
-                                                                </span>
-                                                            </button>
-                                                        );
-                                                    }
-                                                )}
-                                            </div>
-                                        </PopoverContent>
-                                    </Popover>
-                                ) : null
-                            }
-                            placeholder="Search models"
-                            className="rounded-none border-b border-dark-600 py-1"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                        />
-
-                        <div className="min-h-0 flex-1 overflow-y-auto p-1">
-                            {filteredModels.length === 0 && (
-                                <div className="flex h-full flex-col items-center justify-center gap-1">
-                                    <p className="text-center text-xs text-dark-200">
-                                        {activeProvider &&
-                                        !isProviderConfigured(activeProvider)
-                                            ? "Configure API key in Settings"
-                                            : "No models found"}
-                                    </p>
-                                </div>
-                            )}
-
-                            <div className="flex flex-col gap-0.5">
-                                {filteredModels.map((model) => {
-                                    const ProviderIcon = ICONS[model.provider];
-                                    const requiresThinking =
-                                        THINKING_ONLY_MODEL_IDS.has(model.id);
-                                    const isDisabled =
-                                        requiresThinking && !isThinkingEnabled;
-                                    const row = (
-                                        <div
-                                            key={`${model.source}-${model.id}`}
-                                            className={cn(
-                                                "flex w-full items-center gap-2.5 rounded-md px-3 py-1.5 text-xs transition-colors text-dark-100",
-                                                isDisabled
-                                                    ? "cursor-not-allowed opacity-80"
-                                                    : "cursor-pointer hover:bg-dark-600 hover:text-dark-50",
-                                                model.id === selectedModelId &&
-                                                    model.source ===
-                                                        selectedModel?.source &&
-                                                    "bg-dark-600 text-dark-50"
-                                            )}
-                                            onClick={() => {
-                                                if (isDisabled) return;
-                                                onModelSelected(model);
-                                                setOpen(false);
-                                            }}
-                                            aria-disabled={isDisabled}
-                                        >
-                                            <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                                                {model.source ===
-                                                "openrouter" ? (
-                                                    <OpenRouter
-                                                        className="size-4 shrink-0 opacity-70"
-                                                        title=""
                                                     />
-                                                ) : ProviderIcon ? (
-                                                    <ProviderIcon
-                                                        className="size-4 shrink-0 opacity-70"
-                                                        title=""
-                                                    />
-                                                ) : null}
-                                                <span className="min-w-0 flex-1 truncate text-left">
-                                                    {model.name}
+                                                )}
+                                                <span className="flex-1 capitalize text-left">
+                                                    {label}
                                                 </span>
-                                            </div>
-
-                                            {model.free && (
-                                                <div className="shrink-0 rounded-md bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-100">
-                                                    Free
-                                                </div>
-                                            )}
-
-                                            <ModelInfoButton model={model} />
-                                        </div>
-                                    );
-
-                                    if (!isDisabled) {
-                                        return row;
-                                    }
-
-                                    return (
-                                        <Tooltip
-                                            key={`${model.source}-${model.id}`}
-                                            content="Enable Thinking to use this model"
-                                            side="right"
-                                        >
-                                            {row}
-                                        </Tooltip>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    </div>
+                                                {isSelected && (
+                                                    <CheckIcon
+                                                        className="size-3 shrink-0"
+                                                        weight="bold"
+                                                    />
+                                                )}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </PopoverContent>
+                        </Popover>
+                    )}
                 </div>
 
-                {onThinkingChange && (
-                    <button
-                        type="button"
-                        className={cn(
-                            "flex w-full shrink-0 items-center gap-2 border-t border-dark-600 px-3 py-2 text-xs transition-colors hover:bg-dark-700",
-                            isThinkingEnabled
-                                ? "text-dark-50"
-                                : "text-dark-200 hover:text-dark-50"
-                        )}
-                        onClick={() => onThinkingChange(!isThinkingEnabled)}
-                    >
-                        <BrainIcon
-                            className="size-4"
-                            weight={isThinkingEnabled ? "fill" : "bold"}
-                        />
-                        <span>Thinking</span>
+                {/* Model list */}
+                <div
+                    ref={listRef}
+                    className="min-h-0 flex-1 overflow-y-auto"
+                    style={{ maxHeight: "360px" }}
+                >
+                    {groups.length === 0 ? (
+                        <div className="flex h-24 items-center justify-center">
+                            <p className="text-xs text-dark-300">
+                                {search
+                                    ? `No results for "${search}"`
+                                    : "No models available"}
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="p-1">
+                            {groups.map(({ key, models: groupModels }, gi) => {
+                                const ProviderIcon = ICONS[key];
+                                const configured =
+                                    key === "openrouter"
+                                        ? configuredProviderSet.has(
+                                              "openrouter"
+                                          )
+                                        : isProviderConfigured(key);
 
-                        <Switch
-                            checked={isThinkingEnabled}
-                            onCheckedChange={onThinkingChange}
-                            className="ml-auto bg-dark-900"
-                            size="sm"
-                        />
-                    </button>
-                )}
+                                return (
+                                    <div key={key}>
+                                        {/* Provider header */}
+                                        {(groups.length > 1 || !search) && (
+                                            <div
+                                                className={cn(
+                                                    "flex items-center gap-2 px-2.5 py-1.5",
+                                                    gi > 0 && "mt-1"
+                                                )}
+                                            >
+                                                {ProviderIcon && (
+                                                    <ProviderIcon
+                                                        className="size-3 shrink-0 opacity-60"
+                                                        title=""
+                                                    />
+                                                )}
+                                                <span className="text-[10px] font-medium uppercase text-dark-200">
+                                                    {formatProviderName(key)}
+                                                </span>
+                                                {!configured && (
+                                                    <span className="text-[10px] text-dark-200">
+                                                        — configure in Settings
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Models */}
+                                        <div className="flex flex-col gap-px">
+                                            {groupModels.map((model) => {
+                                                const requiresThinking =
+                                                    THINKING_ONLY_MODEL_IDS.has(
+                                                        model.id
+                                                    );
+                                                const isDisabled =
+                                                    requiresThinking &&
+                                                    !isThinkingEnabled;
+                                                const isSelected =
+                                                    model.id ===
+                                                        selectedModelId &&
+                                                    model.source ===
+                                                        selectedModel?.source;
+
+                                                const ModelRowIcon =
+                                                    model.source ===
+                                                    "openrouter"
+                                                        ? OpenRouter
+                                                        : ICONS[model.provider];
+
+                                                const row = (
+                                                    <div
+                                                        key={`${model.source}-${model.id}`}
+                                                        data-selected={
+                                                            isSelected ||
+                                                            undefined
+                                                        }
+                                                        className={cn(
+                                                            "group flex w-full items-center gap-2.5 rounded-md px-2.5 py-1 text-xs transition-colors",
+                                                            isDisabled
+                                                                ? "cursor-not-allowed opacity-50"
+                                                                : "cursor-pointer hover:bg-dark-700",
+                                                            isSelected
+                                                                ? "bg-dark-700 text-dark-50"
+                                                                : "text-dark-100 hover:text-dark-50"
+                                                        )}
+                                                        onClick={() => {
+                                                            if (isDisabled)
+                                                                return;
+                                                            onModelSelected(
+                                                                model
+                                                            );
+                                                            setOpen(false);
+                                                        }}
+                                                        aria-disabled={
+                                                            isDisabled
+                                                        }
+                                                    >
+                                                        {ModelRowIcon ? (
+                                                            <ModelRowIcon
+                                                                className="size-3.5 shrink-0 opacity-60"
+                                                                title=""
+                                                            />
+                                                        ) : (
+                                                            <div className="size-3.5 shrink-0" />
+                                                        )}
+                                                        <span
+                                                            className={cn(
+                                                                "min-w-0 flex-1 truncate",
+                                                                isSelected &&
+                                                                    "font-medium"
+                                                            )}
+                                                        >
+                                                            {model.name}
+                                                        </span>
+
+                                                        <div className="flex shrink-0 items-center gap-1.5">
+                                                            {model.free && (
+                                                                <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
+                                                                    Free
+                                                                </span>
+                                                            )}
+                                                            <ModelInfoButton
+                                                                model={model}
+                                                            />
+                                                            {isSelected && (
+                                                                <div className="size-3.5 shrink-0">
+                                                                    <CheckIcon
+                                                                        className="size-3.5 text-dark-300"
+                                                                        weight="bold"
+                                                                    />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+
+                                                if (!isDisabled) return row;
+
+                                                return (
+                                                    <Tooltip
+                                                        key={`${model.source}-${model.id}`}
+                                                        content="Enable Thinking to use this model"
+                                                        side="right"
+                                                    >
+                                                        {row}
+                                                    </Tooltip>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
             </PopoverContent>
         </Popover>
     );

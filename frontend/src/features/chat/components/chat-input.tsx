@@ -6,7 +6,8 @@ import {
     XIcon,
     FileTextIcon,
     ImageIcon,
-    StopIcon
+    StopIcon,
+    BrainIcon
 } from "@phosphor-icons/react";
 import { Button, Tooltip } from "@/components/ui";
 import { cn } from "@/lib/cn";
@@ -513,23 +514,41 @@ export function ChatInput({
             </div>
 
             <div className="flex items-center justify-between gap-4 px-2 pb-2 pt-1">
-                <div className="flex min-w-0 items-center gap-2">
+                <div className="flex min-w-0 items-center gap-1">
                     <div className="min-w-0">
                         <ModelSelector
                             selectedModelId={selectedModelId}
                             models={models}
                             configuredProviders={configuredProviders}
                             onModelSelected={(model) =>
-                                onSelectedModelChange?.(
-                                    model.id,
-                                    model.source
-                                )
+                                onSelectedModelChange?.(model.id, model.source)
                             }
                             disabled={isModelSelectDisabled}
                             isThinkingEnabled={isThinkingEnabled}
-                            onThinkingChange={onThinkingChange}
                         />
                     </div>
+                    {onThinkingChange && (
+                        <Tooltip content="Thinking" side="top">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                className={cn(
+                                    "size-8 p-0 hover:bg-dark-700",
+                                    isThinkingEnabled
+                                        ? "text-dark-100 hover:text-dark-50"
+                                        : "text-dark-300 hover:text-dark-50"
+                                )}
+                                onClick={() =>
+                                    onThinkingChange(!isThinkingEnabled)
+                                }
+                            >
+                                <BrainIcon
+                                    className="size-4"
+                                    weight={isThinkingEnabled ? "fill" : "bold"}
+                                />
+                            </Button>
+                        </Tooltip>
+                    )}
                     {toolbarSlot}
                 </div>
 
