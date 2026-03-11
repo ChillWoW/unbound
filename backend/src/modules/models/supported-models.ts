@@ -16,6 +16,13 @@ const qwenModels: SupportedModelDefinition[] = [
         description: "Fast but performance-focused model from Qwen"
     },
     {
+        id: "qwen/qwen3.5-plus-02-15",
+        name: "Qwen 3.5 Plus",
+        provider: "qwen",
+        description:
+            "Qwen's native vision-language model built on a hybrid architecture"
+    },
+    {
         id: "qwen/qwen3-coder-next",
         name: "Qwen 3 Coder Next",
         provider: "qwen",
@@ -175,6 +182,22 @@ const zaiModels: SupportedModelDefinition[] = [
     }
 ];
 
+const deepseekModels: SupportedModelDefinition[] = [
+    {
+        id: "deepseek/deepseek-v3.2",
+        name: "DeepSeek V3.2",
+        provider: "deepseek",
+        description:
+            "Deepseek's model designed to harmonize high computational efficiency with strong reasoning and agentic tool-use performance"
+    },
+    {
+        id: "deepseek/deepseek-chat-v3-0324",
+        name: "DeepSeek Chat V3",
+        provider: "deepseek",
+        description: "Deepseek's mixture-of-experts model"
+    }
+];
+
 const supportedModelDefinitions: SupportedModelDefinition[] = [
     ...qwenModels,
     ...stepfunModels,
@@ -185,7 +208,8 @@ const supportedModelDefinitions: SupportedModelDefinition[] = [
     ...openaiModels,
     ...googleModels,
     ...anthropicModels,
-    ...zaiModels
+    ...zaiModels,
+    ...deepseekModels
 ];
 
 export function selectSupportedModels(models: ModelSummary[]): ModelSummary[] {

@@ -30,7 +30,8 @@ import {
     Google,
     Anthropic,
     ZAI,
-    OpenRouter
+    OpenRouter,
+    DeepSeek
 } from "@lobehub/icons";
 
 const ICONS: Record<string, React.ComponentType<any>> = {
@@ -45,7 +46,8 @@ const ICONS: Record<string, React.ComponentType<any>> = {
     google: Google,
     anthropic: Anthropic,
     zai: ZAI,
-    openrouter: OpenRouter
+    openrouter: OpenRouter,
+    deepseek: DeepSeek
 };
 
 const PROVIDER_ALIASES: Record<string, string> = {
@@ -334,14 +336,9 @@ export function ModelSelector({
                 groupKeys.add(PROVIDER_ALIASES[m.provider] ?? m.provider);
             }
         }
-        const ordered = Array.from(groupKeys).sort((a, b) => {
-            if (a === "openrouter") return 1;
-            if (b === "openrouter") return -1;
-            const aDirect = DIRECT_API_PROVIDERS.has(a);
-            const bDirect = DIRECT_API_PROVIDERS.has(b);
-            if (aDirect !== bDirect) return aDirect ? -1 : 1;
-            return formatProviderName(a).localeCompare(formatProviderName(b));
-        });
+        const ordered = Array.from(groupKeys).sort((a, b) =>
+            formatProviderName(a).localeCompare(formatProviderName(b))
+        );
 
         return ordered
             .map((key) => {
@@ -356,6 +353,11 @@ export function ModelSelector({
                     .filter(modelMatchesModalities)
                     .filter((m) =>
                         q ? m.name.toLowerCase().includes(q) : true
+                    )
+                    .sort((a, b) =>
+                        key === "openrouter"
+                            ? a.name.localeCompare(b.name)
+                            : 0
                     );
                 return { key, models: groupModels };
             })
