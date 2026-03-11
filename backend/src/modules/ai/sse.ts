@@ -109,6 +109,7 @@ export function createSubscriberStream(
                 } catch {
                     closed = true;
                     generation.emitter.off("event", onEvent);
+                    try { controller.close(); } catch { /* already closed */ }
                 }
             };
 

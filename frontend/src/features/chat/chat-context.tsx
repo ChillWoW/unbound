@@ -1208,7 +1208,10 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 }
             );
 
-                await parseAIStream(streamResponse, {
+            const STREAM_DONE_TIMEOUT_MS = 15_000;
+            let streamDoneTimer: ReturnType<typeof setTimeout> | null = null;
+
+            await parseAIStream(streamResponse, {
                     onMessageStart(messageId) {
                         streamState.messageId = messageId;
                     setConversationDetails((current) => {
@@ -1235,12 +1238,19 @@ export function ChatProvider({ children }: PropsWithChildren) {
                             titleSource
                         );
                     },
-                    ...callbacks
+                    ...callbacks,
+                    onFinish() {
+                        streamDoneTimer = setTimeout(() => {
+                            abortController.abort();
+                        }, STREAM_DONE_TIMEOUT_MS);
+                    }
                 }).catch((error: unknown) => {
                 if (!(error instanceof Error && error.name === "AbortError")) {
                     throw error;
                 }
             });
+
+            if (streamDoneTimer) clearTimeout(streamDoneTimer);
 
             flushNow();
             activeGenerationsRef.current.delete(conversationId);
@@ -1277,15 +1287,70 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 return;
             }
 
-            const finalResponse = await chatApi.getConversation(conversationId);
-            clearPartialMessage(
-                finalResponse.conversation.latestAssistantMessageId ?? ""
-            );
-            upsertConversation(finalResponse.conversation);
-            if (finalResponse.conversation.titleSource === "prompt") {
-                void refreshConversationTitle(conversationId);
-            } else {
-                stopTitleRefresh(conversationId);
+            try {
+                let finalResponse = await chatApi.getConversation(conversationId);
+
+                const finalMsg = finalResponse.conversation.messages?.find(
+                    (m: { id: string }) => m.id === streamState.messageId
+                );
+                if (finalMsg?.status === "pending") {
+                    for (let attempt = 0; attempt < 3; attempt++) {
+                        await new Promise((r) => setTimeout(r, 2000));
+                        try {
+                            const poll = await chatApi.getConversation(conversationId);
+                            const pollMsg = poll.conversation.messages?.find(
+                                (m: { id: string }) => m.id === streamState.messageId
+                            );
+                            if (pollMsg?.status !== "pending") {
+                                finalResponse = poll;
+                                break;
+                            }
+                        } catch {
+                            /* continue polling */
+                        }
+                    }
+                }
+
+                clearPartialMessage(
+                    finalResponse.conversation.latestAssistantMessageId ?? ""
+                );
+                upsertConversation(finalResponse.conversation);
+                if (finalResponse.conversation.titleSource === "prompt") {
+                    void refreshConversationTitle(conversationId);
+                } else {
+                    stopTitleRefresh(conversationId);
+                }
+            } catch {
+                const finalParts = [...streamState.parts];
+                setConversationDetails((current) => {
+                    const existing = current[conversationId];
+                    if (!existing) return current;
+                    return {
+                        ...current,
+                        [conversationId]: {
+                            ...existing,
+                            messages: existing.messages.map((m) =>
+                                m.id === streamState.messageId &&
+                                m.status === "pending"
+                                    ? {
+                                          ...m,
+                                          status:
+                                              finalParts.length > 0
+                                                  ? ("complete" as const)
+                                                  : ("failed" as const),
+                                          parts: finalParts,
+                                          ...(finalParts.length === 0
+                                              ? {
+                                                    errorMessage:
+                                                        "Connection lost. Please try again."
+                                                }
+                                              : {})
+                                      }
+                                    : m
+                            )
+                        }
+                    };
+                });
             }
         },
         [

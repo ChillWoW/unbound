@@ -400,110 +400,118 @@ function startBackgroundGeneration(
         abortSignal: generation.abortController.signal,
         onFinish: async ({ steps, finishReason }) => {
             if (generation.abortController.signal.aborted) return;
-            const finalParts: MessagePart[] = [];
+            try {
+                const finalParts: MessagePart[] = [];
 
-            for (const step of steps) {
-                const stepReasoning = (step as Record<string, unknown>)
-                    .reasoningText as string | undefined;
-                const stepText = step.text;
-                const stepToolCalls = step.toolCalls ?? [];
-                const stepToolResults = step.toolResults ?? [];
+                for (const step of steps) {
+                    const stepReasoning = (step as Record<string, unknown>)
+                        .reasoningText as string | undefined;
+                    const stepText = step.text;
+                    const stepToolCalls = step.toolCalls ?? [];
+                    const stepToolResults = step.toolResults ?? [];
 
-                if (thinking && stepReasoning) {
-                    finalParts.push({ type: "reasoning", text: stepReasoning });
+                    if (thinking && stepReasoning) {
+                        finalParts.push({ type: "reasoning", text: stepReasoning });
+                    }
+
+                    for (const call of stepToolCalls) {
+                        upsertToolInvocationPart(finalParts, {
+                            type: "tool-invocation",
+                            toolInvocationId: call.toolCallId,
+                            toolName: call.toolName,
+                            args: (call as unknown as Record<string, unknown>)
+                                .input as Record<string, unknown>,
+                            state: "call"
+                        });
+                    }
+
+                    for (const toolResult of stepToolResults) {
+                        applyToolResult(finalParts, {
+                            toolCallId: toolResult.toolCallId,
+                            toolName: toolResult.toolName,
+                            output: (
+                                toolResult as unknown as Record<string, unknown>
+                            ).output
+                        });
+                    }
+
+                    if (stepText) {
+                        finalParts.push({ type: "text", text: stepText });
+                    }
                 }
 
-                for (const call of stepToolCalls) {
-                    upsertToolInvocationPart(finalParts, {
-                        type: "tool-invocation",
-                        toolInvocationId: call.toolCallId,
-                        toolName: call.toolName,
-                        args: (call as unknown as Record<string, unknown>)
-                            .input as Record<string, unknown>,
-                        state: "call"
-                    });
+                if (finalParts.length === 0) {
+                    finalParts.push({ type: "text", text: "" });
                 }
 
-                for (const toolResult of stepToolResults) {
-                    applyToolResult(finalParts, {
-                        toolCallId: toolResult.toolCallId,
-                        toolName: toolResult.toolName,
-                        output: (
-                            toolResult as unknown as Record<string, unknown>
-                        ).output
-                    });
+                for (const part of finalParts) {
+                    if (part.type === "tool-invocation" && part.state === "call") {
+                        part.state = "error";
+                    }
                 }
 
-                if (stepText) {
-                    finalParts.push({ type: "text", text: stepText });
+                const generationCompletedAt = new Date().toISOString();
+                const durationMs =
+                    new Date(generationCompletedAt).getTime() -
+                    new Date(generationStartedAt).getTime();
+                const status = finishReason === "error" ? "failed" : "complete";
+                const usage = aggregateUsage(
+                    steps as unknown as Array<Record<string, unknown>>
+                );
+                const sources = extractSourcesFromParts(finalParts);
+
+                logger.info("Generation finished", {
+                    conversationId: generation.conversationId,
+                    messageId: assistantMessageId,
+                    modelId,
+                    finishReason,
+                    status,
+                    steps: steps.length,
+                    durationMs,
+                    usage
+                });
+
+                await conversationsRepository.updateMessage(assistantMessageId, {
+                    parts: finalParts,
+                    status,
+                    metadata: {
+                        model: modelId,
+                        provider,
+                        thinkingEnabled: thinking,
+                        generationStartedAt,
+                        generationCompletedAt,
+                        usage,
+                        ...(sources.length > 0 ? { sources } : {})
+                    }
+                });
+
+                if (
+                    status === "complete" &&
+                    hasMeaningfulAssistantOutput(finalParts)
+                ) {
+                    try {
+                        await reconcileLingeringInProgressTodos(
+                            generation.conversationId
+                        );
+                    } catch (error) {
+                        logger.warn("Todo reconciliation failed", {
+                            conversationId: generation.conversationId,
+                            error:
+                                error instanceof Error
+                                    ? error.message
+                                    : String(error)
+                        });
+                    }
                 }
+            } catch (error) {
+                logger.error("onFinish processing failed", {
+                    conversationId: generation.conversationId,
+                    messageId: assistantMessageId,
+                    error: error instanceof Error ? error.message : String(error)
+                });
+            } finally {
+                generationManager.complete(generation.conversationId);
             }
-
-            if (finalParts.length === 0) {
-                finalParts.push({ type: "text", text: "" });
-            }
-
-            for (const part of finalParts) {
-                if (part.type === "tool-invocation" && part.state === "call") {
-                    part.state = "error";
-                }
-            }
-
-            const generationCompletedAt = new Date().toISOString();
-            const durationMs =
-                new Date(generationCompletedAt).getTime() -
-                new Date(generationStartedAt).getTime();
-            const status = finishReason === "error" ? "failed" : "complete";
-            const usage = aggregateUsage(
-                steps as unknown as Array<Record<string, unknown>>
-            );
-            const sources = extractSourcesFromParts(finalParts);
-
-            logger.info("Generation finished", {
-                conversationId: generation.conversationId,
-                messageId: assistantMessageId,
-                modelId,
-                finishReason,
-                status,
-                steps: steps.length,
-                durationMs,
-                usage
-            });
-
-            await conversationsRepository.updateMessage(assistantMessageId, {
-                parts: finalParts,
-                status,
-                metadata: {
-                    model: modelId,
-                    provider,
-                    thinkingEnabled: thinking,
-                    generationStartedAt,
-                    generationCompletedAt,
-                    usage,
-                    ...(sources.length > 0 ? { sources } : {})
-                }
-            });
-
-            if (
-                status === "complete" &&
-                hasMeaningfulAssistantOutput(finalParts)
-            ) {
-                try {
-                    await reconcileLingeringInProgressTodos(
-                        generation.conversationId
-                    );
-                } catch (error) {
-                    logger.warn("Todo reconciliation failed", {
-                        conversationId: generation.conversationId,
-                        error:
-                            error instanceof Error
-                                ? error.message
-                                : String(error)
-                    });
-                }
-            }
-
-            generationManager.complete(generation.conversationId);
         },
         onError: async (event: { error: unknown }) => {
             if (generation.abortController.signal.aborted) return;
@@ -634,28 +642,36 @@ function startBackgroundGeneration(
                     messageId: assistantMessageId
                 });
 
-                const stoppedParts = buildAccumulatedParts(
-                    generation,
-                    thinking,
-                    false
-                );
-                const sources = extractSourcesFromParts(stoppedParts);
+                try {
+                    const stoppedParts = buildAccumulatedParts(
+                        generation,
+                        thinking,
+                        false
+                    );
+                    const sources = extractSourcesFromParts(stoppedParts);
 
-                await conversationsRepository.updateMessage(
-                    assistantMessageId,
-                    {
-                        parts: stoppedParts,
-                        status: "complete",
-                        metadata: {
-                            model: modelId,
-                            provider,
-                            thinkingEnabled: thinking,
-                            generationStartedAt,
-                            generationCompletedAt: new Date().toISOString(),
-                            ...(sources.length > 0 ? { sources } : {})
+                    await conversationsRepository.updateMessage(
+                        assistantMessageId,
+                        {
+                            parts: stoppedParts,
+                            status: "complete",
+                            metadata: {
+                                model: modelId,
+                                provider,
+                                thinkingEnabled: thinking,
+                                generationStartedAt,
+                                generationCompletedAt: new Date().toISOString(),
+                                ...(sources.length > 0 ? { sources } : {})
+                            }
                         }
-                    }
-                );
+                    );
+                } catch (dbError) {
+                    logger.error("Failed to persist stopped state", {
+                        conversationId: generation.conversationId,
+                        messageId: assistantMessageId,
+                        error: dbError instanceof Error ? dbError.message : String(dbError)
+                    });
+                }
 
                 generationManager.complete(generation.conversationId);
                 return;
@@ -670,27 +686,35 @@ function startBackgroundGeneration(
                 error: streamErrorMessage
             });
 
-            const errorParts = buildAccumulatedParts(
-                generation,
-                thinking,
-                true
-            );
-            const sources = extractSourcesFromParts(errorParts);
-
-            await conversationsRepository.updateMessage(assistantMessageId, {
-                parts: errorParts,
-                status: "failed",
-                metadata: buildErrorMetadata({
-                    modelId,
-                    provider,
+            try {
+                const errorParts = buildAccumulatedParts(
+                    generation,
                     thinking,
-                    generationStartedAt,
-                    generationCompletedAt: new Date().toISOString(),
-                    errorMessage: streamErrorMessage,
-                    sources,
-                    recovery
-                })
-            });
+                    true
+                );
+                const sources = extractSourcesFromParts(errorParts);
+
+                await conversationsRepository.updateMessage(assistantMessageId, {
+                    parts: errorParts,
+                    status: "failed",
+                    metadata: buildErrorMetadata({
+                        modelId,
+                        provider,
+                        thinking,
+                        generationStartedAt,
+                        generationCompletedAt: new Date().toISOString(),
+                        errorMessage: streamErrorMessage,
+                        sources,
+                        recovery
+                    })
+                });
+            } catch (dbError) {
+                logger.error("Failed to persist error state", {
+                    conversationId: generation.conversationId,
+                    messageId: assistantMessageId,
+                    error: dbError instanceof Error ? dbError.message : String(dbError)
+                });
+            }
 
             generationManager.fail(
                 generation.conversationId,
