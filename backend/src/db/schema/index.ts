@@ -5,6 +5,7 @@ export * from "./messages";
 export * from "./password-reset-tokens";
 export * from "./users";
 export * from "./sessions";
+export * from "./user-mcp-servers";
 export * from "./user-settings";
 export * from "./user-memories";
 export * from "./todo-items";

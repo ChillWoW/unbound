@@ -8,6 +8,7 @@ import { settingsRoutes } from "./modules/settings/settings.routes";
 import { aiRoutes } from "./modules/ai/ai.routes";
 import { todosRoutes } from "./modules/todos/todos.routes";
 import { memoryRoutes } from "./modules/memory/memory.routes";
+import { mcpRoutes } from "./modules/mcp/mcp.routes";
 
 const MAX_JSON_BODY_BYTES = 30 * 1024 * 1024;
 
@@ -53,6 +54,7 @@ export const app = new Elysia()
     .use(conversationsRoutes)
     .use(modelsRoutes)
     .use(settingsRoutes)
+    .use(mcpRoutes)
     .use(memoryRoutes)
     .use(todosRoutes)
     .use(aiRoutes);

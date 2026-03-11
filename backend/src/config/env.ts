@@ -49,6 +49,8 @@ export const env = {
     corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:3500",
     searxngBaseUrl: getOptionalEnv("SEARXNG_BASE_URL"),
     sandboxUrl: getOptionalEnv("SANDBOX_URL"),
+    allowPrivateMcpUrls:
+        process.env.ALLOW_PRIVATE_MCP_URLS === "true" || nodeEnv !== "production",
     databaseUrl: getRequiredEnv("DATABASE_URL"),
     sessionCookieName: process.env.SESSION_COOKIE_NAME ?? "unbound_session",
     sessionMaxAgeSeconds: getNumberEnv(

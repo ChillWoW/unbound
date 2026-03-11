@@ -40,6 +40,7 @@ import {
     type AIRecoveryInfo
 } from "./ai-recovery";
 import { extractSourcesFromParts } from "./citations";
+import type { ToolSet } from "./ai.tools";
 
 function createMessageId(): string {
     return `msg_${randomBytes(10).toString("hex")}`;
@@ -371,7 +372,8 @@ function startBackgroundGeneration(
     apiKey: string,
     generationStartedAt: string,
     thinking: boolean,
-    tools: ReturnType<typeof createTools>,
+    tools: ToolSet,
+    cleanupTools: () => Promise<void>,
     maxOutputTokens: number | null
 ) {
     const model = createModelInstance(provider, modelId, apiKey);
@@ -510,6 +512,7 @@ function startBackgroundGeneration(
                     error: error instanceof Error ? error.message : String(error)
                 });
             } finally {
+                await cleanupTools();
                 generationManager.complete(generation.conversationId);
             }
         },
@@ -557,6 +560,8 @@ function startBackgroundGeneration(
                 errorMessage,
                 recovery ?? undefined
             );
+
+            await cleanupTools();
         }
     });
 
@@ -951,7 +956,11 @@ export const aiService = {
             initialPrompt
         });
 
-        const tools = createTools(conversationId, user.id, latestUserText);
+        const { tools, cleanup } = await createTools(
+            conversationId,
+            user.id,
+            latestUserText
+        );
         const modelMaxOutputTokens = modelsService.getModelMaxOutputTokens(
             user.id,
             modelId
@@ -966,6 +975,7 @@ export const aiService = {
             generationStartedAt,
             thinking,
             tools,
+            cleanup,
             modelMaxOutputTokens
         );
 

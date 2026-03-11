@@ -2,6 +2,8 @@ import { tool } from "ai";
 import { z } from "zod";
 import { env } from "../../config/env";
 import { logger } from "../../lib/logger";
+import { createMcpToolsForServers } from "../mcp/mcp-runtime";
+import { mcpService } from "../mcp/mcp.service";
 import { todosRepository } from "../todos/todos.repository";
 import { memoryService } from "../memory/memory.service";
 import {
@@ -248,11 +250,13 @@ function formatTodos(
     }));
 }
 
-export function createTools(
+export type ToolSet = Record<string, any>;
+
+function createBuiltInTools(
     conversationId: string,
     userId: string,
     latestUserText: string | null
-) {
+): ToolSet {
     return {
         webSearch: tool({
             description:
@@ -620,5 +624,34 @@ export function createTools(
                 return memoryService.deleteMemoryForTool(userId, memoryId);
             }
         })
+    };
+}
+
+export async function createTools(
+    conversationId: string,
+    userId: string,
+    latestUserText: string | null
+): Promise<{
+    tools: ToolSet;
+    cleanup: () => Promise<void>;
+}> {
+    const tools = createBuiltInTools(conversationId, userId, latestUserText);
+    const servers = await mcpService.listEnabledServersForRuntime(userId);
+    const mcp = await createMcpToolsForServers({
+        servers,
+        conversationId,
+        userId,
+        onHealthSuccess: (serverId, snapshot) =>
+            mcpService.markRuntimeServerHealthy(userId, serverId, snapshot),
+        onHealthError: (serverId, error) =>
+            mcpService.markRuntimeServerError(userId, serverId, error)
+    });
+
+    return {
+        tools: {
+            ...tools,
+            ...mcp.tools
+        },
+        cleanup: mcp.cleanup
     };
 }

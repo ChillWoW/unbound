@@ -12,6 +12,7 @@ import { Button, Input } from "@/components/ui";
 import { useAuth } from "@/features/auth/use-auth";
 import { useChat } from "@/features/chat/chat-context";
 import { settingsApi } from "@/features/settings/api";
+import { McpTab } from "@/features/settings/mcp-tab";
 import { MemoryTab } from "@/features/settings/memory-tab";
 import type {
     ProviderType,
@@ -296,8 +297,8 @@ function SettingsPage() {
                             Settings
                         </h1>
                         <p className="text-sm text-dark-200">
-                            Manage provider access, durable memory, and upcoming
-                            local tool integrations.
+                            Manage provider access, durable memory, and MCP tool
+                            integrations.
                         </p>
                     </div>
 
@@ -367,18 +368,7 @@ function SettingsPage() {
                         isActive={activeTab === "memory"}
                     />
                 ) : (
-                    <div className="rounded-md border border-dark-600 bg-dark-900 px-5 py-8 sm:px-6">
-                        <div className="max-w-lg">
-                            <p className="text-sm font-medium text-white">
-                                MCP settings are coming next.
-                            </p>
-                            <p className="mt-2 text-sm leading-6 text-dark-300">
-                                This tab will be used for configuring Model
-                                Context Protocol servers and local tool
-                                connections.
-                            </p>
-                        </div>
-                    </div>
+                    <McpTab isActive={activeTab === "mcp"} />
                 )}
             </div>
         </div>
