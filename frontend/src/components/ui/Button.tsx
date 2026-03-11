@@ -8,6 +8,7 @@ import { cn } from "@/lib/cn";
 export interface ButtonProps extends BaseButtonProps {
     variant?: "primary" | "default" | "ghost" | "outline";
     className?: string;
+    size?: "sm" | "md" | "lg";
 }
 
 const variantClasses = {
@@ -18,15 +19,22 @@ const variantClasses = {
         "border border-dark-600 hover:bg-dark-600 bg-transparent text-white"
 };
 
+const sizeClasses = {
+    sm: "h-7 text-xs",
+    md: "h-8 text-sm",
+    lg: "h-9 text-base"
+};
+
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-    ({ className, variant = "default", ...props }, ref) => {
+    ({ className, variant = "default", size = "md", ...props }, ref) => {
         return (
             <BaseButton
                 ref={ref}
                 className={cn(
-                    "inline-flex items-center gap-2 justify-center rounded-md px-3 h-8 text-sm font-medium transition-colors",
+                    "inline-flex items-center gap-2 justify-center rounded-md px-3 font-medium transition-colors",
                     variantClasses[variant],
                     "data-[disabled]:opacity-50 data-[disabled]:cursor-not-allowed",
+                    sizeClasses[size],
                     className
                 )}
                 {...props}

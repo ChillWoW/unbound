@@ -56,6 +56,7 @@ const IMAGE_MIME_TYPES = new Set([
 
 export interface ConversationMessage {
     id: string;
+    parentMessageId: string | null;
     role: MessageRole;
     parts: MessagePart[];
     status: MessageStatus;
@@ -165,6 +166,7 @@ export function toConversationMessage(
 ): ConversationMessage {
     return {
         id: message.id,
+        parentMessageId: message.parentMessageId ?? null,
         role: message.role as MessageRole,
         parts: message.parts,
         status: message.status as MessageStatus,

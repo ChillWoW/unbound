@@ -70,11 +70,15 @@ function ConversationPage() {
         );
     }, [conversation, conversationId, isSending, markConversationRead]);
 
-    async function handleSubmit(value: string, attachments: import("@/features/chat/components/chat-input").ChatAttachment[]) {
+    async function handleSubmit(
+        value: string,
+        attachments: import("@/features/chat/components/chat-input").ChatAttachment[],
+        parentMessageId?: string
+    ) {
         setSubmissionError(null);
 
         try {
-            await sendMessage(conversationId, value, attachments);
+            await sendMessage(conversationId, value, attachments, parentMessageId);
         } catch (submitError) {
             if (submitError instanceof Error) {
                 setSubmissionError(submitError.message);

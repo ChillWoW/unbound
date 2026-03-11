@@ -102,6 +102,7 @@ export const conversationsRepository = {
         messageParts: MessagePart[];
         messageStatus: MessageStatus;
         messageMetadata?: Record<string, unknown> | null;
+        parentMessageId?: string | null;
     }) {
         return db.transaction(async (tx) => {
             const now = new Date();
@@ -123,6 +124,7 @@ export const conversationsRepository = {
                 .values({
                     id: input.messageId,
                     conversationId: input.conversationId,
+                    parentMessageId: input.parentMessageId ?? null,
                     role: input.messageRole,
                     parts: input.messageParts,
                     status: input.messageStatus,
@@ -146,6 +148,7 @@ export const conversationsRepository = {
         messageParts: MessagePart[];
         messageStatus: MessageStatus;
         messageMetadata?: Record<string, unknown> | null;
+        parentMessageId?: string | null;
     }) {
         return db.transaction(async (tx) => {
             const now = new Date();
@@ -154,6 +157,7 @@ export const conversationsRepository = {
                 .values({
                     id: input.messageId,
                     conversationId: input.conversationId,
+                    parentMessageId: input.parentMessageId ?? null,
                     role: input.messageRole,
                     parts: input.messageParts,
                     status: input.messageStatus,
@@ -192,6 +196,29 @@ export const conversationsRepository = {
             .limit(1);
 
         return message ?? null;
+    },
+
+    async getMessageAncestorChain(
+        conversationId: string,
+        messageId: string
+    ): Promise<MessageRecord[]> {
+        const allMessages = await db
+            .select()
+            .from(messages)
+            .where(eq(messages.conversationId, conversationId));
+
+        const byId = new Map(allMessages.map((m) => [m.id, m]));
+        const chain: MessageRecord[] = [];
+        let current = byId.get(messageId);
+
+        while (current) {
+            chain.unshift(current);
+            current = current.parentMessageId
+                ? byId.get(current.parentMessageId)
+                : undefined;
+        }
+
+        return chain;
     },
 
     async updateMessage(

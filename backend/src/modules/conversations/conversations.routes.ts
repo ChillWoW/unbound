@@ -14,6 +14,17 @@ const attachmentSchema = t.Object({
 
 const messageBody = t.Object({
     content: t.String({ maxLength: 32000 }),
+    attachments: t.Optional(t.Array(attachmentSchema, { maxItems: 10 })),
+    parentMessageId: t.Optional(t.String({ minLength: 1, maxLength: 64 }))
+});
+
+const messageParams = t.Object({
+    conversationId: t.String({ minLength: 1, maxLength: 64 }),
+    messageId: t.String({ minLength: 1, maxLength: 64 })
+});
+
+const editMessageBody = t.Object({
+    content: t.String({ maxLength: 32000 }),
     attachments: t.Optional(t.Array(attachmentSchema, { maxItems: 10 }))
 });
 
@@ -96,15 +107,16 @@ export const conversationsRoutes = new Elysia({ prefix: "/api/conversations" })
         "/:conversationId/messages",
         async ({ body, params, request, set }) => {
             try {
-                const conversation =
+                const result =
                     await conversationsService.createConversationMessage(
                         request,
                         params.conversationId,
                         body
                     );
 
+                const { newMessageId, ...conversation } = result;
                 set.status = 201;
-                return { conversation };
+                return { conversation, newMessageId };
             } catch (error) {
                 return handleConversationError(error, set);
             }
@@ -112,6 +124,29 @@ export const conversationsRoutes = new Elysia({ prefix: "/api/conversations" })
         {
             body: messageBody,
             params: conversationParams
+        }
+    )
+    .post(
+        "/:conversationId/messages/:messageId/edit",
+        async ({ body, params, request, set }) => {
+            try {
+                const result = await conversationsService.editMessage(
+                    request,
+                    params.conversationId,
+                    params.messageId,
+                    body
+                );
+
+                const { newMessageId, ...conversation } = result;
+                set.status = 201;
+                return { conversation, newMessageId };
+            } catch (error) {
+                return handleConversationError(error, set);
+            }
+        },
+        {
+            body: editMessageBody,
+            params: messageParams
         }
     )
     .post(

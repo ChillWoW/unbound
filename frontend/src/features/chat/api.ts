@@ -4,19 +4,27 @@ import type {
     ConversationReadResponse,
     ConversationResponse,
     ConversationsResponse,
+    MessageCreateResponse,
     ModelsResponse,
     TodoItem
 } from "./types";
 
 export const chatApi = {
-    generateResponse(conversationId: string, modelId: string, provider: string, thinking: boolean, signal?: AbortSignal) {
+    generateResponse(
+        conversationId: string,
+        modelId: string,
+        provider: string,
+        thinking: boolean,
+        signal?: AbortSignal,
+        replyToMessageId?: string
+    ) {
         return fetch(
             `${API_BASE_URL}/api/conversations/${conversationId}/generate`,
             {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",
-                body: JSON.stringify({ modelId, provider, thinking }),
+                body: JSON.stringify({ modelId, provider, thinking, replyToMessageId }),
                 signal
             }
         );
@@ -69,9 +77,28 @@ export const chatApi = {
         );
     },
 
-    sendMessage(conversationId: string, content: string, attachments?: Array<{ data: string; mimeType: string }>) {
-        return api.post<ConversationResponse>(
+    sendMessage(
+        conversationId: string,
+        content: string,
+        attachments?: Array<{ data: string; mimeType: string }>,
+        parentMessageId?: string
+    ) {
+        return api.post<MessageCreateResponse>(
             `/api/conversations/${conversationId}/messages`,
+            {
+                body: { content, attachments, parentMessageId }
+            }
+        );
+    },
+
+    editMessage(
+        conversationId: string,
+        messageId: string,
+        content: string,
+        attachments?: Array<{ data: string; mimeType: string }>
+    ) {
+        return api.post<MessageCreateResponse>(
+            `/api/conversations/${conversationId}/messages/${messageId}/edit`,
             {
                 body: { content, attachments }
             }

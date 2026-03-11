@@ -14,7 +14,8 @@ const conversationParams = t.Object({
 const generateBody = t.Object({
     modelId: t.String({ minLength: 1, maxLength: 200 }),
     provider: t.Optional(t.String({ minLength: 1, maxLength: 20 })),
-    thinking: t.Optional(t.Boolean())
+    thinking: t.Optional(t.Boolean()),
+    replyToMessageId: t.Optional(t.String({ minLength: 1, maxLength: 64 }))
 });
 
 function handleAiError(error: unknown, set: { status?: number | string }) {
@@ -41,7 +42,8 @@ export const aiRoutes = new Elysia({ prefix: "/api/conversations" })
                     params.conversationId,
                     body.modelId,
                     body.provider ?? "openrouter",
-                    body.thinking ?? false
+                    body.thinking ?? false,
+                    body.replyToMessageId
                 );
             } catch (error) {
                 return handleAiError(error, set);

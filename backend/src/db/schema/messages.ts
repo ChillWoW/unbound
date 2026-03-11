@@ -8,6 +8,7 @@ export const messages = pgTable(
         conversationId: text("conversation_id")
             .notNull()
             .references(() => conversations.id, { onDelete: "cascade" }),
+        parentMessageId: text("parent_message_id"),
         role: text("role").notNull(),
         parts: jsonb("parts")
             .$type<
@@ -39,6 +40,9 @@ export const messages = pgTable(
         ).on(table.conversationId, table.createdAt),
         conversationRoleCreatedAtIndex: index(
             "messages_conversation_role_created_at_idx"
-        ).on(table.conversationId, table.role, table.createdAt)
+        ).on(table.conversationId, table.role, table.createdAt),
+        parentMessageIdIndex: index(
+            "messages_parent_message_id_idx"
+        ).on(table.parentMessageId)
     })
 );

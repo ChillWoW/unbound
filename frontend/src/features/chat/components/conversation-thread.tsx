@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     ArrowDownIcon,
+    ArrowsClockwiseIcon,
     BrainIcon,
+    CaretLeftIcon,
     CaretRightIcon,
     CopyIcon,
     CheckIcon,
@@ -9,6 +11,7 @@ import {
     GlobeHemisphereWestIcon,
     ListChecksIcon,
     MagnifyingGlassIcon,
+    PencilSimpleIcon,
     WarningCircleIcon,
     WrenchIcon
 } from "@phosphor-icons/react";
@@ -28,6 +31,14 @@ import { useChat } from "../chat-context";
 import { type ChatAttachment } from "./chat-input";
 import { InputDock } from "./input-dock";
 import { MarkdownRenderer } from "@/components/markdown/markdown-renderer";
+import {
+    buildMessageTree,
+    resolveActivePath,
+    getSiblingInfo,
+    ensureTreeStructure,
+    type BranchSelections,
+    type MessageChildrenMap
+} from "../utils/message-tree";
 
 const TODO_TOOLS = new Set([
     "todoWrite",
@@ -445,6 +456,121 @@ function CopyButton({ text }: { text: string }) {
     );
 }
 
+function BranchNavigator({
+    tree,
+    message,
+    onSelect
+}: {
+    tree: MessageChildrenMap;
+    message: ConversationMessage;
+    onSelect: (parentKey: string | null, messageId: string) => void;
+}) {
+    const { siblings, activeIndex, total } = getSiblingInfo(tree, message);
+
+    if (total <= 1) return null;
+
+    const canGoLeft = activeIndex > 0;
+    const canGoRight = activeIndex < total - 1;
+    const parentKey = message.parentMessageId ?? null;
+
+    return (
+        <div className="flex items-center gap-0.5 text-[11px] text-dark-300">
+            <button
+                type="button"
+                disabled={!canGoLeft}
+                onClick={() =>
+                    canGoLeft &&
+                    onSelect(parentKey, siblings[activeIndex - 1].id)
+                }
+                className="flex size-5 items-center justify-center rounded-md transition-colors hover:text-dark-50 disabled:opacity-30 disabled:hover:text-dark-300"
+            >
+                <CaretLeftIcon className="size-3" weight="bold" />
+            </button>
+            <span className="tabular-nums min-w-[2ch] text-center">
+                {activeIndex + 1}/{total}
+            </span>
+            <button
+                type="button"
+                disabled={!canGoRight}
+                onClick={() =>
+                    canGoRight &&
+                    onSelect(parentKey, siblings[activeIndex + 1].id)
+                }
+                className="flex size-5 items-center justify-center rounded transition-colors hover:text-dark-50 disabled:opacity-30 disabled:hover:text-dark-300"
+            >
+                <CaretRightIcon className="size-3" weight="bold" />
+            </button>
+        </div>
+    );
+}
+
+function InlineEditForm({
+    initialText,
+    onSave,
+    onCancel,
+    isSending
+}: {
+    initialText: string;
+    onSave: (text: string) => void;
+    onCancel: () => void;
+    isSending: boolean;
+}) {
+    const [text, setText] = useState(initialText);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+    useEffect(() => {
+        const el = textareaRef.current;
+        if (el) {
+            el.focus();
+            el.setSelectionRange(el.value.length, el.value.length);
+        }
+    }, []);
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            if (text.trim()) onSave(text.trim());
+        }
+        if (e.key === "Escape") {
+            e.preventDefault();
+            onCancel();
+        }
+    };
+
+    return (
+        <div className="w-full">
+            <textarea
+                ref={textareaRef}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={isSending}
+                rows={Math.min(12, Math.max(2, text.split("\n").length))}
+                className="w-full resize-none rounded-md border border-dark-500 bg-dark-900 px-3 py-2 text-sm leading-6 text-dark-50 outline-none focus:border-primary-500"
+            />
+            <div className="mt-2 flex items-center justify-end gap-2">
+                <Button
+                    variant="ghost"
+                    onClick={onCancel}
+                    disabled={isSending}
+                    className="text-dark-200 hover:text-dark-50"
+                    size="sm"
+                >
+                    Cancel
+                </Button>
+                <Button
+                    variant="primary"
+                    onClick={() => text.trim() && onSave(text.trim())}
+                    disabled={isSending || !text.trim()}
+                    size="sm"
+                >
+                    Save & Submit
+                </Button>
+            </div>
+        </div>
+    );
+}
+
 function useLiveTimer(
     startIso: string | undefined,
     isActive: boolean
@@ -623,10 +749,18 @@ function StreamingIndicator() {
 
 function AssistantMessage({
     message,
-    availableModels
+    availableModels,
+    tree,
+    onBranchSelect,
+    onRegenerate,
+    isSending
 }: {
     message: ConversationMessage;
     availableModels: ChatModel[];
+    tree: MessageChildrenMap;
+    onBranchSelect: (parentKey: string | null, messageId: string) => void;
+    onRegenerate?: () => void;
+    isSending: boolean;
 }) {
     const text = getMessageText(message.parts);
     const isPending = message.status === "pending";
@@ -637,6 +771,12 @@ function AssistantMessage({
             part.type === "reasoning" ? index : lastIndex,
         -1
     );
+
+    const canRegenerate =
+        onRegenerate &&
+        !isSending &&
+        (message.status === "complete" || message.status === "failed") &&
+        message.parentMessageId != null;
 
     return (
         <div className="group w-full">
@@ -698,6 +838,25 @@ function AssistantMessage({
                 {message.status === "complete" && text && (
                     <CopyButton text={text} />
                 )}
+                {canRegenerate && (
+                    <Tooltip content="Regenerate" side="top">
+                        <button
+                            type="button"
+                            onClick={onRegenerate}
+                            className="flex size-7 items-center justify-center rounded-md text-dark-300 transition-colors hover:bg-dark-700 hover:text-dark-50"
+                        >
+                            <ArrowsClockwiseIcon
+                                className="size-3.5"
+                                weight="bold"
+                            />
+                        </button>
+                    </Tooltip>
+                )}
+                <BranchNavigator
+                    tree={tree}
+                    message={message}
+                    onSelect={onBranchSelect}
+                />
                 <AssistantMessageMetadataDisplay
                     metadata={message.metadata}
                     availableModels={availableModels}
@@ -721,7 +880,8 @@ interface ConversationThreadProps {
     onStop?: () => void;
     onSubmit: (
         value: string,
-        attachments: ChatAttachment[]
+        attachments: ChatAttachment[],
+        parentMessageId?: string
     ) => Promise<void> | void;
     onThinkingChange?: (enabled: boolean) => void;
     selectedModelId: string | null;
@@ -742,8 +902,55 @@ export function ConversationThread({
     selectedModelId,
     onSubmit
 }: ConversationThreadProps) {
-    const { getConversationTodos } = useChat();
+    const { getConversationTodos, regenerateMessage, editAndResend } =
+        useChat();
     const todos = getConversationTodos(conversation.id);
+
+    const [branchSelections, setBranchSelections] = useState<BranchSelections>(
+        new Map()
+    );
+    const [editingMessageId, setEditingMessageId] = useState<string | null>(
+        null
+    );
+
+    const patchedMessages = useMemo(
+        () => ensureTreeStructure(conversation.messages),
+        [conversation.messages]
+    );
+    const tree = useMemo(
+        () => buildMessageTree(patchedMessages),
+        [patchedMessages]
+    );
+    const displayPath = useMemo(
+        () => resolveActivePath(tree, branchSelections),
+        [tree, branchSelections]
+    );
+
+    const handleBranchSelect = useCallback(
+        (parentKey: string | null, messageId: string) => {
+            setBranchSelections((prev) => {
+                const next = new Map(prev);
+                next.set(parentKey, messageId);
+                return next;
+            });
+        },
+        []
+    );
+
+    const handleRegenerate = useCallback(
+        (assistantMessageId: string) => {
+            void regenerateMessage(conversation.id, assistantMessageId);
+        },
+        [conversation.id, regenerateMessage]
+    );
+
+    const handleEditSave = useCallback(
+        (messageId: string, newContent: string) => {
+            setEditingMessageId(null);
+            void editAndResend(conversation.id, messageId, newContent);
+        },
+        [conversation.id, editAndResend]
+    );
 
     const BOTTOM_SCROLL_THRESHOLD = 48;
     const RETURN_TO_BOTTOM_THRESHOLD = 16;
@@ -765,7 +972,6 @@ export function ConversationThread({
 
         atBottomRef.current = nextIsAtBottom;
 
-        // Only trigger a re-render when the value actually changes
         setIsAtBottom((prev) =>
             prev === nextIsAtBottom ? prev : nextIsAtBottom
         );
@@ -793,7 +999,7 @@ export function ConversationThread({
         if (!el) return;
 
         const messageCount = conversation.messages.length;
-        const lastMessage = conversation.messages.at(-1);
+        const lastMessage = displayPath.at(-1);
         const isNewMessage = messageCount > lastMessageCountRef.current;
         const isAssistantStreaming =
             lastMessage?.role === "assistant" &&
@@ -804,7 +1010,7 @@ export function ConversationThread({
         }
 
         lastMessageCountRef.current = messageCount;
-    }, [conversation.messages, scrollToBottom]);
+    }, [conversation.messages, displayPath, scrollToBottom]);
 
     useEffect(() => {
         const el = scrollRef.current;
@@ -835,52 +1041,118 @@ export function ConversationThread({
                 className="h-full overflow-y-auto px-4 pt-6 pb-56"
             >
                 <div className="mx-auto max-w-3xl 3xl:max-w-4xl space-y-5">
-                    {conversation.messages.map((message) => {
+                    {displayPath.map((message) => {
                         if (message.role === "user") {
                             const text = getMessageText(message.parts);
                             const images = message.parts.filter(
                                 (p): p is import("../types").ImageMessagePart =>
                                     p.type === "image"
                             );
+                            const isEditing = editingMessageId === message.id;
+
                             return (
                                 <div
                                     key={message.id}
                                     className="flex justify-end"
                                 >
-                                    <div className="max-w-[75%]">
-                                        {images.length > 0 && (
-                                            <div className="flex flex-wrap justify-end gap-2.5 mb-1">
-                                                {images.map((img, i) => (
-                                                    <ImageViewer
-                                                        key={i}
-                                                        src={`data:${img.mimeType};base64,${img.data}`}
-                                                        alt="attachment"
-                                                        imgClassName="max-h-32 w-auto max-w-full rounded-md"
-                                                    />
-                                                ))}
-                                            </div>
+                                    <div
+                                        className={cn(
+                                            isEditing
+                                                ? "w-full max-w-[85%]"
+                                                : "max-w-[75%]"
                                         )}
-                                        {text && (
-                                            <div className="rounded-md border border-dark-600 bg-dark-850 px-3 py-0.5">
-                                                <p className="whitespace-pre-wrap text-sm leading-6 text-dark-50">
-                                                    {text}
-                                                </p>
-                                            </div>
-                                        )}
-                                        {!text && images.length === 0 && (
-                                            <div className="rounded-md border border-dark-600 bg-dark-850 px-3 py-0.5">
-                                                <p className="whitespace-pre-wrap text-sm leading-6 text-dark-50">
-                                                    Unsupported message part.
-                                                </p>
-                                            </div>
-                                        )}
-                                        <div className="mt-1.5 flex items-center justify-end gap-2">
-                                            {text && <CopyButton text={text} />}
-                                            <UserMessageMetadataDisplay
-                                                metadata={message.metadata}
-                                                createdAt={message.createdAt}
+                                    >
+                                        {isEditing ? (
+                                            <InlineEditForm
+                                                initialText={text ?? ""}
+                                                onSave={(newText) =>
+                                                    handleEditSave(
+                                                        message.id,
+                                                        newText
+                                                    )
+                                                }
+                                                onCancel={() =>
+                                                    setEditingMessageId(null)
+                                                }
+                                                isSending={isSending}
                                             />
-                                        </div>
+                                        ) : (
+                                            <>
+                                                {images.length > 0 && (
+                                                    <div className="flex flex-wrap justify-end gap-2.5 mb-1">
+                                                        {images.map(
+                                                            (img, i) => (
+                                                                <ImageViewer
+                                                                    key={i}
+                                                                    src={`data:${img.mimeType};base64,${img.data}`}
+                                                                    alt="attachment"
+                                                                    imgClassName="max-h-32 w-auto max-w-full rounded-md"
+                                                                />
+                                                            )
+                                                        )}
+                                                    </div>
+                                                )}
+                                                {text && (
+                                                    <div className="rounded-md border border-dark-600 bg-dark-850 px-3 py-0.5">
+                                                        <p className="whitespace-pre-wrap text-sm leading-6 text-dark-50">
+                                                            {text}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                                {!text &&
+                                                    images.length === 0 && (
+                                                        <div className="rounded-md border border-dark-600 bg-dark-850 px-3 py-0.5">
+                                                            <p className="whitespace-pre-wrap text-sm leading-6 text-dark-50">
+                                                                Unsupported
+                                                                message part.
+                                                            </p>
+                                                        </div>
+                                                    )}
+                                                <div className="mt-1.5 flex items-center justify-end gap-1.5">
+                                                    {text && (
+                                                        <CopyButton
+                                                            text={text}
+                                                        />
+                                                    )}
+                                                    {!isSending && text && (
+                                                        <Tooltip
+                                                            content="Edit"
+                                                            side="top"
+                                                        >
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    setEditingMessageId(
+                                                                        message.id
+                                                                    )
+                                                                }
+                                                                className="flex size-7 items-center justify-center rounded-md text-dark-300 transition-colors hover:bg-dark-700 hover:text-dark-50"
+                                                            >
+                                                                <PencilSimpleIcon
+                                                                    className="size-3.5"
+                                                                    weight="bold"
+                                                                />
+                                                            </button>
+                                                        </Tooltip>
+                                                    )}
+                                                    <BranchNavigator
+                                                        tree={tree}
+                                                        message={message}
+                                                        onSelect={
+                                                            handleBranchSelect
+                                                        }
+                                                    />
+                                                    <UserMessageMetadataDisplay
+                                                        metadata={
+                                                            message.metadata
+                                                        }
+                                                        createdAt={
+                                                            message.createdAt
+                                                        }
+                                                    />
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             );
@@ -891,6 +1163,12 @@ export function ConversationThread({
                                 key={message.id}
                                 message={message}
                                 availableModels={availableModels}
+                                tree={tree}
+                                onBranchSelect={handleBranchSelect}
+                                onRegenerate={() =>
+                                    handleRegenerate(message.id)
+                                }
+                                isSending={isSending}
                             />
                         );
                     })}
@@ -949,7 +1227,10 @@ export function ConversationThread({
                         showContextBadge
                         placeholder="Send a message..."
                         {...(onStop && { onStop })}
-                        onSubmit={onSubmit}
+                        onSubmit={(value, attachments) => {
+                            const lastMsg = displayPath.at(-1);
+                            return onSubmit(value, attachments, lastMsg?.id);
+                        }}
                         isSubmitting={isSending}
                         conversationMessages={conversation.messages}
                         todos={todos}

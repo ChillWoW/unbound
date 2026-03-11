@@ -51,6 +51,7 @@ export interface MessageMetadata {
 
 export interface ConversationMessage {
     id: string;
+    parentMessageId: string | null;
     role: MessageRole;
     parts: MessagePart[];
     status: MessageStatus;
@@ -113,6 +114,10 @@ export interface ConversationResponse {
 export interface ConversationDeleteResponse {
     success: boolean;
     conversationId: string;
+}
+
+export interface MessageCreateResponse extends ConversationResponse {
+    newMessageId: string;
 }
 
 export type TodoStatus = "pending" | "in_progress" | "completed" | "cancelled";

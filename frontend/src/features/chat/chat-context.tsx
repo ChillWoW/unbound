@@ -174,10 +174,21 @@ interface ChatContextValue {
     reconnectToGeneration: (conversationId: string) => Promise<void>;
     isThinkingEnabled: boolean;
     selectedModelId: string | null;
+    regenerateMessage: (
+        conversationId: string,
+        assistantMessageId: string
+    ) => Promise<void>;
+    editAndResend: (
+        conversationId: string,
+        messageId: string,
+        newContent: string,
+        attachments?: ChatAttachment[]
+    ) => Promise<void>;
     sendMessage: (
         conversationId: string,
         prompt: string,
-        attachments?: ChatAttachment[]
+        attachments?: ChatAttachment[],
+        parentMessageId?: string
     ) => Promise<ConversationDetail>;
     setSelectedModelId: (
         modelId: string | null,
@@ -874,7 +885,12 @@ export function ChatProvider({ children }: PropsWithChildren) {
     }, []);
 
     const runGeneration = useCallback(
-        async (conversationId: string, modelId: string, provider: string) => {
+        async (
+            conversationId: string,
+            modelId: string,
+            provider: string,
+            replyToMessageId?: string
+        ) => {
             const thinking = isThinkingEnabledRef.current;
             const abortController = new AbortController();
             activeGenerationsRef.current.set(conversationId, abortController);
@@ -882,6 +898,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
             const optimisticId = `msg_optimistic_${Date.now()}`;
             const optimisticMessage: ConversationMessage = {
                 id: optimisticId,
+                parentMessageId: replyToMessageId ?? null,
                 role: "assistant",
                 parts: [],
                 status: "pending",
@@ -908,7 +925,8 @@ export function ChatProvider({ children }: PropsWithChildren) {
                     modelId,
                     provider,
                     thinking,
-                    abortController.signal
+                    abortController.signal,
+                    replyToMessageId
                 );
             } catch (error) {
                 activeGenerationsRef.current.delete(conversationId);
@@ -1193,10 +1211,19 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 upsertConversation(response.conversation);
 
                 const conversationId = response.conversation.id;
+                const firstUserMessageId =
+                    response.conversation.messages.find(
+                        (m) => m.role === "user"
+                    )?.id;
 
                 setConversationSending(conversationId, true);
                 void refreshConversationTitle(conversationId);
-                runGeneration(conversationId, modelId, provider)
+                runGeneration(
+                    conversationId,
+                    modelId,
+                    provider,
+                    firstUserMessageId
+                )
                     .catch(() => undefined)
                     .finally(() =>
                         setConversationSending(conversationId, false)
@@ -1276,7 +1303,8 @@ export function ChatProvider({ children }: PropsWithChildren) {
         async (
             conversationId: string,
             prompt: string,
-            attachments?: ChatAttachment[]
+            attachments?: ChatAttachment[],
+            parentMessageId?: string
         ) => {
             const modelId = selectedModelIdRef.current;
 
@@ -1299,11 +1327,18 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 const persistResponse = await chatApi.sendMessage(
                     conversationId,
                     prompt,
-                    preparedAttachments
+                    preparedAttachments,
+                    parentMessageId
                 );
                 upsertConversation(persistResponse.conversation);
 
-                await runGeneration(conversationId, modelId, provider);
+                const newUserMessageId = persistResponse.newMessageId;
+                await runGeneration(
+                    conversationId,
+                    modelId,
+                    provider,
+                    newUserMessageId
+                );
 
                 const finalConversation = conversationDetails[conversationId];
                 if (finalConversation) return finalConversation;
@@ -1398,6 +1433,100 @@ export function ChatProvider({ children }: PropsWithChildren) {
         [upsertConversation]
     );
 
+    const regenerateMessage = useCallback(
+        async (conversationId: string, assistantMessageId: string) => {
+            const modelId = selectedModelIdRef.current;
+            if (!modelId) {
+                throw new Error("No model selected.");
+            }
+
+            const provider =
+                selectedModelSourceRef.current ??
+                availableModelsRef.current.find((m) => m.id === modelId)
+                    ?.source ??
+                "openrouter";
+
+            const conversation = conversationDetails[conversationId];
+            if (!conversation) {
+                throw new Error("Conversation not found.");
+            }
+
+            const assistantMsg = conversation.messages.find(
+                (m) => m.id === assistantMessageId
+            );
+            if (!assistantMsg) {
+                throw new Error("Message not found.");
+            }
+
+            const replyToId = assistantMsg.parentMessageId;
+            if (!replyToId) {
+                throw new Error("Cannot regenerate: no parent message.");
+            }
+
+            setConversationSending(conversationId, true);
+            try {
+                await runGeneration(
+                    conversationId,
+                    modelId,
+                    provider,
+                    replyToId
+                );
+            } catch (error) {
+                throw new Error(getErrorMessage(error));
+            } finally {
+                setConversationSending(conversationId, false);
+            }
+        },
+        [conversationDetails, runGeneration, setConversationSending]
+    );
+
+    const editAndResend = useCallback(
+        async (
+            conversationId: string,
+            messageId: string,
+            newContent: string,
+            attachments?: ChatAttachment[]
+        ) => {
+            const modelId = selectedModelIdRef.current;
+            if (!modelId) {
+                throw new Error("No model selected.");
+            }
+
+            const provider =
+                selectedModelSourceRef.current ??
+                availableModelsRef.current.find((m) => m.id === modelId)
+                    ?.source ??
+                "openrouter";
+
+            setConversationSending(conversationId, true);
+            try {
+                const preparedAttachments = attachments?.length
+                    ? await prepareAttachments(attachments)
+                    : undefined;
+                const editResponse = await chatApi.editMessage(
+                    conversationId,
+                    messageId,
+                    newContent,
+                    preparedAttachments
+                );
+                upsertConversation(editResponse.conversation);
+
+                const newUserMessageId = editResponse.newMessageId;
+                await runGeneration(
+                    conversationId,
+                    modelId,
+                    provider,
+                    newUserMessageId
+                );
+            } catch (error) {
+                throw new Error(getErrorMessage(error));
+            } finally {
+                setConversationSending(conversationId, false);
+            }
+        },
+        [runGeneration, setConversationSending, upsertConversation]
+    );
+
     const deleteConversation = useCallback(
         async (conversationId: string) => {
             try {
@@ -1472,6 +1601,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
             conversationsError,
             createConversation,
             deleteConversation,
+            editAndResend,
             getConversation,
             getConversationError,
             getConversationTodos,
@@ -1485,6 +1615,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
             loadModels,
             markConversationRead,
             modelsError,
+            regenerateMessage,
             renameConversation,
             isThinkingEnabled,
             reconnectToGeneration,
@@ -1502,6 +1633,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
             conversationsError,
             createConversation,
             deleteConversation,
+            editAndResend,
             getConversation,
             getConversationError,
             getConversationTodos,
@@ -1516,6 +1648,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
             loadModels,
             markConversationRead,
             modelsError,
+            regenerateMessage,
             renameConversation,
             reconnectToGeneration,
             selectedModelId,

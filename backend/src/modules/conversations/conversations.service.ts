@@ -193,7 +193,11 @@ export const conversationsService = {
     async createConversationMessage(
         request: Request,
         conversationId: string,
-        input: { content: string; attachments?: Array<{ data: string; mimeType: string }> }
+        input: {
+            content: string;
+            attachments?: Array<{ data: string; mimeType: string }>;
+            parentMessageId?: string | null;
+        }
     ) {
         const user = await requireVerifiedAuth(request);
         const conversation =
@@ -206,7 +210,7 @@ export const conversationsService = {
             throw new ConversationError(404, "Conversation not found.");
         }
 
-        await conversationsRepository.appendMessageToConversation({
+        const result = await conversationsRepository.appendMessageToConversation({
             conversationId,
             messageId: createCustomId("msg"),
             messageRole: "user",
@@ -214,10 +218,61 @@ export const conversationsService = {
             messageStatus: "complete",
             messageMetadata: {
                 sentAt: new Date().toISOString()
-            }
+            },
+            parentMessageId: input.parentMessageId ?? null
         });
 
-        return getConversationDetailOrThrow(user.id, conversationId);
+        const detail = await getConversationDetailOrThrow(user.id, conversationId);
+        return { ...detail, newMessageId: result.message.id };
+    },
+
+    async editMessage(
+        request: Request,
+        conversationId: string,
+        messageId: string,
+        input: {
+            content: string;
+            attachments?: Array<{ data: string; mimeType: string }>;
+        }
+    ) {
+        const user = await requireVerifiedAuth(request);
+        const conversation =
+            await conversationsRepository.findConversationByIdForUser(
+                user.id,
+                conversationId
+            );
+
+        if (!conversation) {
+            throw new ConversationError(404, "Conversation not found.");
+        }
+
+        const original = await conversationsRepository.findMessageById(
+            conversationId,
+            messageId
+        );
+
+        if (!original) {
+            throw new ConversationError(404, "Message not found.");
+        }
+
+        if (original.role !== "user") {
+            throw new ConversationError(400, "Only user messages can be edited.");
+        }
+
+        const result = await conversationsRepository.appendMessageToConversation({
+            conversationId,
+            messageId: createCustomId("msg"),
+            messageRole: "user",
+            messageParts: createMessageParts(input.content, input.attachments),
+            messageStatus: "complete",
+            messageMetadata: {
+                sentAt: new Date().toISOString()
+            },
+            parentMessageId: original.parentMessageId ?? null
+        });
+
+        const detail = await getConversationDetailOrThrow(user.id, conversationId);
+        return { ...detail, newMessageId: result.message.id };
     },
 
     async markConversationRead(

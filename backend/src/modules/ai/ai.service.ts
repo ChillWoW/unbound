@@ -557,7 +557,8 @@ export const aiService = {
         conversationId: string,
         modelId: string,
         provider: string,
-        thinking = false
+        thinking = false,
+        replyToMessageId?: string
     ): Promise<Response> {
         const user = await requireVerifiedAuth(request);
 
@@ -599,10 +600,15 @@ export const aiService = {
             throw new ConversationError(404, "Conversation not found.");
         }
 
-        const messageRecords =
-            await conversationsRepository.listMessagesByConversationId(
-                conversationId
-            );
+        const messageRecords = replyToMessageId
+            ? await conversationsRepository.getMessageAncestorChain(
+                  conversationId,
+                  replyToMessageId
+              )
+            : await conversationsRepository.listMessagesByConversationId(
+                  conversationId
+              );
+
         const initialPrompt = getInitialConversationPrompt(
             messageRecords
                 .filter((message) => message.role === "user")
@@ -664,7 +670,8 @@ export const aiService = {
                 provider: resolvedProvider,
                 thinkingEnabled: thinking,
                 generationStartedAt
-            }
+            },
+            parentMessageId: replyToMessageId ?? null
         });
 
         const generation = generationManager.register(
