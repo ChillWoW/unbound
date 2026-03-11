@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 import { Navigate, createFileRoute } from "@tanstack/react-router";
 import { ShieldCheckIcon, CheckCircleIcon } from "@phosphor-icons/react";
-import { OpenRouter, OpenAI, Anthropic, Google, Moonshot } from "@lobehub/icons";
+import {
+    OpenRouter,
+    OpenAI,
+    Anthropic,
+    Google,
+    Moonshot
+} from "@lobehub/icons";
 import { Button, Input } from "@/components/ui";
 import { useAuth } from "@/features/auth/use-auth";
 import { useChat } from "@/features/chat/chat-context";
@@ -12,6 +18,7 @@ import type {
     UserSettingsSummary
 } from "@/features/settings/types";
 import { ApiError } from "@/lib/api";
+import { cn } from "@/lib/cn";
 import { notify } from "@/lib/toast";
 
 const defaultSettings: UserSettingsSummary = {
@@ -69,6 +76,8 @@ const PROVIDERS: ProviderConfig[] = [
         icon: Moonshot
     }
 ];
+
+type SettingsTab = "api-keys" | "mcp";
 
 function getErrorMessage(error: unknown): string {
     if (
@@ -145,14 +154,12 @@ function ProviderRow({
     return (
         <form
             onSubmit={handleSubmit}
-            className="flex flex-wrap items-center gap-4 py-4 border-b border-dark-700 last:border-b-0"
+            className="flex flex-wrap items-center gap-4 border-b border-dark-600 py-4 last:border-b-0"
         >
-            {/* Icon */}
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-dark-700">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-dark-800">
                 <Icon className="size-4 text-dark-100" />
             </div>
 
-            {/* Title + description */}
             <div className="w-44 shrink-0">
                 <div className="flex items-center gap-1.5">
                     <span className="text-sm font-medium text-white">
@@ -170,7 +177,6 @@ function ProviderRow({
                 </p>
             </div>
 
-            {/* Input + save */}
             <div className="flex w-full md:flex-1 items-center gap-2 min-w-0">
                 <Input
                     value={apiKey}
@@ -198,6 +204,7 @@ function ProviderRow({
 function SettingsPage() {
     const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
     const { loadModels } = useChat();
+    const [activeTab, setActiveTab] = useState<SettingsTab>("api-keys");
     const [settings, setSettings] =
         useState<UserSettingsSummary>(defaultSettings);
     const [error, setError] = useState<string | null>(null);
@@ -236,7 +243,10 @@ function SettingsPage() {
     }, [isAuthLoading, isAuthenticated]);
 
     async function handleSaveKey(provider: ProviderType, apiKey: string) {
-        const response = await settingsApi.updateProviderApiKey(provider, apiKey);
+        const response = await settingsApi.updateProviderApiKey(
+            provider,
+            apiKey
+        );
         setSettings(response.settings);
         void loadModels().catch(() => undefined);
     }
@@ -262,11 +272,49 @@ function SettingsPage() {
     return (
         <div className="flex h-full overflow-y-auto">
             <div className="w-full max-w-2xl mx-auto px-4 py-8 sm:px-6">
-                <div className="mb-6">
-                    <h1 className="text-base font-semibold text-white">API Keys</h1>
-                    <p className="mt-1 text-sm text-dark-300">
-                        Connect AI providers with your API keys. Keys are encrypted and stored securely. Clear a key and save to remove it.
-                    </p>
+                <div className="mb-6 flex flex-col gap-4">
+                    <div>
+                        <h1 className="text-lg font-semibold text-white">
+                            Settings
+                        </h1>
+                        <p className="text-sm text-dark-200">
+                            Manage provider access and upcoming local tool
+                            integrations.
+                        </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                        {(
+                            [
+                                {
+                                    id: "api-keys",
+                                    label: "API Keys"
+                                },
+                                {
+                                    id: "mcp",
+                                    label: "MCP"
+                                }
+                            ] as const
+                        ).map((tab) => {
+                            const isActive = activeTab === tab.id;
+
+                            return (
+                                <Button
+                                    key={tab.id}
+                                    type="button"
+                                    onClick={() => setActiveTab(tab.id)}
+                                    variant="primary"
+                                    size="sm"
+                                    className={cn(
+                                        !isActive &&
+                                            "bg-dark-900 border border-dark-600 hover:bg-dark-800 text-dark-200 hover:text-dark-50"
+                                    )}
+                                >
+                                    {tab.label}
+                                </Button>
+                            );
+                        })}
+                    </div>
                 </div>
 
                 {error ? (
@@ -275,18 +323,35 @@ function SettingsPage() {
                     </div>
                 ) : null}
 
-                <div className="rounded-xl border border-dark-700 bg-dark-900 px-4 sm:px-6">
-                    {PROVIDERS.map((config) => (
-                        <ProviderRow
-                            key={config.id}
-                            config={config}
-                            status={settings.providers[config.id]}
-                            onSave={handleSaveKey}
-                            onRemove={handleRemoveKey}
-                            globalBusy={isLoadingSettings}
-                        />
-                    ))}
-                </div>
+                {activeTab === "api-keys" ? (
+                    <>
+                        <div className="rounded-md border border-dark-600 bg-dark-900 px-4 sm:px-6">
+                            {PROVIDERS.map((config) => (
+                                <ProviderRow
+                                    key={config.id}
+                                    config={config}
+                                    status={settings.providers[config.id]}
+                                    onSave={handleSaveKey}
+                                    onRemove={handleRemoveKey}
+                                    globalBusy={isLoadingSettings}
+                                />
+                            ))}
+                        </div>
+                    </>
+                ) : (
+                    <div className="rounded-md border border-dark-600 bg-dark-900 px-5 py-8 sm:px-6">
+                        <div className="max-w-lg">
+                            <p className="text-sm font-medium text-white">
+                                MCP settings are coming next.
+                            </p>
+                            <p className="mt-2 text-sm leading-6 text-dark-300">
+                                This tab will be used for configuring Model
+                                Context Protocol servers and local tool
+                                connections.
+                            </p>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
