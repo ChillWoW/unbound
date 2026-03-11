@@ -19,6 +19,8 @@ import type {
     UserMemorySummary
 } from "./types";
 
+const EMPTY_DRAFT_OVERRIDES: Partial<UpdateMemorySettingsInput> = {};
+
 const MEMORY_KIND_LABELS: Record<MemoryKind, string> = {
     preference: "Preference",
     workflow: "Workflow",
@@ -54,6 +56,10 @@ function formatDate(value: string | null): string {
     });
 }
 
+function getSettingsKey(settings: MemorySettingsSummary): string {
+    return JSON.stringify(settings);
+}
+
 export function MemoryTab({
     settings,
     onSavePolicy,
@@ -63,7 +69,28 @@ export function MemoryTab({
     onSavePolicy: (input: UpdateMemorySettingsInput) => Promise<void>;
     isActive: boolean;
 }) {
-    const [draft, setDraft] = useState<UpdateMemorySettingsInput>(settings);
+    return (
+        <MemoryTabContent
+            key={getSettingsKey(settings)}
+            settings={settings}
+            onSavePolicy={onSavePolicy}
+            isActive={isActive}
+        />
+    );
+}
+
+function MemoryTabContent({
+    settings,
+    onSavePolicy,
+    isActive
+}: {
+    settings: MemorySettingsSummary;
+    onSavePolicy: (input: UpdateMemorySettingsInput) => Promise<void>;
+    isActive: boolean;
+}) {
+    const [draftOverrides, setDraftOverrides] = useState<
+        Partial<UpdateMemorySettingsInput>
+    >(EMPTY_DRAFT_OVERRIDES);
     const [searchQuery, setSearchQuery] = useState("");
     const [kindFilter, setKindFilter] = useState<MemoryKind | "all">("all");
     const [memories, setMemories] = useState<UserMemorySummary[]>([]);
@@ -72,9 +99,13 @@ export function MemoryTab({
     const [isSavingPolicy, setIsSavingPolicy] = useState(false);
     const [deletingId, setDeletingId] = useState<string | null>(null);
 
-    useEffect(() => {
-        setDraft(settings);
-    }, [settings]);
+    const draft = useMemo<UpdateMemorySettingsInput>(
+        () => ({
+            ...settings,
+            ...draftOverrides
+        }),
+        [draftOverrides, settings]
+    );
 
     useEffect(() => {
         if (!isActive) return;
@@ -165,7 +196,7 @@ export function MemoryTab({
                         <Switch
                             checked={draft.enabled}
                             onCheckedChange={(checked) =>
-                                setDraft((prev) => ({
+                                setDraftOverrides((prev) => ({
                                     ...prev,
                                     enabled: checked
                                 }))
@@ -187,7 +218,7 @@ export function MemoryTab({
                         <textarea
                             value={draft.customInstructions ?? ""}
                             onChange={(e) =>
-                                setDraft((prev) => ({
+                                setDraftOverrides((prev) => ({
                                     ...prev,
                                     customInstructions: e.target.value
                                 }))

@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { env } from "../../config/env";
 import { getSessionIdFromRequest } from "../../lib/cookies";
 import { logger } from "../../lib/logger";
+import { consumeRateLimit } from "../../lib/rate-limit";
 import { hashPassword, verifyPassword } from "../../lib/password";
 import { emailService } from "../email";
 import { usersRepository } from "../users/users.repository";
@@ -13,7 +14,6 @@ import type {
     RegisterInput,
     ResendVerificationInput,
     ResetPasswordInput,
-    Session,
     VerifyEmailInput
 } from "./auth.types";
 import { AuthError } from "./auth.types";
@@ -22,6 +22,10 @@ const EMAIL_VERIFICATION_TTL_MS = 1000 * 60 * 15;
 const EMAIL_VERIFICATION_RESEND_COOLDOWN_MS = 1000 * 60 * 15;
 const PASSWORD_RESET_TTL_MS = 1000 * 60 * 15;
 const PASSWORD_RESET_RESEND_COOLDOWN_MS = 1000 * 60 * 15;
+const RATE_LIMIT_WINDOW_MS = 1000 * 60 * 15;
+const AUTH_RATE_LIMIT_MESSAGE =
+    "Too many attempts right now. Please wait a few minutes and try again.";
+const LOGIN_FAILURE_MESSAGE = "Unable to sign in with those credentials.";
 
 function normalizeEmail(email: string): string {
     return email.trim().toLowerCase();
@@ -29,6 +33,10 @@ function normalizeEmail(email: string): string {
 
 function createSessionId(): string {
     return randomBytes(32).toString("hex");
+}
+
+function hashSessionId(sessionId: string): string {
+    return createHash("sha256").update(sessionId).digest("hex");
 }
 
 function createSessionExpiry(): Date {
@@ -55,6 +63,75 @@ function hashPasswordResetToken(token: string): string {
     return createHash("sha256").update(token).digest("hex");
 }
 
+function getClientIdentifier(request: Request): string {
+    const forwardedFor = request.headers.get("x-forwarded-for");
+
+    if (forwardedFor) {
+        const firstAddress = forwardedFor.split(",")[0]?.trim();
+
+        if (firstAddress) {
+            return firstAddress;
+        }
+    }
+
+    const directAddress =
+        request.headers.get("cf-connecting-ip") ??
+        request.headers.get("x-real-ip") ??
+        "unknown";
+
+    return directAddress.trim().toLowerCase() || "unknown";
+}
+
+function consumeAuthRateLimit(input: {
+    scope: string;
+    request: Request;
+    limit: number;
+    suffix?: string;
+}) {
+    const key = [getClientIdentifier(input.request), input.suffix]
+        .filter(Boolean)
+        .join(":");
+
+    if (
+        !consumeRateLimit({
+            scope: input.scope,
+            key,
+            limit: input.limit,
+            windowMs: RATE_LIMIT_WINDOW_MS
+        })
+    ) {
+        throw new AuthError(429, AUTH_RATE_LIMIT_MESSAGE);
+    }
+}
+
+function enforceEmailRateLimit(
+    scope: string,
+    request: Request,
+    email: string,
+    limit: number
+) {
+    consumeAuthRateLimit({
+        scope,
+        request,
+        limit,
+        suffix: createHash("sha256").update(email).digest("hex")
+    });
+}
+
+function enforceTokenRateLimit(
+    scope: string,
+    request: Request,
+    token: string,
+    limit: number
+) {
+    consumeAuthRateLimit({
+        scope,
+        request,
+        limit,
+        suffix: createHash("sha256").update(token).digest("hex")
+    });
+}
+
 function createEmailVerificationUrl(token: string): string {
     const url = new URL("/verify-email", env.corsOrigin);
     url.searchParams.set("token", token);
@@ -71,12 +148,16 @@ function createPasswordResetUrl(token: string): string {
     return url.toString();
 }
 
-async function createSessionForUser(userId: string): Promise<Session> {
-    return authRepository.createSession({
-        id: createSessionId(),
+async function createSessionForUser(userId: string): Promise<string> {
+    const sessionId = createSessionId();
+
+    await authRepository.createSession({
+        id: hashSessionId(sessionId),
         userId,
         expiresAt: createSessionExpiry()
     });
+
+    return sessionId;
 }
 
 async function sendVerificationEmail(user: {
@@ -93,15 +174,7 @@ async function sendVerificationEmail(user: {
         Date.now() - latestToken.createdAt.getTime() <
             EMAIL_VERIFICATION_RESEND_COOLDOWN_MS
     ) {
-        const availableAt = new Date(
-            latestToken.createdAt.getTime() +
-                EMAIL_VERIFICATION_RESEND_COOLDOWN_MS
-        );
-
-        throw new AuthError(
-            429,
-            `A verification email was already sent recently. Please try again after ${availableAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.`
-        );
+        return false;
     }
 
     const token = createEmailVerificationToken();
@@ -134,6 +207,8 @@ async function sendVerificationEmail(user: {
             error: error instanceof Error ? error.message : error
         });
     }
+
+    return true;
 }
 
 async function sendPasswordResetEmail(user: {
@@ -186,15 +261,26 @@ async function sendPasswordResetEmail(user: {
 }
 
 export const authService = {
-    async register(input: RegisterInput) {
+    async register(request: Request, input: RegisterInput) {
         const email = normalizeEmail(input.email);
+        consumeAuthRateLimit({
+            scope: "auth.register.ip",
+            request,
+            limit: 10
+        });
+        enforceEmailRateLimit("auth.register.email", request, email, 5);
+
         const existingUser = await usersRepository.findByEmail(email);
 
         if (existingUser) {
-            throw new AuthError(
-                409,
-                "An account with this email already exists."
-            );
+            if (!existingUser.emailVerifiedAt) {
+                await sendVerificationEmail(existingUser);
+            }
+
+            return {
+                user: null,
+                sessionToken: null
+            };
         }
 
         const passwordHash = await hashPassword(input.password);
@@ -203,21 +289,28 @@ export const authService = {
             name: input.name,
             passwordHash
         });
-        const session = await createSessionForUser(user.id);
+        const sessionToken = await createSessionForUser(user.id);
         await sendVerificationEmail(user);
 
         return {
             user: toPublicUser(user),
-            session
+            sessionToken
         };
     },
 
-    async login(input: LoginInput) {
+    async login(request: Request, input: LoginInput) {
         const email = normalizeEmail(input.email);
+        consumeAuthRateLimit({
+            scope: "auth.login.ip",
+            request,
+            limit: 20
+        });
+        enforceEmailRateLimit("auth.login.email", request, email, 10);
+
         const user = await usersRepository.findByEmail(email);
 
         if (!user) {
-            throw new AuthError(401, "Invalid email or password.");
+            throw new AuthError(401, LOGIN_FAILURE_MESSAGE);
         }
 
         const isValidPassword = await verifyPassword(
@@ -226,21 +319,18 @@ export const authService = {
         );
 
         if (!isValidPassword) {
-            throw new AuthError(401, "Invalid email or password.");
+            throw new AuthError(401, LOGIN_FAILURE_MESSAGE);
         }
 
         if (!user.emailVerifiedAt) {
-            throw new AuthError(
-                403,
-                "Please verify your email before signing in."
-            );
+            throw new AuthError(401, LOGIN_FAILURE_MESSAGE);
         }
 
-        const session = await createSessionForUser(user.id);
+        const sessionToken = await createSessionForUser(user.id);
 
         return {
             user: toPublicUser(user),
-            session
+            sessionToken
         };
     },
 
@@ -251,7 +341,7 @@ export const authService = {
             return;
         }
 
-        await authRepository.deleteSession(sessionId);
+        await authRepository.deleteSession(hashSessionId(sessionId));
     },
 
     async getCurrentUser(request: Request) {
@@ -261,7 +351,9 @@ export const authService = {
             return null;
         }
 
-        const session = await authRepository.findSessionById(sessionId);
+        const session = await authRepository.findSessionById(
+            hashSessionId(sessionId)
+        );
 
         if (!session) {
             return null;
@@ -282,12 +374,20 @@ export const authService = {
         return toPublicUser(user);
     },
 
-    async verifyEmail(input: VerifyEmailInput) {
+    async verifyEmail(request: Request, input: VerifyEmailInput) {
         const token = input.token.trim();
+
+        consumeAuthRateLimit({
+            scope: "auth.verify-email.ip",
+            request,
+            limit: 20
+        });
 
         if (!token) {
             throw new AuthError(400, "Verification token is required.");
         }
+
+        enforceTokenRateLimit("auth.verify-email.token", request, token, 10);
 
         const record = await authRepository.findValidEmailVerificationTokenByHash(
             hashEmailVerificationToken(token)
@@ -318,15 +418,21 @@ export const authService = {
         }
 
         await authRepository.deleteEmailVerificationTokensForUser(user.id);
-        const session = await createSessionForUser(user.id);
+        const sessionToken = await createSessionForUser(user.id);
 
         return {
             user: toPublicUser(verifiedUser),
-            session
+            sessionToken
         };
     },
 
     async resendVerification(request: Request, input: ResendVerificationInput) {
+        consumeAuthRateLimit({
+            scope: "auth.resend-verification.ip",
+            request,
+            limit: 10
+        });
+
         const currentUser = await this.getCurrentUser(request);
 
         if (currentUser && !currentUser.isEmailVerified) {
@@ -345,6 +451,8 @@ export const authService = {
             throw new AuthError(400, "Email is required.");
         }
 
+        enforceEmailRateLimit("auth.resend-verification.email", request, email, 5);
+
         const user = await usersRepository.findByEmail(email);
 
         if (user && !user.emailVerifiedAt) {
@@ -354,8 +462,14 @@ export const authService = {
         return { success: true };
     },
 
-    async forgotPassword(input: ForgotPasswordInput) {
+    async forgotPassword(request: Request, input: ForgotPasswordInput) {
         const email = normalizeEmail(input.email);
+        consumeAuthRateLimit({
+            scope: "auth.forgot-password.ip",
+            request,
+            limit: 10
+        });
+        enforceEmailRateLimit("auth.forgot-password.email", request, email, 5);
         const user = await usersRepository.findByEmail(email);
 
         if (user) {
@@ -365,12 +479,20 @@ export const authService = {
         return { success: true };
     },
 
-    async resetPassword(input: ResetPasswordInput) {
+    async resetPassword(request: Request, input: ResetPasswordInput) {
         const token = input.token.trim();
+
+        consumeAuthRateLimit({
+            scope: "auth.reset-password.ip",
+            request,
+            limit: 10
+        });
 
         if (!token) {
             throw new AuthError(400, "Reset token is required.");
         }
+
+        enforceTokenRateLimit("auth.reset-password.token", request, token, 5);
 
         const record = await authRepository.findValidPasswordResetTokenByHash(
             hashPasswordResetToken(token)

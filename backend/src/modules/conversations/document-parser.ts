@@ -3,9 +3,29 @@ import { logger } from "../../lib/logger";
 
 const MAX_PARSED_PDF_PAGES = 20;
 const MAX_PARSED_TEXT_LENGTH = 20_000;
+const PDF_PARSE_TIMEOUT_MS = 10_000;
 
 function normalizeText(value: string): string {
     return value.replace(/\s+/g, " ").trim();
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+    return await new Promise<T>((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+            reject(new Error("Document parsing timed out."));
+        }, timeoutMs);
+
+        void promise.then(
+            (value) => {
+                clearTimeout(timeoutId);
+                resolve(value);
+            },
+            (error: unknown) => {
+                clearTimeout(timeoutId);
+                reject(error);
+            }
+        );
+    });
 }
 
 export async function extractDocumentText(
@@ -21,13 +41,22 @@ export async function extractDocumentText(
     const startedAt = Date.now();
 
     try {
-        document = await getDocument({ data }).promise;
+        document = await withTimeout(
+            getDocument({ data }).promise,
+            PDF_PARSE_TIMEOUT_MS
+        );
         const chunks: string[] = [];
         const pageCount = Math.min(document.numPages, MAX_PARSED_PDF_PAGES);
 
         for (let pageNumber = 1; pageNumber <= pageCount; pageNumber++) {
-            const page = await document.getPage(pageNumber);
-            const textContent = await page.getTextContent();
+            const page = (await withTimeout(
+                document.getPage(pageNumber),
+                PDF_PARSE_TIMEOUT_MS
+            )) as any;
+            const textContent = (await withTimeout(
+                page.getTextContent(),
+                PDF_PARSE_TIMEOUT_MS
+            )) as { items: Array<{ str?: string }> };
             const text = normalizeText(
                 textContent.items
                     .map((item: { str?: string }) => item.str ?? "")

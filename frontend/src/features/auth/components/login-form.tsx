@@ -44,21 +44,11 @@ export function LoginForm() {
             });
             await navigate({ to: "/" });
         } catch (submitError) {
-            if (submitError instanceof ApiError && submitError.status === 403) {
-                notify.error({
-                    title: "Verify your email",
-                    description: getErrorMessage(submitError)
-                });
-                await navigate({
-                    to: "/verify-email",
-                    search: { email: email.trim() }
-                });
-                return;
-            }
-
             notify.error({
                 title: "Couldn't sign in",
-                description: getErrorMessage(submitError)
+                description:
+                    getErrorMessage(submitError) +
+                    " If you still need to verify your email, you can request a new link from the verification page."
             });
         } finally {
             setIsSubmitting(false);
@@ -83,11 +73,15 @@ export function LoginForm() {
                         className="flex flex-col gap-4"
                         onSubmit={handleSubmit}
                     >
-                        <label className="flex flex-col gap-1.5">
+                        <label
+                            htmlFor="login-email"
+                            className="flex flex-col gap-1.5"
+                        >
                             <span className="text-xs font-semibold text-dark-200">
                                 Email
                             </span>
                             <Input
+                                id="login-email"
                                 autoComplete="email"
                                 placeholder="you@example.com"
                                 type="email"
@@ -98,11 +92,15 @@ export function LoginForm() {
                             />
                         </label>
 
-                        <label className="flex flex-col gap-1.5">
+                        <label
+                            htmlFor="login-credential"
+                            className="flex flex-col gap-1.5"
+                        >
                             <span className="text-xs font-semibold text-dark-200">
                                 Password
                             </span>
                             <PasswordInput
+                                id="login-credential"
                                 autoComplete="current-password"
                                 placeholder="********"
                                 value={password}

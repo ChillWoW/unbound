@@ -914,7 +914,7 @@ export const aiService = {
             initialPrompt
         });
 
-        const tools = createTools(conversationId, user.id);
+        const tools = createTools(conversationId, user.id, latestUserText);
         const modelMaxOutputTokens = modelsService.getModelMaxOutputTokens(
             user.id,
             modelId

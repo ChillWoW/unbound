@@ -29,6 +29,10 @@ export interface AuthSuccessResponse {
     user: AuthUser;
 }
 
+export interface RegisterResponse {
+    user: AuthUser | null;
+}
+
 export interface ResendVerificationInput {
     email?: string;
 }
@@ -62,7 +66,7 @@ export interface AuthContextValue {
     login: (input: LoginInput) => Promise<AuthUser>;
     logout: () => Promise<void>;
     refresh: () => Promise<AuthUser | null>;
-    register: (input: RegisterInput) => Promise<AuthUser>;
+    register: (input: RegisterInput) => Promise<AuthUser | null>;
     resendVerification: (input?: ResendVerificationInput) => Promise<void>;
     resetPassword: (input: ResetPasswordInput) => Promise<void>;
     verifyEmail: (token: string) => Promise<AuthUser>;

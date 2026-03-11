@@ -53,14 +53,16 @@ function handleAuthError(
 export const authRoutes = new Elysia({ prefix: "/api/auth" })
     .post(
         "/register",
-        async ({ body, set }) => {
+        async ({ body, request, set }) => {
             try {
-                const result = await authService.register(body);
+                const result = await authService.register(request, body);
 
-                setCookieHeader(
-                    set.headers,
-                    createSessionCookie(result.session.id)
-                );
+                if (result.sessionToken) {
+                    setCookieHeader(
+                        set.headers,
+                        createSessionCookie(result.sessionToken)
+                    );
+                }
 
                 return { user: result.user };
             } catch (error) {
@@ -73,13 +75,13 @@ export const authRoutes = new Elysia({ prefix: "/api/auth" })
     )
     .post(
         "/login",
-        async ({ body, set }) => {
+        async ({ body, request, set }) => {
             try {
-                const result = await authService.login(body);
+                const result = await authService.login(request, body);
 
                 setCookieHeader(
                     set.headers,
-                    createSessionCookie(result.session.id)
+                    createSessionCookie(result.sessionToken)
                 );
 
                 return { user: result.user };
@@ -93,9 +95,9 @@ export const authRoutes = new Elysia({ prefix: "/api/auth" })
     )
     .post(
         "/forgot-password",
-        async ({ body, set }) => {
+        async ({ body, request, set }) => {
             try {
-                return await authService.forgotPassword(body);
+                return await authService.forgotPassword(request, body);
             } catch (error) {
                 return handleAuthError(error, set);
             }
@@ -106,13 +108,13 @@ export const authRoutes = new Elysia({ prefix: "/api/auth" })
     )
     .post(
         "/verify-email",
-        async ({ body, set }) => {
+        async ({ body, request, set }) => {
             try {
-                const result = await authService.verifyEmail(body);
+                const result = await authService.verifyEmail(request, body);
 
                 setCookieHeader(
                     set.headers,
-                    createSessionCookie(result.session.id)
+                    createSessionCookie(result.sessionToken)
                 );
 
                 return { user: result.user };
@@ -126,9 +128,9 @@ export const authRoutes = new Elysia({ prefix: "/api/auth" })
     )
     .post(
         "/reset-password",
-        async ({ body, set }) => {
+        async ({ body, request, set }) => {
             try {
-                return await authService.resetPassword(body);
+                return await authService.resetPassword(request, body);
             } catch (error) {
                 return handleAuthError(error, set);
             }

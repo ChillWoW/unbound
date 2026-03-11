@@ -47,7 +47,58 @@ function normalizeTargetUrl(value: string): string {
         throw new Error("Only http and https URLs are supported.");
     }
 
+    const hostname = parsed.hostname.toLowerCase();
+
+    if (parsed.username || parsed.password) {
+        throw new Error("URLs with embedded credentials are not supported.");
+    }
+
+    if (
+        hostname === "localhost" ||
+        hostname.endsWith(".localhost") ||
+        hostname.endsWith(".local") ||
+        hostname === "host.docker.internal" ||
+        hostname === "0.0.0.0" ||
+        hostname === "::1" ||
+        hostname.startsWith("127.") ||
+        hostname.startsWith("10.") ||
+        hostname.startsWith("192.168.") ||
+        hostname.startsWith("169.254.") ||
+        /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname) ||
+        hostname.startsWith("fc") ||
+        hostname.startsWith("fd") ||
+        hostname.startsWith("fe80:")
+    ) {
+        throw new Error("Local and private network URLs are not supported.");
+    }
+
     return parsed.toString();
+}
+
+function hasExplicitMemoryInstruction(latestUserText: string | null): boolean {
+    if (!latestUserText) {
+        return false;
+    }
+
+    const normalized = normalizeWhitespace(latestUserText).toLowerCase();
+
+    return [
+        /\bremember\b/,
+        /\bdon'?t forget\b/,
+        /\bsave (?:this|that|it|my)\b/,
+        /\bstore (?:this|that|it|my)\b/,
+        /\bkeep (?:this|that|it) in mind\b/,
+        /\buse this going forward\b/,
+        /\bupdate (?:my )?memory\b/
+    ].some((pattern) => pattern.test(normalized));
+}
+
+function assertExplicitMemoryInstruction(latestUserText: string | null) {
+    if (!hasExplicitMemoryInstruction(latestUserText)) {
+        throw new Error(
+            "Only save or update memory when the user explicitly asks you to remember something."
+        );
+    }
 }
 
 async function fetchJson(url: URL): Promise<unknown> {
@@ -197,7 +248,11 @@ function formatTodos(
     }));
 }
 
-export function createTools(conversationId: string, userId: string) {
+export function createTools(
+    conversationId: string,
+    userId: string,
+    latestUserText: string | null
+) {
     return {
         webSearch: tool({
             description:
@@ -475,7 +530,7 @@ export function createTools(conversationId: string, userId: string) {
 
         memorySave: tool({
             description:
-                "Save a durable user memory when it will be useful in future conversations. Only save long-lived, user-benefiting details. Direct user requests to remember a preference or workflow default should usually be saved with high confidence. Never save secrets, temporary details, or creepy personal information.",
+                "Save a durable user memory only when the user explicitly asks you to remember something for future conversations. Only save long-lived, user-benefiting details. Never save secrets, temporary details, or creepy personal information.",
             inputSchema: z.object({
                 kind: z.enum(MEMORY_KINDS),
                 content: z
@@ -494,6 +549,8 @@ export function createTools(conversationId: string, userId: string) {
                     .describe("Optional search keywords.")
             }),
             execute: async ({ kind, content, confidence, reason, keywords }) => {
+                assertExplicitMemoryInstruction(latestUserText);
+
                 return memoryService.saveMemoryForTool(userId, conversationId, {
                     kind,
                     content,
@@ -506,7 +563,7 @@ export function createTools(conversationId: string, userId: string) {
 
         memoryUpdate: tool({
             description:
-                "Update an existing user memory when a saved preference or profile detail should be refined, corrected, or have its confidence adjusted.",
+                "Update an existing user memory only when the user explicitly asks you to change or refine something that should be remembered.",
             inputSchema: z.object({
                 memoryId: z
                     .string()
@@ -537,6 +594,8 @@ export function createTools(conversationId: string, userId: string) {
                 reason,
                 keywords
             }) => {
+                assertExplicitMemoryInstruction(latestUserText);
+
                 return memoryService.updateMemoryForTool(userId, conversationId, {
                     memoryId,
                     kind,

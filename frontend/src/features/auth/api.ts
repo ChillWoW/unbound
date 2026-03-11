@@ -6,6 +6,7 @@ import type {
     ForgotPasswordResponse,
     LoginInput,
     LogoutResponse,
+    RegisterResponse,
     ResendVerificationInput,
     ResendVerificationResponse,
     RegisterInput,
@@ -44,7 +45,7 @@ export const authApi = {
     },
 
     register(input: RegisterInput) {
-        return api.post<AuthSuccessResponse>("/api/auth/register", {
+        return api.post<RegisterResponse>("/api/auth/register", {
             body: input
         });
     },

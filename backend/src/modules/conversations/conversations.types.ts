@@ -68,7 +68,8 @@ const IMAGE_MIME_TYPES = new Set([
     "image/svg+xml"
 ]);
 
-const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+export const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+export const MAX_ATTACHMENT_BASE64_LENGTH = Math.ceil(MAX_ATTACHMENT_BYTES / 3) * 4;
 const MAX_FILENAME_LENGTH = 255;
 const DEFAULT_ATTACHMENT_BASENAME = "attachment";
 
@@ -138,6 +139,10 @@ function summarizeAttachment(part: MessagePart): string | null {
 }
 
 function getAttachmentSize(input: MessageAttachmentInput, data: string): number {
+    if (data.length > MAX_ATTACHMENT_BASE64_LENGTH) {
+        throw new ConversationError(400, "Attachments must be 20 MB or smaller.");
+    }
+
     const decoded = Buffer.from(data, "base64");
 
     if (decoded.byteLength === 0) {
@@ -231,11 +236,11 @@ export async function createMessageParts(
     const attachmentInputs = attachments ?? [];
 
     if (attachmentInputs.length > 0) {
-        const attachmentParts = await Promise.all(
-            attachmentInputs.map((attachment, index) =>
-                createAttachmentPart(attachment, index)
-            )
-        );
+        const attachmentParts: MessagePart[] = [];
+
+        for (const [index, attachment] of attachmentInputs.entries()) {
+            attachmentParts.push(await createAttachmentPart(attachment, index));
+        }
 
         parts.push(...attachmentParts);
     }

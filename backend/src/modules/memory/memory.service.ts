@@ -447,6 +447,7 @@ export function buildMemoryPromptBlock(
     const lines = [
         "Memory system:",
         "- Save only durable user-benefiting preferences, workflows, profile details, or recurring project context.",
+        "- Only write or update memory when the user explicitly asks you to remember something.",
         "- Never save secrets, credentials, temporary details, or sensitive/creepy personal data.",
         "- Apply saved preferences and workflow defaults proactively across conversations unless the user explicitly overrides them.",
         `- Minimum memory confidence: ${policy.minConfidence}.`,
