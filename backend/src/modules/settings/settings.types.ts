@@ -2,6 +2,11 @@ import type { InferSelectModel } from "drizzle-orm";
 import { userSettings } from "../../db/schema";
 import type { ProviderType } from "../../lib/provider-registry";
 import { AppError } from "../../lib/app-error";
+import type {
+    MemoryConfidence,
+    MemoryKind,
+    MemoryWritePolicy
+} from "../memory/memory.types";
 
 export type UserSettingsRecord = InferSelectModel<typeof userSettings>;
 
@@ -13,6 +18,7 @@ export interface ProviderKeyStatus {
 
 export interface UserSettingsSummary {
     providers: Record<ProviderType, ProviderKeyStatus>;
+    memory: MemoryWritePolicy;
 }
 
 export { AppError as SettingsError };
@@ -59,6 +65,29 @@ function providerKeyStatus(
     };
 }
 
+export function toMemorySettingsSummary(
+    settings: UserSettingsRecord | null
+): MemoryWritePolicy {
+    const minConfidence = settings?.memoryMinConfidence;
+
+    return {
+        enabled: settings?.memoryEnabled ?? true,
+        minConfidence:
+            minConfidence === "low" ||
+            minConfidence === "medium" ||
+            minConfidence === "high"
+                ? (minConfidence as MemoryConfidence)
+                : "medium",
+        allowedKinds: {
+            preference: settings?.memoryAllowPreference ?? true,
+            workflow: settings?.memoryAllowWorkflow ?? true,
+            profile: settings?.memoryAllowProfile ?? true,
+            project_context: settings?.memoryAllowProjectContext ?? true
+        } satisfies Record<MemoryKind, boolean>,
+        customInstructions: settings?.memoryCustomInstructions ?? null
+    };
+}
+
 export function toUserSettingsSummary(
     settings: UserSettingsRecord | null
 ): UserSettingsSummary {
@@ -69,6 +98,7 @@ export function toUserSettingsSummary(
             anthropic: providerKeyStatus(settings, "anthropic"),
             google: providerKeyStatus(settings, "google"),
             kimi: providerKeyStatus(settings, "kimi")
-        }
+        },
+        memory: toMemorySettingsSummary(settings)
     };
 }

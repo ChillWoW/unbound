@@ -63,6 +63,13 @@ const SANDBOX_TOOLS = new Set([
     "pythonSandboxReset"
 ]);
 
+const MEMORY_TOOLS = new Set([
+    "memorySearch",
+    "memorySave",
+    "memoryUpdate",
+    "memoryDelete"
+]);
+
 const COMPACT_TOOLS = new Set(["webSearch", "scrape"]);
 
 const TOOL_LABELS: Record<string, string> = {
@@ -70,6 +77,10 @@ const TOOL_LABELS: Record<string, string> = {
     todoRead: "Reading tasks…",
     todoSetStatus: "Updating task status…",
     todoDelete: "Removing tasks...",
+    memorySearch: "Checking memory...",
+    memorySave: "Saving memory...",
+    memoryUpdate: "Updating memory...",
+    memoryDelete: "Deleting memory...",
     webSearch: "Searching the web...",
     scrape: "Scraping page...",
     pythonSandbox: "Running Python...",
@@ -82,6 +93,10 @@ const TOOL_LABELS_DONE: Record<string, string> = {
     todoRead: "Read tasks",
     todoSetStatus: "Updated task status",
     todoDelete: "Removed tasks",
+    memorySearch: "Checked memory",
+    memorySave: "Saved memory",
+    memoryUpdate: "Updated memory",
+    memoryDelete: "Deleted memory",
     webSearch: "Searched the web",
     scrape: "Scraped",
     pythonSandbox: "Ran Python",
@@ -483,6 +498,8 @@ function ToolCallIcon({
 }) {
     const Icon = TODO_TOOLS.has(toolName)
         ? ListChecksIcon
+        : MEMORY_TOOLS.has(toolName)
+          ? BrainIcon
         : SANDBOX_TOOLS.has(toolName)
           ? FileTextIcon
           : toolName === "webSearch"
@@ -602,6 +619,7 @@ function ToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
     const isErrored = part.state === "error";
     const hasOutput = part.state === "result" && part.result !== undefined;
     const isTodoTool = TODO_TOOLS.has(part.toolName);
+    const isMemoryTool = MEMORY_TOOLS.has(part.toolName);
     const isSandboxTool = SANDBOX_TOOLS.has(part.toolName);
     const isCompactTool = COMPACT_TOOLS.has(part.toolName);
     const toolUrl = getToolUrl(part);
@@ -612,6 +630,37 @@ function ToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
           ? (TOOL_LABELS_DONE[part.toolName]?.replace(/…$/, "") ??
                 part.toolName) + " (failed)"
           : (TOOL_LABELS_DONE[part.toolName] ?? part.toolName);
+
+    if (isMemoryTool) {
+        return (
+            <div className="my-1.5">
+                <span className="flex items-center gap-1.5 text-xs">
+                    <ToolCallIcon
+                        toolName={part.toolName}
+                        className={cn(
+                            isPending
+                                ? "wave-text"
+                                : isErrored
+                                  ? "text-red-300"
+                                  : "text-dark-200"
+                        )}
+                    />
+                    <span
+                        className={cn(
+                            "font-medium transition-colors",
+                            isPending
+                                ? "wave-text"
+                                : isErrored
+                                  ? "text-red-300"
+                                  : "text-dark-200 hover:text-dark-50"
+                        )}
+                    >
+                        {label}
+                    </span>
+                </span>
+            </div>
+        );
+    }
 
     if (isTodoTool) {
         if (isErrored) {

@@ -23,6 +23,7 @@ import {
 import { buildOptimizedContext } from "./context-manager";
 import { modelsService } from "../models/models.service";
 import { logger } from "../../lib/logger";
+import { memoryService } from "../memory/memory.service";
 
 import { toModelMessages, buildSystemPrompt } from "./message-converter";
 import { buildProviderOptions } from "./provider-options";
@@ -99,6 +100,31 @@ function buildErrorMetadata(input: {
             : {}),
         ...(recovery ? { errorRecovery: recovery } : {})
     };
+}
+
+function getLatestUserText(messageRecords: {
+    role: string;
+    parts: MessagePart[];
+}[]): string {
+    for (let index = messageRecords.length - 1; index >= 0; index -= 1) {
+        const record = messageRecords[index];
+
+        if (!record || record.role !== "user") {
+            continue;
+        }
+
+        const text = record.parts
+            .filter((part) => part.type === "text")
+            .map((part) => part.text)
+            .join(" ")
+            .trim();
+
+        if (text) {
+            return text;
+        }
+    }
+
+    return "";
 }
 
 async function appendFailedAssistantMessage(input: {
@@ -544,43 +570,53 @@ function startBackgroundGeneration(
                     });
                 }
 
-                if (event.type === "text-delta") {
-                    generation.accumulatedText += event.text;
-                } else if (event.type === "reasoning" && thinking) {
-                    generation.accumulatedReasoning += event.text;
-                } else if (event.type === "tool-call-start") {
-                    upsertToolInvocationPart(generation.toolParts, {
-                        type: "tool-invocation",
-                        toolInvocationId: event.toolCallId,
-                        toolName: event.toolName,
-                        args: {},
-                        state: "call"
-                    });
-                } else if (event.type === "tool-call") {
-                    logger.debug("Tool call", {
-                        conversationId: generation.conversationId,
-                        toolName: event.toolName,
-                        toolCallId: event.toolCallId,
-                        args: event.args
-                    });
-                    upsertToolInvocationPart(generation.toolParts, {
-                        type: "tool-invocation",
-                        toolInvocationId: event.toolCallId,
-                        toolName: event.toolName,
-                        args: event.args,
-                        state: "call"
-                    });
-                } else if (event.type === "tool-result") {
-                    logger.debug("Tool result", {
-                        conversationId: generation.conversationId,
-                        toolName: event.toolName,
-                        toolCallId: event.toolCallId
-                    });
-                    applyToolResult(generation.toolParts, {
-                        toolCallId: event.toolCallId,
-                        toolName: event.toolName,
-                        output: event.result
-                    });
+                switch (event.type) {
+                    case "text-delta":
+                        generation.accumulatedText += event.text;
+                        break;
+                    case "reasoning":
+                        if (thinking) {
+                            generation.accumulatedReasoning += event.text;
+                        }
+                        break;
+                    case "tool-call-start":
+                        upsertToolInvocationPart(generation.toolParts, {
+                            type: "tool-invocation",
+                            toolInvocationId: event.toolCallId,
+                            toolName: event.toolName,
+                            args: {},
+                            state: "call"
+                        });
+                        break;
+                    case "tool-call":
+                        logger.debug("Tool call", {
+                            conversationId: generation.conversationId,
+                            toolName: event.toolName,
+                            toolCallId: event.toolCallId,
+                            args: event.args
+                        });
+                        upsertToolInvocationPart(generation.toolParts, {
+                            type: "tool-invocation",
+                            toolInvocationId: event.toolCallId,
+                            toolName: event.toolName,
+                            args: event.args,
+                            state: "call"
+                        });
+                        break;
+                    case "tool-result":
+                        logger.debug("Tool result", {
+                            conversationId: generation.conversationId,
+                            toolName: event.toolName,
+                            toolCallId: event.toolCallId
+                        });
+                        applyToolResult(generation.toolParts, {
+                            toolCallId: event.toolCallId,
+                            toolName: event.toolName,
+                            output: event.result
+                        });
+                        break;
+                    default:
+                        break;
                 }
 
                 if (event.type !== "reasoning" || thinking) {
@@ -771,6 +807,11 @@ export const aiService = {
                 .filter((message) => message.role === "user")
                 .map((message) => message.parts)
         );
+        const latestUserText = getLatestUserText(messageRecords);
+        const systemPrompt = `${buildSystemPrompt()}\n\n${await memoryService.getPromptBlockForUser(
+            user.id,
+            latestUserText
+        )}`;
 
         let messagesWithSystemPrompt: ModelMessage[];
 
@@ -778,7 +819,7 @@ export const aiService = {
             const contextStartedAt = Date.now();
             const contextResult = buildOptimizedContext(
                 messageRecords,
-                buildSystemPrompt(),
+                systemPrompt,
                 {
                     modelContextLength: modelsService.getModelContextLength(
                         user.id,
@@ -810,7 +851,7 @@ export const aiService = {
             });
 
             messagesWithSystemPrompt = [
-                { role: "system", content: buildSystemPrompt() },
+                { role: "system", content: systemPrompt },
                 ...toModelMessages(messageRecords)
             ];
         }

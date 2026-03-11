@@ -3,6 +3,11 @@ import { z } from "zod";
 import { env } from "../../config/env";
 import { logger } from "../../lib/logger";
 import { todosRepository } from "../todos/todos.repository";
+import { memoryService } from "../memory/memory.service";
+import {
+    MEMORY_CONFIDENCE_LEVELS,
+    MEMORY_KINDS
+} from "../memory/memory.types";
 import { createSandboxTools } from "./sandbox-tools";
 
 const SEARCH_RESULT_LIMIT = 5;
@@ -431,6 +436,129 @@ export function createTools(conversationId: string, userId: string) {
                 const todos =
                     await todosRepository.listByConversationId(conversationId);
                 return { todos: formatTodos(todos) };
+            }
+        }),
+
+        memorySearch: tool({
+            description:
+                "Search durable user memory for saved preferences, workflows, profile details, or recurring project context. Use this before saving a new memory to avoid duplicates.",
+            inputSchema: z.object({
+                query: z
+                    .string()
+                    .optional()
+                    .describe("Optional search query. Leave empty to inspect top memories."),
+                kind: z
+                    .enum(MEMORY_KINDS)
+                    .optional()
+                    .describe("Optional memory kind filter."),
+                minConfidence: z
+                    .enum(MEMORY_CONFIDENCE_LEVELS)
+                    .optional()
+                    .describe("Optional minimum confidence filter."),
+                limit: z
+                    .number()
+                    .int()
+                    .min(1)
+                    .max(10)
+                    .optional()
+                    .describe("Maximum memories to return.")
+            }),
+            execute: async ({ query, kind, minConfidence, limit }) => {
+                return memoryService.searchMemoriesForTool(userId, {
+                    query,
+                    kind,
+                    minConfidence,
+                    limit
+                });
+            }
+        }),
+
+        memorySave: tool({
+            description:
+                "Save a durable user memory when it will be useful in future conversations. Only save long-lived, user-benefiting details. Direct user requests to remember a preference or workflow default should usually be saved with high confidence. Never save secrets, temporary details, or creepy personal information.",
+            inputSchema: z.object({
+                kind: z.enum(MEMORY_KINDS),
+                content: z
+                    .string()
+                    .min(1)
+                    .describe("Concise durable memory content to store."),
+                confidence: z.enum(MEMORY_CONFIDENCE_LEVELS),
+                reason: z
+                    .string()
+                    .min(1)
+                    .describe("Why this memory was saved for the user."),
+                keywords: z
+                    .array(z.string().min(1).max(32))
+                    .max(8)
+                    .optional()
+                    .describe("Optional search keywords.")
+            }),
+            execute: async ({ kind, content, confidence, reason, keywords }) => {
+                return memoryService.saveMemoryForTool(userId, conversationId, {
+                    kind,
+                    content,
+                    confidence,
+                    reason,
+                    keywords
+                });
+            }
+        }),
+
+        memoryUpdate: tool({
+            description:
+                "Update an existing user memory when a saved preference or profile detail should be refined, corrected, or have its confidence adjusted.",
+            inputSchema: z.object({
+                memoryId: z
+                    .string()
+                    .min(1)
+                    .describe("The memory id to update."),
+                kind: z.enum(MEMORY_KINDS).optional(),
+                content: z
+                    .string()
+                    .min(1)
+                    .optional()
+                    .describe("Updated durable memory content."),
+                confidence: z.enum(MEMORY_CONFIDENCE_LEVELS).optional(),
+                reason: z
+                    .string()
+                    .min(1)
+                    .describe("Why this memory was updated."),
+                keywords: z
+                    .array(z.string().min(1).max(32))
+                    .max(8)
+                    .optional()
+                    .describe("Optional replacement keywords.")
+            }),
+            execute: async ({
+                memoryId,
+                kind,
+                content,
+                confidence,
+                reason,
+                keywords
+            }) => {
+                return memoryService.updateMemoryForTool(userId, conversationId, {
+                    memoryId,
+                    kind,
+                    content,
+                    confidence,
+                    reason,
+                    keywords
+                });
+            }
+        }),
+
+        memoryDelete: tool({
+            description:
+                "Delete a saved user memory when the user wants it forgotten or it is no longer correct.",
+            inputSchema: z.object({
+                memoryId: z
+                    .string()
+                    .min(1)
+                    .describe("The memory id to delete.")
+            }),
+            execute: async ({ memoryId }) => {
+                return memoryService.deleteMemoryForTool(userId, memoryId);
             }
         })
     };

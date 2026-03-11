@@ -12,9 +12,11 @@ import { Button, Input } from "@/components/ui";
 import { useAuth } from "@/features/auth/use-auth";
 import { useChat } from "@/features/chat/chat-context";
 import { settingsApi } from "@/features/settings/api";
+import { MemoryTab } from "@/features/settings/memory-tab";
 import type {
     ProviderType,
     ProviderKeyStatus,
+    UpdateMemorySettingsInput,
     UserSettingsSummary
 } from "@/features/settings/types";
 import { ApiError } from "@/lib/api";
@@ -28,6 +30,17 @@ const defaultSettings: UserSettingsSummary = {
         anthropic: { configured: false, preview: null, updatedAt: null },
         google: { configured: false, preview: null, updatedAt: null },
         kimi: { configured: false, preview: null, updatedAt: null }
+    },
+    memory: {
+        enabled: true,
+        minConfidence: "medium",
+        allowedKinds: {
+            preference: true,
+            workflow: true,
+            profile: true,
+            project_context: true
+        },
+        customInstructions: null
     }
 };
 
@@ -77,7 +90,7 @@ const PROVIDERS: ProviderConfig[] = [
     }
 ];
 
-type SettingsTab = "api-keys" | "mcp";
+type SettingsTab = "api-keys" | "memory" | "mcp";
 
 function getErrorMessage(error: unknown): string {
     if (
@@ -257,6 +270,11 @@ function SettingsPage() {
         void loadModels().catch(() => undefined);
     }
 
+    async function handleSaveMemorySettings(input: UpdateMemorySettingsInput) {
+        const response = await settingsApi.updateMemorySettings(input);
+        setSettings(response.settings);
+    }
+
     if (!isAuthLoading && !isAuthenticated) {
         return <Navigate to="/login" />;
     }
@@ -278,8 +296,8 @@ function SettingsPage() {
                             Settings
                         </h1>
                         <p className="text-sm text-dark-200">
-                            Manage provider access and upcoming local tool
-                            integrations.
+                            Manage provider access, durable memory, and upcoming
+                            local tool integrations.
                         </p>
                     </div>
 
@@ -289,6 +307,10 @@ function SettingsPage() {
                                 {
                                     id: "api-keys",
                                     label: "API Keys"
+                                },
+                                {
+                                    id: "memory",
+                                    label: "Memory"
                                 },
                                 {
                                     id: "mcp",
@@ -338,6 +360,12 @@ function SettingsPage() {
                             ))}
                         </div>
                     </>
+                ) : activeTab === "memory" ? (
+                    <MemoryTab
+                        settings={settings.memory}
+                        onSavePolicy={handleSaveMemorySettings}
+                        isActive={activeTab === "memory"}
+                    />
                 ) : (
                     <div className="rounded-md border border-dark-600 bg-dark-900 px-5 py-8 sm:px-6">
                         <div className="max-w-lg">

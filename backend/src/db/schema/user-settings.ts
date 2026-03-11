@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { users } from "./users";
 
 export const userSettings = pgTable("user_settings", {
@@ -15,6 +15,21 @@ export const userSettings = pgTable("user_settings", {
     googleApiKeyPreview: text("google_api_key_preview"),
     kimiApiKeyCiphertext: text("kimi_api_key_ciphertext"),
     kimiApiKeyPreview: text("kimi_api_key_preview"),
+    memoryEnabled: boolean("memory_enabled").notNull().default(true),
+    memoryMinConfidence: text("memory_min_confidence")
+        .notNull()
+        .default("medium"),
+    memoryAllowPreference: boolean("memory_allow_preference")
+        .notNull()
+        .default(true),
+    memoryAllowWorkflow: boolean("memory_allow_workflow")
+        .notNull()
+        .default(true),
+    memoryAllowProfile: boolean("memory_allow_profile").notNull().default(true),
+    memoryAllowProjectContext: boolean("memory_allow_project_context")
+        .notNull()
+        .default(true),
+    memoryCustomInstructions: text("memory_custom_instructions"),
     createdAt: timestamp("created_at", { withTimezone: true })
         .defaultNow()
         .notNull(),
