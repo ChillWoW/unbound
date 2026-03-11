@@ -96,13 +96,13 @@ function pruneOldMedia(
             if (p.type === "image") {
                 return {
                     type: "text" as const,
-                    text: `[Attached image (${p.mimeType})]`
+                    text: `[Attached image: ${p.filename ?? p.mimeType}]`
                 };
             }
             if (p.type === "file") {
                 return {
                     type: "text" as const,
-                    text: `[Attached file (${p.mimeType})]`
+                    text: `[Attached file: ${p.filename ?? p.mimeType}]`
                 };
             }
             return p;

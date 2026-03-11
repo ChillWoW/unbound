@@ -9,12 +9,33 @@ export interface ImageMessagePart {
     type: "image";
     data: string; // base64
     mimeType: string;
+    filename?: string;
+    size?: number;
 }
 
 export interface FileMessagePart {
     type: "file";
     data: string; // base64
     mimeType: string;
+    filename?: string;
+    size?: number;
+    extractedText?: string | null;
+}
+
+export interface AttachmentPayload {
+    data: string;
+    mimeType: string;
+    filename?: string;
+    size?: number;
+}
+
+export interface CitationSource {
+    id: string;
+    title: string;
+    url: string;
+    host: string;
+    snippet?: string;
+    sourceType: "web" | "document";
 }
 
 export interface ToolInvocationPart {
@@ -70,6 +91,7 @@ export interface MessageMetadata {
     generationCompletedAt?: string;
     errorMessage?: string;
     errorRecovery?: ChatErrorRecovery | null;
+    sources?: CitationSource[];
     [key: string]: unknown;
 }
 

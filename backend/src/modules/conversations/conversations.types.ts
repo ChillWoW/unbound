@@ -1,5 +1,6 @@
 import type { InferSelectModel } from "drizzle-orm";
 import { conversationReads, conversations, messages } from "../../db/schema";
+import { extractDocumentText } from "./document-parser";
 
 export type ConversationRecord = InferSelectModel<typeof conversations>;
 export type ConversationReadRecord = InferSelectModel<typeof conversationReads>;
@@ -17,12 +18,24 @@ export interface ImageMessagePart {
     type: "image";
     data: string; // base64
     mimeType: string;
+    filename?: string;
+    size?: number;
 }
 
 export interface FileMessagePart {
     type: "file";
     data: string; // base64
     mimeType: string;
+    filename?: string;
+    size?: number;
+    extractedText?: string | null;
+}
+
+export interface MessageAttachmentInput {
+    data: string;
+    mimeType: string;
+    filename?: string;
+    size?: number;
 }
 
 export interface ToolInvocationPart {
@@ -53,6 +66,10 @@ const IMAGE_MIME_TYPES = new Set([
     "image/webp",
     "image/svg+xml"
 ]);
+
+const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+const MAX_FILENAME_LENGTH = 255;
+const DEFAULT_ATTACHMENT_BASENAME = "attachment";
 
 export interface ConversationMessage {
     id: string;
@@ -97,11 +114,98 @@ function normalizeWhitespace(value: string): string {
     return value.replace(/\s+/g, " ").trim();
 }
 
-export function createConversationTitle(prompt: string): string {
+function clampFilename(value: string | undefined, index: number): string {
+    const normalized = value?.trim().replace(/[\\/]+/g, "-") || "";
+
+    if (!normalized) {
+        return `${DEFAULT_ATTACHMENT_BASENAME}-${index + 1}`;
+    }
+
+    return normalized.slice(0, MAX_FILENAME_LENGTH);
+}
+
+function summarizeAttachment(part: MessagePart): string | null {
+    if (part.type === "image") {
+        return part.filename ? `Image: ${part.filename}` : "Image attachment";
+    }
+
+    if (part.type === "file") {
+        return part.filename ? `File: ${part.filename}` : "File attachment";
+    }
+
+    return null;
+}
+
+function getAttachmentSize(input: MessageAttachmentInput, data: string): number {
+    const decoded = Buffer.from(data, "base64");
+
+    if (decoded.byteLength === 0) {
+        throw new ConversationError(400, "Attachment data is invalid.");
+    }
+
+    const size =
+        typeof input.size === "number" && Number.isFinite(input.size)
+            ? Math.max(Math.round(input.size), decoded.byteLength)
+            : decoded.byteLength;
+
+    if (size > MAX_ATTACHMENT_BYTES) {
+        throw new ConversationError(400, "Attachments must be 20 MB or smaller.");
+    }
+
+    return size;
+}
+
+async function createAttachmentPart(
+    attachment: MessageAttachmentInput,
+    index: number
+): Promise<ImageMessagePart | FileMessagePart> {
+    const mimeType = attachment.mimeType.trim();
+
+    if (!mimeType) {
+        throw new ConversationError(400, "Attachment mime type is required.");
+    }
+
+    const size = getAttachmentSize(attachment, attachment.data);
+    const filename = clampFilename(attachment.filename, index);
+
+    if (IMAGE_MIME_TYPES.has(mimeType)) {
+        return {
+            type: "image",
+            data: attachment.data,
+            mimeType,
+            filename,
+            size
+        };
+    }
+
+    const extractedText = await extractDocumentText(
+        mimeType,
+        Uint8Array.from(Buffer.from(attachment.data, "base64")),
+        filename
+    );
+
+    return {
+        type: "file",
+        data: attachment.data,
+        mimeType,
+        filename,
+        size,
+        extractedText
+    };
+}
+
+export function createConversationTitle(
+    prompt: string,
+    attachments?: MessageAttachmentInput[]
+): string {
     const normalized = normalizeWhitespace(prompt);
 
     if (!normalized) {
-        return "Image conversation";
+        const attachmentSummary = attachments
+            ?.map((attachment, index) => clampFilename(attachment.filename, index))
+            .find(Boolean);
+
+        return attachmentSummary || "Attachment conversation";
     }
 
     if (normalized.length <= 60) {
@@ -111,10 +215,10 @@ export function createConversationTitle(prompt: string): string {
     return `${normalized.slice(0, 57).trimEnd()}...`;
 }
 
-export function createMessageParts(
+export async function createMessageParts(
     content: string,
-    attachments?: Array<{ data: string; mimeType: string }>
-): MessagePart[] {
+    attachments?: MessageAttachmentInput[]
+): Promise<MessagePart[]> {
     const parts: MessagePart[] = [];
     const normalized = content.trim();
 
@@ -122,12 +226,8 @@ export function createMessageParts(
         parts.push({ type: "text", text: normalized });
     }
 
-    for (const att of attachments ?? []) {
-        if (IMAGE_MIME_TYPES.has(att.mimeType)) {
-            parts.push({ type: "image", data: att.data, mimeType: att.mimeType });
-        } else {
-            parts.push({ type: "file", data: att.data, mimeType: att.mimeType });
-        }
+    for (const [index, attachment] of (attachments ?? []).entries()) {
+        parts.push(await createAttachmentPart(attachment, index));
     }
 
     if (parts.length === 0) {
@@ -138,7 +238,7 @@ export function createMessageParts(
 }
 
 /** @deprecated Use createMessageParts instead */
-export function createTextMessageParts(content: string): MessagePart[] {
+export async function createTextMessageParts(content: string): Promise<MessagePart[]> {
     return createMessageParts(content);
 }
 
@@ -151,7 +251,8 @@ export function getMessagePreview(parts: MessagePart[]): string {
     );
 
     if (!preview) {
-        return "";
+        const attachmentPreview = parts.map(summarizeAttachment).find(Boolean);
+        return attachmentPreview ?? "";
     }
 
     if (preview.length <= 90) {

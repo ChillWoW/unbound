@@ -18,6 +18,8 @@ import {
 } from "./utils/parse-ai-stream";
 import type { ChatAttachment } from "./components/chat-input";
 import type {
+    AttachmentPayload,
+    CitationSource,
     ChatErrorRecovery,
     ChatModel,
     ConversationDetail,
@@ -47,13 +49,132 @@ function fileToBase64(file: File): Promise<string> {
     });
 }
 
-async function prepareAttachments(attachments: ChatAttachment[]) {
+async function prepareAttachments(
+    attachments: ChatAttachment[]
+): Promise<AttachmentPayload[]> {
     return Promise.all(
         attachments.map(async (a) => ({
             data: await fileToBase64(a.file),
-            mimeType: a.file.type
+            mimeType: a.file.type,
+            filename: a.file.name,
+            size: a.file.size
         }))
     );
+}
+
+function normalizeCitationUrl(value: unknown): string | null {
+    return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function citationHost(url: string): string {
+    try {
+        return new URL(url).host;
+    } catch {
+        return url;
+    }
+}
+
+function extractSourcesFromToolResult(
+    toolName: string,
+    result: unknown
+): CitationSource[] {
+    if (!result || typeof result !== "object") {
+        return [];
+    }
+
+    const record = result as Record<string, unknown>;
+
+    if (toolName === "webSearch") {
+        const results = Array.isArray(record.results)
+            ? (record.results as Array<Record<string, unknown>>)
+            : [];
+
+        return results
+            .map<CitationSource | null>((entry, index) => {
+                const url = normalizeCitationUrl(entry.url);
+                if (!url) return null;
+
+                const title =
+                    typeof entry.title === "string" && entry.title.trim()
+                        ? entry.title.trim()
+                        : `Source ${index + 1}`;
+                const snippet =
+                    typeof entry.content === "string" && entry.content.trim()
+                        ? entry.content.trim()
+                        : undefined;
+
+                return {
+                    id: `${toolName}-${index}-${url}`,
+                    title,
+                    url,
+                    host: citationHost(url),
+                    snippet,
+                    sourceType: "web" as const
+                };
+            })
+            .filter((entry): entry is CitationSource => entry !== null);
+    }
+
+    if (toolName === "scrape") {
+        const url = normalizeCitationUrl(record.url ?? record.proxyUrl);
+        if (!url) return [];
+
+        const snippet =
+            typeof record.content === "string" && record.content.trim()
+                ? record.content.trim().slice(0, 280)
+                : undefined;
+
+        return [
+            {
+                id: `${toolName}-${url}`,
+                title: citationHost(url),
+                url,
+                host: citationHost(url),
+                snippet,
+                sourceType: "web"
+            }
+        ];
+    }
+
+    return [];
+}
+
+function mergeSources(
+    existing: CitationSource[] | undefined,
+    incoming: CitationSource[]
+): CitationSource[] {
+    if (incoming.length === 0) {
+        return existing ?? [];
+    }
+
+    const merged = new Map<string, CitationSource>();
+
+    for (const source of existing ?? []) {
+        merged.set(source.id, source);
+    }
+
+    for (const source of incoming) {
+        merged.set(source.id, source);
+    }
+
+    return [...merged.values()];
+}
+
+function withMessageMetadataSources(
+    message: ConversationMessage,
+    incomingSources: CitationSource[]
+): ConversationMessage {
+    if (incomingSources.length === 0) {
+        return message;
+    }
+
+    return {
+        ...message,
+        metadata: {
+            ...(message.metadata ?? {}),
+            sources: mergeSources(message.metadata?.sources, incomingSources)
+        }
+    };
 }
 
 function getSelectedModelStorageKey(userId: string) {
@@ -511,6 +632,29 @@ function createStreamCallbacks(state: StreamState, deps: StreamCallbackDeps) {
         }) {
             applyToolResult(state.parts, toolResult);
             flushNow();
+            const sources = extractSourcesFromToolResult(
+                toolResult.toolName,
+                toolResult.result
+            );
+            if (sources.length > 0) {
+                const mid = state.messageId;
+                deps.setConversationDetails((current) => {
+                    const existing = current[deps.conversationId];
+                    if (!existing) return current;
+
+                    return {
+                        ...current,
+                        [deps.conversationId]: {
+                            ...existing,
+                            messages: existing.messages.map((message) =>
+                                message.id === mid
+                                    ? withMessageMetadataSources(message, sources)
+                                    : message
+                            )
+                        }
+                    };
+                });
+            }
             const todos = extractTodosFromToolResult(
                 toolResult.toolName,
                 toolResult.result

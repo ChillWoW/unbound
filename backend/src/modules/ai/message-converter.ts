@@ -9,6 +9,37 @@ import type {
     MessageRecord
 } from "../conversations/conversations.types";
 
+const MAX_EXTRACTED_TEXT_LENGTH = 12_000;
+
+function describeAttachment(
+    part: Extract<MessagePart, { type: "image" | "file" }>
+) {
+    const details = [
+        part.filename,
+        part.mimeType,
+        part.size ? `${part.size} bytes` : null
+    ]
+        .filter(Boolean)
+        .join(", ");
+
+    return details || part.mimeType;
+}
+
+function createFileContextText(part: Extract<MessagePart, { type: "file" }>) {
+    const description = describeAttachment(part);
+    const extractedText = part.extractedText?.trim();
+
+    if (!extractedText) {
+        return `Attached file: ${description}.`;
+    }
+
+    return [
+        `Attached file: ${description}.`,
+        "Use the extracted document text below if native file parsing is unavailable:",
+        extractedText.slice(0, MAX_EXTRACTED_TEXT_LENGTH)
+    ].join("\n\n");
+}
+
 function toToolResultOutput(result: unknown): ToolResultPart["output"] {
     if (typeof result === "string") {
         return { type: "text", value: result };
@@ -51,11 +82,19 @@ export function toModelMessages(records: MessageRecord[]): ModelMessage[] {
                         content.push({ type: "text", text: p.text });
                     } else if (p.type === "image") {
                         content.push({
+                            type: "text",
+                            text: `Attached image: ${describeAttachment(p)}.`
+                        });
+                        content.push({
                             type: "image",
                             image: p.data,
                             mediaType: p.mimeType
                         });
                     } else if (p.type === "file") {
+                        content.push({
+                            type: "text",
+                            text: createFileContextText(p)
+                        });
                         content.push({
                             type: "file",
                             data: p.data,
@@ -146,7 +185,6 @@ export function buildSystemPrompt(now = new Date()): string {
         "- Use webSearch for information that is likely to be fresh or changing, especially news, releases, prices, rankings, schedules, social posts, and anything described as latest/current/recent.",
         "- Use scrape when the user provides or implies a specific URL/page that should be inspected.",
         "- Prefer searching when accuracy depends on up-to-date information; do not guess if current facts are uncertain.",
-        "- After using webSearch or scrape, reference the relevant source URLs briefly in your answer.",
         "- Skip search for stable evergreen knowledge unless freshness is important.",
         "",
         "Runtime context (use as source of truth for time-sensitive questions):",

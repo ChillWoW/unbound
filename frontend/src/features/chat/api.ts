@@ -1,5 +1,6 @@
 import api, { API_BASE_URL } from "@/lib/api";
 import type {
+    AttachmentPayload,
     ConversationDeleteResponse,
     ConversationReadResponse,
     ConversationResponse,
@@ -30,7 +31,7 @@ export const chatApi = {
         );
     },
 
-    createConversation(content: string, attachments?: Array<{ data: string; mimeType: string }>) {
+    createConversation(content: string, attachments?: AttachmentPayload[]) {
         return api.post<ConversationResponse>("/api/conversations", {
             body: { content, attachments }
         });
@@ -80,7 +81,7 @@ export const chatApi = {
     sendMessage(
         conversationId: string,
         content: string,
-        attachments?: Array<{ data: string; mimeType: string }>,
+        attachments?: AttachmentPayload[],
         parentMessageId?: string
     ) {
         return api.post<MessageCreateResponse>(
@@ -95,7 +96,7 @@ export const chatApi = {
         conversationId: string,
         messageId: string,
         content: string,
-        attachments?: Array<{ data: string; mimeType: string }>
+        attachments?: AttachmentPayload[]
     ) {
         return api.post<MessageCreateResponse>(
             `/api/conversations/${conversationId}/messages/${messageId}/edit`,

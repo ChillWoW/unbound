@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
     ArrowDownIcon,
+    ArrowSquareOutIcon,
     ArrowsClockwiseIcon,
     BrainIcon,
     CaretLeftIcon,
@@ -10,6 +11,7 @@ import {
     CheckIcon,
     ClockIcon,
     GlobeHemisphereWestIcon,
+    FileTextIcon,
     ListChecksIcon,
     MagnifyingGlassIcon,
     PencilSimpleIcon,
@@ -22,7 +24,10 @@ import type {
     ChatErrorRecovery,
     ChatModel,
     ConversationDetail,
+    FileMessagePart,
+    ImageMessagePart,
     ConversationMessage,
+    CitationSource,
     MessageMetadata,
     MessagePart,
     ProviderType,
@@ -41,10 +46,7 @@ import {
     type BranchSelections,
     type MessageChildrenMap
 } from "../utils/message-tree";
-import {
-    formatGenerationError,
-    parseChatErrorRecovery
-} from "../recovery";
+import { formatGenerationError, parseChatErrorRecovery } from "../recovery";
 import { ModelSelector } from "./model-selector";
 
 const TODO_TOOLS = new Set([
@@ -108,6 +110,135 @@ function formatToolUrl(value: string): string {
     } catch {
         return value;
     }
+}
+
+function formatBytes(bytes?: number): string | null {
+    if (!bytes || bytes <= 0) return null;
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function createAttachmentUrl(part: ImageMessagePart | FileMessagePart): string {
+    return `data:${part.mimeType};base64,${part.data}`;
+}
+
+function getAttachmentName(part: ImageMessagePart | FileMessagePart): string {
+    return part.filename?.trim() || "attachment";
+}
+
+function MessageFileCard({ part }: { part: FileMessagePart }) {
+    const href = createAttachmentUrl(part);
+    const size = formatBytes(part.size);
+
+    return (
+        <a
+            href={href}
+            download={getAttachmentName(part)}
+            target="_blank"
+            rel="noreferrer"
+            className="flex min-w-0 items-center gap-3 rounded-xl border border-dark-600 bg-dark-850 px-3 py-2 text-left transition-colors hover:border-dark-500 hover:bg-dark-800"
+        >
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-dark-700 text-dark-100">
+                <FileTextIcon className="size-4.5" weight="bold" />
+            </div>
+            <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium text-dark-50">
+                    {getAttachmentName(part)}
+                </div>
+                <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-dark-300">
+                    <span>{part.mimeType}</span>
+                    {size ? <span>{size}</span> : null}
+                </div>
+            </div>
+            <ArrowSquareOutIcon
+                className="size-4 shrink-0 text-dark-200"
+                weight="bold"
+            />
+        </a>
+    );
+}
+
+function CitationList({
+    sources,
+    canShow = true
+}: {
+    sources: CitationSource[];
+    canShow?: boolean;
+}) {
+    if (sources.length === 0 || !canShow) return null;
+
+    const [expanded, setExpanded] = useState(false);
+    const previewSources = sources.slice(0, 3);
+
+    return (
+        <div className="mt-3 rounded-md border px-2.5 py-1.5 border-dark-700">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                <button
+                    type="button"
+                    onClick={() => setExpanded((value) => !value)}
+                    className="inline-flex items-center gap-1.5 rounded-md text-dark-200 transition-colors hover:text-dark-50"
+                >
+                    <span className="font-medium text-dark-100">Sources</span>
+                    <span className="text-dark-300">{sources.length}</span>
+                    <CaretRightIcon
+                        className={cn(
+                            "size-3 text-dark-300 transition-transform",
+                            expanded && "rotate-90"
+                        )}
+                        weight="bold"
+                    />
+                </button>
+
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-dark-300">
+                    {previewSources.map((source, index) => (
+                        <a
+                            key={source.id}
+                            href={source.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="truncate underline decoration-dark-500 underline-offset-2 transition-colors hover:text-dark-50"
+                        >
+                            {source.host}
+                            {index < previewSources.length - 1 ? "," : ""}
+                        </a>
+                    ))}
+                    {sources.length > previewSources.length ? (
+                        <span>
+                            +{sources.length - previewSources.length} more
+                        </span>
+                    ) : null}
+                </div>
+            </div>
+
+            {expanded ? (
+                <div className="mt-2 space-y-1.5 border-t border-dark-700 pt-2">
+                    {sources.map((source, index) => (
+                        <a
+                            key={source.id}
+                            href={source.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-start justify-between gap-3 rounded-md px-2 py-1.5 transition-colors hover:bg-dark-800"
+                        >
+                            <div className="min-w-0">
+                                <div className="truncate text-[11px] text-dark-300">
+                                    [{index + 1}] {source.host}
+                                </div>
+                                <div className="truncate text-sm text-dark-50">
+                                    {source.title}
+                                </div>
+                            </div>
+                            <ArrowSquareOutIcon
+                                className="mt-0.5 size-3.5 shrink-0 text-dark-300"
+                                weight="bold"
+                            />
+                        </a>
+                    ))}
+                </div>
+            ) : null}
+        </div>
+    );
 }
 
 function getMessageText(parts: MessagePart[]) {
@@ -778,7 +909,12 @@ function AssistantMessage({
     const isPending = message.status === "pending";
     const hasText = message.parts.some((p) => p.type === "text");
     const isWaiting = isPending && message.parts.length === 0;
-    const errorRecovery = parseChatErrorRecovery(message.metadata?.errorRecovery);
+    const errorRecovery = parseChatErrorRecovery(
+        message.metadata?.errorRecovery
+    );
+    const sources = Array.isArray(message.metadata?.sources)
+        ? (message.metadata.sources as CitationSource[])
+        : [];
     const lastReasoningIndex = message.parts.reduce(
         (lastIndex, part, index) =>
             part.type === "reasoning" ? index : lastIndex,
@@ -828,6 +964,11 @@ function AssistantMessage({
             })}
 
             {isWaiting && <StreamingIndicator />}
+
+            <CitationList
+                sources={sources}
+                canShow={message.status === "complete"}
+            />
 
             {message.status === "failed" && (
                 <div className="mt-2 flex items-start gap-1.5 text-xs text-red-400">
@@ -1072,8 +1213,10 @@ export function ConversationThread({
                         if (message.role === "user") {
                             const text = getMessageText(message.parts);
                             const images = message.parts.filter(
-                                (p): p is import("../types").ImageMessagePart =>
-                                    p.type === "image"
+                                (p): p is ImageMessagePart => p.type === "image"
+                            );
+                            const files = message.parts.filter(
+                                (p): p is FileMessagePart => p.type === "file"
                             );
                             const isEditing = editingMessageId === message.id;
 
@@ -1111,9 +1254,25 @@ export function ConversationThread({
                                                             (img, i) => (
                                                                 <ImageViewer
                                                                     key={i}
-                                                                    src={`data:${img.mimeType};base64,${img.data}`}
-                                                                    alt="attachment"
+                                                                    src={createAttachmentUrl(
+                                                                        img
+                                                                    )}
+                                                                    alt={getAttachmentName(
+                                                                        img
+                                                                    )}
                                                                     imgClassName="max-h-32 w-auto max-w-full rounded-md"
+                                                                />
+                                                            )
+                                                        )}
+                                                    </div>
+                                                )}
+                                                {files.length > 0 && (
+                                                    <div className="mb-1 space-y-2">
+                                                        {files.map(
+                                                            (file, index) => (
+                                                                <MessageFileCard
+                                                                    key={`${message.id}-file-${index}`}
+                                                                    part={file}
                                                                 />
                                                             )
                                                         )}
@@ -1127,7 +1286,8 @@ export function ConversationThread({
                                                     </div>
                                                 )}
                                                 {!text &&
-                                                    images.length === 0 && (
+                                                    images.length === 0 &&
+                                                    files.length === 0 && (
                                                         <div className="rounded-md border border-dark-600 bg-dark-850 px-3 py-0.5">
                                                             <p className="whitespace-pre-wrap text-sm leading-6 text-dark-50">
                                                                 Unsupported

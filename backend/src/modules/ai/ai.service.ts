@@ -38,6 +38,7 @@ import {
     inferAIRecovery,
     type AIRecoveryInfo
 } from "./ai-recovery";
+import { extractSourcesFromParts } from "./citations";
 
 function createMessageId(): string {
     return `msg_${randomBytes(10).toString("hex")}`;
@@ -74,6 +75,7 @@ function buildErrorMetadata(input: {
     generationCompletedAt: string;
     errorMessage: string;
     recovery?: AIRecoveryInfo | null;
+    sources?: ReturnType<typeof extractSourcesFromParts>;
 }) {
     const {
         modelId,
@@ -92,6 +94,9 @@ function buildErrorMetadata(input: {
         generationStartedAt,
         generationCompletedAt,
         errorMessage,
+        ...(input.sources && input.sources.length > 0
+            ? { sources: input.sources }
+            : {}),
         ...(recovery ? { errorRecovery: recovery } : {})
     };
 }
@@ -424,6 +429,7 @@ function startBackgroundGeneration(
             const usage = aggregateUsage(
                 steps as unknown as Array<Record<string, unknown>>
             );
+            const sources = extractSourcesFromParts(finalParts);
 
             logger.info("Generation finished", {
                 conversationId: generation.conversationId,
@@ -445,7 +451,8 @@ function startBackgroundGeneration(
                     thinkingEnabled: thinking,
                     generationStartedAt,
                     generationCompletedAt,
-                    usage
+                    usage,
+                    ...(sources.length > 0 ? { sources } : {})
                 }
             });
 
@@ -492,6 +499,7 @@ function startBackgroundGeneration(
                 thinking,
                 true
             );
+            const sources = extractSourcesFromParts(errorParts);
 
             await conversationsRepository.updateMessage(assistantMessageId, {
                 parts: errorParts,
@@ -503,6 +511,7 @@ function startBackgroundGeneration(
                     generationStartedAt,
                     generationCompletedAt,
                     errorMessage,
+                    sources,
                     recovery
                 })
             });
@@ -572,6 +581,7 @@ function startBackgroundGeneration(
                     thinking,
                     false
                 );
+                const sources = extractSourcesFromParts(stoppedParts);
 
                 await conversationsRepository.updateMessage(
                     assistantMessageId,
@@ -583,7 +593,8 @@ function startBackgroundGeneration(
                             provider,
                             thinkingEnabled: thinking,
                             generationStartedAt,
-                            generationCompletedAt: new Date().toISOString()
+                            generationCompletedAt: new Date().toISOString(),
+                            ...(sources.length > 0 ? { sources } : {})
                         }
                     }
                 );
@@ -606,6 +617,7 @@ function startBackgroundGeneration(
                 thinking,
                 true
             );
+            const sources = extractSourcesFromParts(errorParts);
 
             await conversationsRepository.updateMessage(assistantMessageId, {
                 parts: errorParts,
@@ -617,6 +629,7 @@ function startBackgroundGeneration(
                     generationStartedAt,
                     generationCompletedAt: new Date().toISOString(),
                     errorMessage: streamErrorMessage,
+                    sources,
                     recovery
                 })
             });

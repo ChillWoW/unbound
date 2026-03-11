@@ -9,7 +9,9 @@ const conversationParams = t.Object({
 
 const attachmentSchema = t.Object({
     data: t.String({ minLength: 1 }),
-    mimeType: t.String({ minLength: 1 })
+    mimeType: t.String({ minLength: 1 }),
+    filename: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
+    size: t.Optional(t.Number({ minimum: 1, maximum: 20 * 1024 * 1024 }))
 });
 
 const messageBody = t.Object({

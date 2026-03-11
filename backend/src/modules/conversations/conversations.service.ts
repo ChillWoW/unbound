@@ -167,10 +167,13 @@ export const conversationsService = {
         return getConversationDetailOrThrow(user.id, conversationId);
     },
 
-    async createConversation(request: Request, input: { content: string; attachments?: Array<{ data: string; mimeType: string }> }) {
+    async createConversation(request: Request, input: { content: string; attachments?: Array<{ data: string; mimeType: string; filename?: string; size?: number }> }) {
         const user = await requireVerifiedAuth(request);
-        const messageParts = createMessageParts(input.content, input.attachments);
-        const title = createConversationTitle(input.content);
+        const messageParts = await createMessageParts(
+            input.content,
+            input.attachments
+        );
+        const title = createConversationTitle(input.content, input.attachments);
 
         const { conversation } =
             await conversationsRepository.createConversationWithInitialMessage({
@@ -195,7 +198,7 @@ export const conversationsService = {
         conversationId: string,
         input: {
             content: string;
-            attachments?: Array<{ data: string; mimeType: string }>;
+            attachments?: Array<{ data: string; mimeType: string; filename?: string; size?: number }>;
             parentMessageId?: string | null;
         }
     ) {
@@ -214,7 +217,7 @@ export const conversationsService = {
             conversationId,
             messageId: createCustomId("msg"),
             messageRole: "user",
-            messageParts: createMessageParts(input.content, input.attachments),
+            messageParts: await createMessageParts(input.content, input.attachments),
             messageStatus: "complete",
             messageMetadata: {
                 sentAt: new Date().toISOString()
@@ -232,7 +235,7 @@ export const conversationsService = {
         messageId: string,
         input: {
             content: string;
-            attachments?: Array<{ data: string; mimeType: string }>;
+            attachments?: Array<{ data: string; mimeType: string; filename?: string; size?: number }>;
         }
     ) {
         const user = await requireVerifiedAuth(request);
@@ -263,7 +266,7 @@ export const conversationsService = {
             conversationId,
             messageId: createCustomId("msg"),
             messageRole: "user",
-            messageParts: createMessageParts(input.content, input.attachments),
+            messageParts: await createMessageParts(input.content, input.attachments),
             messageStatus: "complete",
             messageMetadata: {
                 sentAt: new Date().toISOString()
