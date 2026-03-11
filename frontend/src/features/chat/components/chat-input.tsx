@@ -433,23 +433,31 @@ export function ChatInput({
 
     // ── Submit ───────────────────────────────────────────────────────────
 
-    async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-        event.preventDefault();
-
+    async function submitMessage() {
         if (disabled || isSubmitting || !hasContent) return;
 
-        await onSubmit?.(trimmedDraft, attachments);
+        const nextDraft = trimmedDraft;
+        const nextAttachments = attachments;
 
-        if (!isControlled) setInternalValue("");
-        clearAttachments();
+        if (!isControlled) {
+            setInternalValue("");
+            clearAttachments();
+        }
+
+        await onSubmit?.(nextDraft, nextAttachments);
+
+        if (isControlled) {
+            clearAttachments();
+        }
+    }
+
+    async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        await submitMessage();
     }
 
     function handleKeySubmit() {
-        if (!disabled && !isSubmitting && hasContent) {
-            onSubmit?.(trimmedDraft, attachments);
-            if (!isControlled) setInternalValue("");
-            clearAttachments();
-        }
+        void submitMessage();
     }
 
     // ── Render ───────────────────────────────────────────────────────────
