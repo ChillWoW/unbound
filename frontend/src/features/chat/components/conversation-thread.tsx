@@ -739,7 +739,10 @@ function formatGenerationError(
 function StreamingIndicator() {
     return (
         <div className="flex items-center gap-1.5 py-1">
-            <BrainIcon className="wave-text size-3.5 shrink-0" weight="fill" />
+            <BrainIcon
+                className="size-3.5 shrink-0 text-dark-200"
+                weight="fill"
+            />
             <span className="wave-text text-xs font-medium">
                 Planning next moves
             </span>
