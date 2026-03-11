@@ -137,9 +137,9 @@ function MessageFileCard({ part }: { part: FileMessagePart }) {
             download={getAttachmentName(part)}
             target="_blank"
             rel="noreferrer"
-            className="flex min-w-0 items-center gap-3 rounded-xl border border-dark-600 bg-dark-850 px-3 py-2 text-left transition-colors hover:border-dark-500 hover:bg-dark-800"
+            className="flex min-w-0 items-center gap-3 rounded-md border border-dark-600 bg-dark-850 px-2.5 py-1.5 text-left transition-colors hover:border-dark-500 hover:bg-dark-800"
         >
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-dark-700 text-dark-100">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-sm bg-dark-700 text-dark-100">
                 <FileTextIcon className="size-4.5" weight="bold" />
             </div>
             <div className="min-w-0 flex-1">
@@ -169,74 +169,52 @@ function CitationList({
     if (sources.length === 0 || !canShow) return null;
 
     const [expanded, setExpanded] = useState(false);
-    const previewSources = sources.slice(0, 3);
 
     return (
-        <div className="mt-3 rounded-md border px-2.5 py-1.5 border-dark-700">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-                <button
-                    type="button"
-                    onClick={() => setExpanded((value) => !value)}
-                    className="inline-flex items-center gap-1.5 rounded-md text-dark-200 transition-colors hover:text-dark-50"
-                >
-                    <span className="font-medium text-dark-100">Sources</span>
-                    <span className="text-dark-300">{sources.length}</span>
-                    <CaretRightIcon
-                        className={cn(
-                            "size-3 text-dark-300 transition-transform",
-                            expanded && "rotate-90"
-                        )}
-                        weight="bold"
-                    />
-                </button>
+        <div className="mt-3">
+            <button
+                type="button"
+                onClick={() => setExpanded((value) => !value)}
+                className="flex items-center gap-1.5 text-xs text-dark-300 transition-colors hover:text-dark-50"
+            >
+                <GlobeHemisphereWestIcon
+                    className="size-3.5 shrink-0"
+                    weight="bold"
+                />
+                <span className="font-medium">
+                    {sources.length} source{sources.length !== 1 ? "s" : ""}
+                </span>
+                <CaretRightIcon
+                    className={cn(
+                        "size-3 transition-transform",
+                        expanded && "rotate-90"
+                    )}
+                    weight="bold"
+                />
+            </button>
 
-                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-dark-300">
-                    {previewSources.map((source, index) => (
+            {expanded && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                    {sources.map((source) => (
                         <a
                             key={source.id}
                             href={source.url}
                             target="_blank"
                             rel="noreferrer"
-                            className="truncate underline decoration-dark-500 underline-offset-2 transition-colors hover:text-dark-50"
+                            title={source.title}
+                            className="inline-flex items-center gap-1.5 rounded-md border border-dark-600 bg-dark-850 px-3 py-0.5 text-xs text-dark-100 transition-colors hover:border-dark-500 hover:bg-dark-800 hover:text-dark-50"
                         >
-                            {source.host}
-                            {index < previewSources.length - 1 ? "," : ""}
-                        </a>
-                    ))}
-                    {sources.length > previewSources.length ? (
-                        <span>
-                            +{sources.length - previewSources.length} more
-                        </span>
-                    ) : null}
-                </div>
-            </div>
-
-            {expanded ? (
-                <div className="mt-2 space-y-1.5 border-t border-dark-700 pt-2">
-                    {sources.map((source, index) => (
-                        <a
-                            key={source.id}
-                            href={source.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="flex items-start justify-between gap-3 rounded-md px-2 py-1.5 transition-colors hover:bg-dark-800"
-                        >
-                            <div className="min-w-0">
-                                <div className="truncate text-[11px] text-dark-300">
-                                    [{index + 1}] {source.host}
-                                </div>
-                                <div className="truncate text-sm text-dark-50">
-                                    {source.title}
-                                </div>
-                            </div>
+                            <span className="max-w-36 truncate">
+                                {source.host}
+                            </span>
                             <ArrowSquareOutIcon
-                                className="mt-0.5 size-3.5 shrink-0 text-dark-300"
+                                className="size-3 shrink-0 text-dark-200"
                                 weight="bold"
                             />
                         </a>
                     ))}
                 </div>
-            ) : null}
+            )}
         </div>
     );
 }
@@ -684,7 +662,7 @@ function InlineEditForm({
                 onKeyDown={handleKeyDown}
                 disabled={isSending}
                 rows={Math.min(12, Math.max(2, text.split("\n").length))}
-                className="w-full resize-none rounded-md border border-dark-500 bg-dark-900 px-3 py-2 text-sm leading-6 text-dark-50 outline-none focus:border-primary-500"
+                className="w-full resize-none rounded-md border border-dark-600 bg-dark-900 px-3 py-2 text-sm leading-6 text-dark-50 outline-none focus:border-primary-500"
             />
             <div className="mt-2 flex items-center justify-end gap-2">
                 <Button

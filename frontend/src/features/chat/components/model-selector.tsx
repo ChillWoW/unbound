@@ -162,7 +162,7 @@ function ModelInfoButton({
                 side="right"
                 align="start"
                 sideOffset={selected ? 44 : 24}
-                className="min-w-[240px] p-0 bg-dark-850 border-dark-500"
+                className="min-w-[240px] p-0 bg-dark-850"
             >
                 <div className="flex flex-col">
                     <div className="flex flex-col gap-1 px-3 pt-3 pb-2">
@@ -185,7 +185,7 @@ function ModelInfoButton({
                     </div>
 
                     {(model.contextLength || hasPricing) && (
-                        <div className="flex flex-col gap-1 border-t border-dark-500 px-3 py-2">
+                        <div className="flex flex-col gap-1 border-t border-dark-600 px-3 py-2">
                             {model.contextLength && (
                                 <InfoRow label="Context">
                                     {formatContextLength(model.contextLength)}
@@ -210,7 +210,7 @@ function ModelInfoButton({
                     )}
 
                     {model.inputModalities.length > 0 && (
-                        <div className="flex flex-col gap-1.5 border-t border-dark-500 px-3 py-2">
+                        <div className="flex flex-col gap-1.5 border-t border-dark-600 px-3 py-2">
                             <span className="text-[11px] text-dark-300">
                                 Input modalities
                             </span>
@@ -407,10 +407,10 @@ export function ModelSelector({
                 side="top"
                 align="start"
                 sideOffset={6}
-                className="bg-dark-850 border-dark-500 flex w-[42rem] min-h-[400px] flex-col overflow-hidden p-0"
+                className="bg-dark-850 flex w-[42rem] min-h-[400px] flex-col overflow-hidden p-0"
             >
                 {/* Search + filter row */}
-                <div className="flex shrink-0 items-center gap-2 border-b border-dark-500 px-2.5">
+                <div className="flex shrink-0 items-center gap-2 border-b border-dark-600 px-2.5">
                     <MagnifyingGlassIcon
                         className="size-4 shrink-0 text-dark-300"
                         weight="bold"
@@ -445,7 +445,7 @@ export function ModelSelector({
                             <PopoverContent
                                 side="right"
                                 sideOffset={12}
-                                className="p-0 bg-dark-850 border-dark-500"
+                                className="p-0 bg-dark-850"
                             >
                                 <div className="flex items-center justify-between px-3 pt-2.5 pb-1.5">
                                     <span className="text-[11px] font-semibold text-dark-300">
