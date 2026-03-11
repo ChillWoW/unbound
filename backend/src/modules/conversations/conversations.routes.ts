@@ -1,14 +1,17 @@
 import { Elysia, t } from "elysia";
 import { UnauthorizedError } from "../../middleware/require-auth";
 import { conversationsService } from "./conversations.service";
-import { ConversationError } from "./conversations.types";
+import {
+    ConversationError,
+    MAX_ATTACHMENT_BASE64_LENGTH
+} from "./conversations.types";
 
 const conversationParams = t.Object({
     conversationId: t.String({ minLength: 1, maxLength: 64 })
 });
 
 const attachmentSchema = t.Object({
-    data: t.String({ minLength: 1 }),
+    data: t.String({ minLength: 1, maxLength: MAX_ATTACHMENT_BASE64_LENGTH }),
     mimeType: t.String({ minLength: 1 }),
     filename: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
     size: t.Optional(t.Number({ minimum: 1, maximum: 20 * 1024 * 1024 }))

@@ -5,6 +5,7 @@ import rehypeKatex from "rehype-katex";
 import type { Components } from "react-markdown";
 import { CodeBlock } from "./code-block";
 import { ImageViewer } from "./image-viewer";
+import { normalizeSafeImageUrl, normalizeSafeLinkUrl } from "@/lib/safe-url";
 
 interface MarkdownRendererProps {
     content: string;
@@ -111,11 +112,18 @@ const components: Components = {
         );
     },
     a({ href, children }) {
+        const safeHref = normalizeSafeLinkUrl(href);
+
+        if (!safeHref) {
+            return <span className="text-dark-100">{children}</span>;
+        }
+
         return (
             <a
-                href={href}
+                href={safeHref}
                 target="_blank"
                 rel="noopener noreferrer"
+                referrerPolicy="no-referrer"
                 className="text-primary-300 underline hover:text-primary-400"
             >
                 {children}
@@ -123,7 +131,31 @@ const components: Components = {
         );
     },
     img({ src, alt }) {
-        return <ImageViewer src={src || ""} alt={alt || ""} />;
+        const safeImage = normalizeSafeImageUrl(src);
+
+        if (!safeImage) {
+            return (
+                <span className="text-sm text-dark-300">
+                    Image blocked because the URL is not allowed.
+                </span>
+            );
+        }
+
+        if (!safeImage.autoLoad) {
+            return (
+                <a
+                    href={safeImage.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    referrerPolicy="no-referrer"
+                    className="inline-flex rounded-md border border-dark-600 px-3 py-2 text-sm text-dark-100 transition-colors hover:border-dark-500 hover:text-dark-50"
+                >
+                    Open external image
+                </a>
+            );
+        }
+
+        return <ImageViewer src={safeImage.url} alt={alt || ""} />;
     },
     table({ children }) {
         return (

@@ -20,6 +20,7 @@ import {
 } from "@phosphor-icons/react";
 import { Button, Tooltip, ImageViewer } from "@/components/ui";
 import { cn } from "@/lib/cn";
+import { normalizeSafeLinkUrl } from "@/lib/safe-url";
 import type {
     ChatErrorRecovery,
     ChatModel,
@@ -62,6 +63,32 @@ const SANDBOX_TOOLS = new Set([
     "pythonSandboxInstallPackage",
     "pythonSandboxReset"
 ]);
+
+const EMPTY_CONFIGURED_PROVIDERS: ProviderType[] = [];
+
+function createMessagePartKey(
+    messageId: string,
+    part: MessagePart,
+    index: number
+): string {
+    if (part.type === "tool-invocation") {
+        return `${messageId}-tool-${part.toolInvocationId}`;
+    }
+
+    if (part.type === "text") {
+        return `${messageId}-text-${index}-${part.text.slice(0, 24)}`;
+    }
+
+    if (part.type === "reasoning") {
+        return `${messageId}-reasoning-${index}-${part.text.slice(0, 24)}`;
+    }
+
+    if (part.type === "image") {
+        return `${messageId}-image-${index}-${part.filename ?? part.mimeType}`;
+    }
+
+    return `${messageId}-file-${index}-${part.filename ?? part.mimeType}`;
+}
 
 const MEMORY_TOOLS = new Set([
     "memorySearch",
@@ -419,24 +446,39 @@ function CitationList({
 
             {expanded && (
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                    {sources.map((source) => (
-                        <a
-                            key={source.id}
-                            href={source.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            title={source.title}
-                            className="inline-flex items-center gap-1.5 rounded-md border border-dark-600 bg-dark-850 px-3 py-0.5 text-xs text-dark-100 transition-colors hover:border-dark-500 hover:bg-dark-800 hover:text-dark-50"
-                        >
-                            <span className="max-w-36 truncate">
-                                {source.host}
-                            </span>
-                            <ArrowSquareOutIcon
-                                className="size-3 shrink-0 text-dark-200"
-                                weight="bold"
-                            />
-                        </a>
-                    ))}
+                    {sources.map((source) => {
+                        const safeUrl = normalizeSafeLinkUrl(source.url);
+
+                        if (!safeUrl) {
+                            return null;
+                        }
+
+                        return (
+                            <a
+                                key={source.id}
+                                href={safeUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                referrerPolicy="no-referrer"
+                                title={source.title}
+                                className="inline-flex items-center gap-1.5 rounded-md border border-dark-600 bg-dark-850 px-3 py-0.5 text-xs text-dark-100 transition-colors hover:border-dark-500 hover:bg-dark-800 hover:text-dark-50"
+                            >
+                                <img
+                                    src={`https://www.google.com/s2/favicons?domain=${source.host}&sz=16`}
+                                    alt=""
+                                    className="size-3.5 shrink-0 rounded-sm"
+                                    onError={(e) => { e.currentTarget.style.display = "none"; }}
+                                />
+                                <span className="max-w-36 truncate">
+                                    {source.host}
+                                </span>
+                                <ArrowSquareOutIcon
+                                    className="size-3 shrink-0 text-dark-200"
+                                    weight="bold"
+                                />
+                            </a>
+                        );
+                    })}
                 </div>
             )}
         </div>
@@ -896,12 +938,13 @@ function InlineEditForm({
     onCancel: () => void;
     isSending: boolean;
 }) {
-    const [text, setText] = useState(initialText);
+    const [text, setText] = useState("");
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     useEffect(() => {
         const el = textareaRef.current;
         if (el) {
+            setText(el.value);
             el.focus();
             el.setSelectionRange(el.value.length, el.value.length);
         }
@@ -922,7 +965,7 @@ function InlineEditForm({
         <div className="w-full">
             <textarea
                 ref={textareaRef}
-                value={text}
+                defaultValue={initialText}
                 onChange={(e) => setText(e.target.value)}
                 onKeyDown={handleKeyDown}
                 disabled={isSending}
@@ -1182,7 +1225,7 @@ function AssistantMessage({
                 if (part.type === "reasoning") {
                     return (
                         <ReasoningDisplay
-                            key={`reasoning-${i}`}
+                            key={createMessagePartKey(message.id, part, i)}
                             part={part}
                             isStreaming={
                                 isPending &&
@@ -1203,7 +1246,7 @@ function AssistantMessage({
                 if (part.type === "text") {
                     return (
                         <MarkdownRenderer
-                            key={`text-${i}`}
+                            key={createMessagePartKey(message.id, part, i)}
                             content={part.text}
                             isStreaming={isPending}
                         />
@@ -1306,7 +1349,7 @@ interface ConversationThreadProps {
 
 export function ConversationThread({
     availableModels,
-    configuredProviders = [],
+    configuredProviders = EMPTY_CONFIGURED_PROVIDERS,
     conversation,
     error,
     isSending = false,
@@ -1503,7 +1546,11 @@ export function ConversationThread({
                                                         {images.map(
                                                             (img, i) => (
                                                                 <ImageViewer
-                                                                    key={i}
+                                                                    key={createMessagePartKey(
+                                                                        message.id,
+                                                                        img,
+                                                                        i
+                                                                    )}
                                                                     src={createAttachmentUrl(
                                                                         img
                                                                     )}
@@ -1521,7 +1568,11 @@ export function ConversationThread({
                                                         {files.map(
                                                             (file, index) => (
                                                                 <MessageFileCard
-                                                                    key={`${message.id}-file-${index}`}
+                                                                    key={createMessagePartKey(
+                                                                        message.id,
+                                                                        file,
+                                                                        index
+                                                                    )}
                                                                     part={file}
                                                                 />
                                                             )

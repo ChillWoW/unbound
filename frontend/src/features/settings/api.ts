@@ -4,8 +4,13 @@ import type {
     MemoryDeleteResponse,
     MemoryKind,
     MemoryListResponse,
+    McpServerDeleteResponse,
+    McpServerResponse,
+    McpServerTestResponse,
+    McpServersResponse,
     ProviderType,
     SettingsResponse,
+    UpdateMcpServerInput,
     UpdateMemorySettingsInput
 } from "./types";
 
@@ -34,6 +39,40 @@ export const settingsApi = {
                 customInstructions: input.customInstructions ?? ""
             }
         });
+    },
+
+    listMcpServers() {
+        return api.get<McpServersResponse>("/api/settings/mcp/servers");
+    },
+
+    createMcpServer(input: UpdateMcpServerInput) {
+        return api.post<McpServerResponse>("/api/settings/mcp/servers", {
+            body: input
+        });
+    },
+
+    updateMcpServer(serverId: string, input: UpdateMcpServerInput) {
+        return api.put<McpServerResponse>(`/api/settings/mcp/servers/${serverId}`, {
+            body: input
+        });
+    },
+
+    deleteMcpServer(serverId: string) {
+        return api.delete<McpServerDeleteResponse>(
+            `/api/settings/mcp/servers/${serverId}`
+        );
+    },
+
+    testMcpServer(serverId: string) {
+        return api.post<McpServerTestResponse>(
+            `/api/settings/mcp/servers/${serverId}/test`
+        );
+    },
+
+    discoverMcpServer(serverId: string) {
+        return api.post<McpServerTestResponse>(
+            `/api/settings/mcp/servers/${serverId}/discover`
+        );
     },
 
     listMemories(filters?: {

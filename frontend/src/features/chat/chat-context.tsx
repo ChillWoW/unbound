@@ -36,6 +36,7 @@ import {
     getApiErrorRecovery,
     parseChatErrorRecovery
 } from "./recovery";
+import { normalizeSafeLinkUrl } from "@/lib/safe-url";
 
 function fileToBase64(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -63,7 +64,7 @@ async function prepareAttachments(
 }
 
 function normalizeCitationUrl(value: unknown): string | null {
-    return typeof value === "string" && value.trim() ? value.trim() : null;
+    return normalizeSafeLinkUrl(value);
 }
 
 function citationHost(url: string): string {

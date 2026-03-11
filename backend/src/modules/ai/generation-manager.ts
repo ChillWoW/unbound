@@ -82,6 +82,12 @@ class GenerationManager {
         const entry = this.active.get(conversationId);
         if (!entry) return;
         entry.abortController.abort();
+
+        setTimeout(() => {
+            if (this.active.has(conversationId) && !entry.finished) {
+                this.complete(conversationId);
+            }
+        }, 10_000);
     }
 
     complete(conversationId: string) {

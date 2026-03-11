@@ -40,6 +40,7 @@ import {
     type AIRecoveryInfo
 } from "./ai-recovery";
 import { extractSourcesFromParts } from "./citations";
+import type { ToolSet } from "./ai.tools";
 
 function createMessageId(): string {
     return `msg_${randomBytes(10).toString("hex")}`;
@@ -371,7 +372,8 @@ function startBackgroundGeneration(
     apiKey: string,
     generationStartedAt: string,
     thinking: boolean,
-    tools: ReturnType<typeof createTools>,
+    tools: ToolSet,
+    cleanupTools: () => Promise<void>,
     maxOutputTokens: number | null
 ) {
     const model = createModelInstance(provider, modelId, apiKey);
@@ -510,6 +512,7 @@ function startBackgroundGeneration(
                     error: error instanceof Error ? error.message : String(error)
                 });
             } finally {
+                await cleanupTools();
                 generationManager.complete(generation.conversationId);
             }
         },
@@ -557,6 +560,8 @@ function startBackgroundGeneration(
                 errorMessage,
                 recovery ?? undefined
             );
+
+            await cleanupTools();
         }
     });
 
@@ -630,6 +635,43 @@ function startBackgroundGeneration(
                 if (event.type !== "reasoning" || thinking) {
                     generation.emitter.emit("event", event);
                 }
+            }
+
+            if (generation.abortController.signal.aborted && !generation.finished) {
+                logger.info("Generation stopped by user (post-stream)", {
+                    conversationId: generation.conversationId,
+                    messageId: assistantMessageId
+                });
+                try {
+                    const stoppedParts = buildAccumulatedParts(
+                        generation,
+                        thinking,
+                        false
+                    );
+                    const sources = extractSourcesFromParts(stoppedParts);
+                    await conversationsRepository.updateMessage(
+                        assistantMessageId,
+                        {
+                            parts: stoppedParts,
+                            status: "complete",
+                            metadata: {
+                                model: modelId,
+                                provider,
+                                thinkingEnabled: thinking,
+                                generationStartedAt,
+                                generationCompletedAt: new Date().toISOString(),
+                                ...(sources.length > 0 ? { sources } : {})
+                            }
+                        }
+                    );
+                } catch (dbError) {
+                    logger.error("Failed to persist stopped state", {
+                        conversationId: generation.conversationId,
+                        messageId: assistantMessageId,
+                        error: dbError instanceof Error ? dbError.message : String(dbError)
+                    });
+                }
+                generationManager.complete(generation.conversationId);
             }
         } catch (error) {
             const isAbort =
@@ -914,7 +956,11 @@ export const aiService = {
             initialPrompt
         });
 
-        const tools = createTools(conversationId, user.id);
+        const { tools, cleanup } = await createTools(
+            conversationId,
+            user.id,
+            latestUserText
+        );
         const modelMaxOutputTokens = modelsService.getModelMaxOutputTokens(
             user.id,
             modelId
@@ -929,6 +975,7 @@ export const aiService = {
             generationStartedAt,
             thinking,
             tools,
+            cleanup,
             modelMaxOutputTokens
         );
 
