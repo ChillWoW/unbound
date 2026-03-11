@@ -54,7 +54,7 @@ export function CodeBlock({ language, children }: CodeBlockProps) {
                     lineHeight: "1.5"
                 }}
                 codeTagProps={{
-                    style: { fontFamily: '"Geist Mono", monospace' }
+                    style: { fontFamily: '"IBM Plex Mono", monospace' }
                 }}
             >
                 {children}

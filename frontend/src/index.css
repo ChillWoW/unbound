@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:ital,wght@0,400..700;1,400..700&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 @plugin "tailwind-scrollbar";
@@ -103,7 +103,7 @@
 
 body {
     margin: 0;
-    font-family: "Geist", sans-serif;
+    font-family: "Instrument Sans", sans-serif;
     height: 100%;
     background-color: var(--color-dark-900);
     -webkit-font-smoothing: antialiased;
