@@ -3,6 +3,7 @@ import { z } from "zod";
 import { env } from "../../config/env";
 import { logger } from "../../lib/logger";
 import { todosRepository } from "../todos/todos.repository";
+import { createSandboxTools } from "./sandbox-tools";
 
 const SEARCH_RESULT_LIMIT = 5;
 const SEARCH_SNIPPET_MAX_LENGTH = 280;
@@ -325,6 +326,8 @@ export function createTools(conversationId: string, userId: string) {
                 }
             }
         }),
+
+        ...createSandboxTools(conversationId, userId),
 
         todoWrite: tool({
             description:

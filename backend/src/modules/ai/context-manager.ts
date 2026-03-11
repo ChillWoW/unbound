@@ -148,9 +148,43 @@ function summarizeToolInvocation(
             const url = typeof a.url === "string" ? a.url.trim() : null;
             return url ? `Scraped ${url}` : "Scraped a page";
         }
+        case "pythonSandbox": {
+            const code =
+                typeof a.code === "string" ? normalizeWhitespace(a.code) : null;
+            const sessionMode =
+                typeof a.sessionMode === "string" ? a.sessionMode : "reuse";
+            const preview = code ? truncateToolPreview(code, 80) : null;
+
+            if (!preview) {
+                return sessionMode === "reuse"
+                    ? "Ran Python sandbox code"
+                    : `Ran Python sandbox code (${sessionMode})`;
+            }
+
+            return sessionMode === "reuse"
+                ? `Ran Python sandbox code: \"${preview}\"`
+                : `Ran Python sandbox code (${sessionMode}): \"${preview}\"`;
+        }
+        case "pythonSandboxInstallPackage": {
+            const packageName =
+                typeof a.packageName === "string" ? a.packageName.trim() : null;
+            return packageName
+                ? `Installed Python package ${packageName}`
+                : "Installed a Python package";
+        }
+        case "pythonSandboxReset":
+            return "Reset the Python sandbox session";
         default:
             return `Used ${toolName}`;
     }
+}
+
+function truncateToolPreview(value: string, maxLength: number): string {
+    if (value.length <= maxLength) {
+        return value;
+    }
+
+    return `${value.slice(0, maxLength - 3).trimEnd()}...`;
 }
 
 function compressOldTools(

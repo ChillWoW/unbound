@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { logger } from "../../lib/logger";
 import { requireVerifiedAuth } from "../../middleware/require-auth";
 import { generationManager } from "../ai/generation-manager";
+import { endSandboxSessionForConversation } from "../ai/sandbox-tools";
 import { conversationsRepository } from "./conversations.repository";
 import {
     ConversationError,
@@ -435,6 +436,8 @@ export const conversationsService = {
         if (generationManager.isActive(conversationId)) {
             generationManager.fail(conversationId, "Conversation deleted.");
         }
+
+        await endSandboxSessionForConversation(conversationId, user.id);
 
         return {
             success: true,
