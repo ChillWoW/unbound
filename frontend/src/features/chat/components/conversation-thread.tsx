@@ -38,6 +38,7 @@ import { useChat } from "../chat-context";
 import { type ChatAttachment } from "./chat-input";
 import { InputDock } from "./input-dock";
 import { MarkdownRenderer } from "@/components/markdown/markdown-renderer";
+import { CodeBlock } from "@/components/markdown/code-block";
 import {
     buildMessageTree,
     resolveActivePath,
@@ -124,18 +125,6 @@ function formatToolUrl(value: string): string {
     }
 }
 
-function truncateToolText(value: string, maxLength: number): string {
-    if (value.length <= maxLength) {
-        return value;
-    }
-
-    return `${value.slice(0, maxLength - 3).trimEnd()}...`;
-}
-
-function normalizeToolPreview(value: string): string {
-    return value.replace(/\s+/g, " ").trim();
-}
-
 function formatToolDurationMs(value: unknown): string | null {
     if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
         return null;
@@ -148,22 +137,9 @@ function formatToolDurationMs(value: unknown): string | null {
     return `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1)} s`;
 }
 
-function formatSandboxSessionAction(value: unknown): string | null {
-    switch (value) {
-        case "reused":
-            return "Reused session";
-        case "started":
-            return "Started session";
-        case "fresh":
-            return "Fresh session";
-        case "reset":
-            return "Reset session";
-        default:
-            return null;
-    }
-}
-
-function getSandboxTone(status: string | null): "neutral" | "success" | "warning" | "danger" {
+function getSandboxTone(
+    status: string | null
+): "neutral" | "success" | "warning" | "danger" {
     switch (status) {
         case "ok":
         case "installed":
@@ -209,8 +185,14 @@ function ToolPill({
     );
 }
 
-function getSandboxResultRecord(part: ToolInvocationPart): Record<string, unknown> | null {
-    if (part.state !== "result" || !part.result || typeof part.result !== "object") {
+function getSandboxResultRecord(
+    part: ToolInvocationPart
+): Record<string, unknown> | null {
+    if (
+        part.state !== "result" ||
+        !part.result ||
+        typeof part.result !== "object"
+    ) {
         return null;
     }
 
@@ -219,14 +201,12 @@ function getSandboxResultRecord(part: ToolInvocationPart): Record<string, unknow
 
 function SandboxToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
     const result = getSandboxResultRecord(part);
-    const [expanded, setExpanded] = useState(part.state !== "call");
+    const [expanded, setExpanded] = useState(false);
+    const isPending = part.state === "call";
     const code =
         part.toolName === "pythonSandbox" && typeof part.args.code === "string"
             ? part.args.code.trim()
             : null;
-    const codePreview = code
-        ? truncateToolText(normalizeToolPreview(code), 120)
-        : null;
     const packageName =
         typeof part.args.packageName === "string"
             ? part.args.packageName
@@ -243,7 +223,6 @@ function SandboxToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
                 : "ok";
     const tone = part.state === "call" ? "neutral" : getSandboxTone(status);
     const duration = formatToolDurationMs(result?.durationMs);
-    const sessionAction = formatSandboxSessionAction(result?.sessionAction);
     const message =
         typeof result?.message === "string" && result.message.trim()
             ? result.message.trim()
@@ -256,111 +235,65 @@ function SandboxToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
         typeof result?.stderr === "string" && result.stderr.trim()
             ? result.stderr.trim()
             : null;
-    const output =
-        part.toolName === "pythonSandbox"
-            ? stderr ?? stdout
-            : typeof result?.output === "string" && result.output.trim()
-              ? result.output.trim()
-              : message;
-    const outputPreview = output
-        ? truncateToolText(normalizeToolPreview(output), 140)
-        : null;
-    const statusLabel =
-        part.state === "call"
-            ? "Running"
-            : status === "installed"
-              ? "Installed"
-              : status === "timeout"
-                ? "Timed out"
-                : status === "error"
-                  ? "Error"
-                  : "Done";
 
-    const title =
-        part.toolName === "pythonSandbox"
-            ? part.state === "call"
-                ? "Python sandbox"
+    const label =
+        part.toolName === "pythonSandboxInstallPackage"
+            ? isPending
+                ? `Installing ${packageName ?? "package"}…`
+                : status === "error"
+                  ? `Package install failed${packageName ? `: ${packageName}` : ""}`
+                  : `Installed ${packageName ?? "package"}`
+            : part.toolName === "pythonSandboxReset"
+              ? isPending
+                  ? "Resetting Python session…"
+                  : status === "error"
+                    ? "Python session reset failed"
+                    : "Python session reset"
+              : isPending
+                ? "Running Python…"
                 : status === "timeout"
-                  ? "Python execution timed out"
+                  ? "Python timed out"
                   : status === "error"
-                    ? "Python execution returned an error"
-                    : "Python execution complete"
-            : part.toolName === "pythonSandboxInstallPackage"
-              ? part.state === "call"
-                  ? `Installing ${packageName ?? "package"}`
-                  : status === "error"
-                    ? `Package install failed${packageName ? `: ${packageName}` : ""}`
-                    : `Installed ${packageName ?? "package"}`
-              : part.state === "call"
-                ? "Resetting Python session"
-                : status === "error"
-                  ? "Python session reset failed"
-                  : "Python session ready";
+                    ? "Python returned an error"
+                    : "Ran Python";
 
-    const canExpand = Boolean(code || output || stderr || message || result);
+    const canExpand = Boolean(code || stdout || stderr || message);
 
     return (
-        <div className="my-2 rounded-xl border border-dark-700 bg-dark-900/80 backdrop-blur-sm">
+        <div className="my-1.5">
             <button
                 type="button"
-                onClick={() => canExpand && setExpanded((value) => !value)}
-                className="flex w-full items-start gap-3 px-3 py-3 text-left"
+                onClick={() => canExpand && setExpanded((v) => !v)}
+                className="flex items-center gap-1.5 text-xs"
             >
-                <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border border-dark-600 bg-dark-850 text-dark-100">
-                    <ToolCallIcon
-                        toolName={part.toolName}
-                        className={cn(
-                            part.state === "call"
-                                ? "wave-text"
-                                : tone === "danger"
-                                  ? "text-red-300"
-                                  : tone === "warning"
-                                    ? "text-amber-200"
-                                    : tone === "success"
-                                      ? "text-emerald-200"
-                                      : "text-dark-100"
-                        )}
-                    />
-                </div>
-
-                <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <span
-                            className={cn(
-                                "text-sm font-medium",
-                                part.state === "call"
-                                    ? "wave-text"
-                                    : tone === "danger"
-                                      ? "text-red-200"
-                                      : "text-dark-50"
-                            )}
-                        >
-                            {title}
-                        </span>
-                        <ToolPill label={statusLabel} tone={tone} />
-                        {packageName && part.toolName !== "pythonSandbox" ? (
-                            <ToolPill label={packageName} />
-                        ) : null}
-                        {sessionAction ? <ToolPill label={sessionAction} /> : null}
-                        {duration ? <ToolPill label={duration} /> : null}
-                        {result?.truncated === true ? (
-                            <ToolPill label="Truncated" tone="warning" />
-                        ) : null}
-                    </div>
-
-                    {(codePreview || outputPreview || message) && (
-                        <p className="mt-1.5 text-xs leading-5 text-dark-300">
-                            {part.state === "call"
-                                ? codePreview ?? message ?? "Waiting for sandbox output..."
-                                : outputPreview ?? codePreview ?? message}
-                        </p>
+                <ToolCallIcon
+                    toolName={part.toolName}
+                    className="text-dark-200"
+                />
+                <span
+                    className={cn(
+                        "font-medium transition-colors",
+                        isPending
+                            ? "wave-text"
+                            : tone === "danger"
+                              ? "text-red-300"
+                              : tone === "warning"
+                                ? "text-amber-200"
+                                : "text-dark-200 hover:text-dark-50"
                     )}
-                </div>
-
+                >
+                    {label}
+                </span>
+                {duration && !isPending ? (
+                    <span className="text-dark-300">{duration}</span>
+                ) : null}
+                {result?.truncated === true ? (
+                    <ToolPill label="Truncated" tone="warning" />
+                ) : null}
                 {canExpand ? (
                     <CaretRightIcon
                         className={cn(
-                            "mt-1 size-3 shrink-0 text-dark-300 transition-transform",
+                            "size-2.5 text-dark-300 transition-transform",
                             expanded && "rotate-90"
                         )}
                         weight="bold"
@@ -369,60 +302,18 @@ function SandboxToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
             </button>
 
             {expanded && canExpand ? (
-                <div className="space-y-3 border-t border-dark-700 px-3 pb-3 pt-3">
+                <div>
                     {code ? (
-                        <div>
-                            <div className="mb-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-dark-400">
-                                Code
-                            </div>
-                            <pre className="overflow-x-auto rounded-lg border border-dark-700 bg-dark-950/90 p-3 text-xs leading-5 text-dark-100">
-                                {code}
-                            </pre>
-                        </div>
+                        <CodeBlock language="python">{code}</CodeBlock>
                     ) : null}
-
-                    {message && part.toolName !== "pythonSandbox" ? (
-                        <div>
-                            <div className="mb-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-dark-400">
-                                Status
-                            </div>
-                            <div className="rounded-lg border border-dark-700 bg-dark-950/60 px-3 py-2 text-xs leading-5 text-dark-100">
-                                {message}
-                            </div>
-                        </div>
-                    ) : null}
-
                     {stdout ? (
-                        <div>
-                            <div className="mb-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-dark-400">
-                                Output
-                            </div>
-                            <pre className="overflow-x-auto rounded-lg border border-dark-700 bg-dark-950/90 p-3 text-xs leading-5 text-dark-100">
-                                {stdout}
-                            </pre>
-                        </div>
+                        <CodeBlock language="text">{stdout}</CodeBlock>
                     ) : null}
-
                     {stderr ? (
-                        <div>
-                            <div className="mb-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-red-300/80">
-                                Error Output
-                            </div>
-                            <pre className="overflow-x-auto rounded-lg border border-red-400/20 bg-red-500/10 p-3 text-xs leading-5 text-red-100">
-                                {stderr}
-                            </pre>
-                        </div>
+                        <CodeBlock language="python">{stderr}</CodeBlock>
                     ) : null}
-
-                    {!stdout && !stderr && output && part.toolName !== "pythonSandbox" ? (
-                        <div>
-                            <div className="mb-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-dark-400">
-                                Details
-                            </div>
-                            <pre className="overflow-x-auto rounded-lg border border-dark-700 bg-dark-950/90 p-3 text-xs leading-5 text-dark-100">
-                                {output}
-                            </pre>
-                        </div>
+                    {!stdout && !stderr && message ? (
+                        <CodeBlock language="text">{message}</CodeBlock>
                     ) : null}
                 </div>
             ) : null}
@@ -594,11 +485,11 @@ function ToolCallIcon({
         ? ListChecksIcon
         : SANDBOX_TOOLS.has(toolName)
           ? FileTextIcon
-        : toolName === "webSearch"
-          ? MagnifyingGlassIcon
-          : toolName === "scrape"
-            ? GlobeHemisphereWestIcon
-            : WrenchIcon;
+          : toolName === "webSearch"
+            ? MagnifyingGlassIcon
+            : toolName === "scrape"
+              ? GlobeHemisphereWestIcon
+              : WrenchIcon;
 
     return (
         <Icon className={cn("size-3.5 shrink-0", className)} weight="bold" />
