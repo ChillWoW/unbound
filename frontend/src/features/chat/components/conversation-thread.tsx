@@ -15,8 +15,8 @@ import {
     ListChecksIcon,
     MagnifyingGlassIcon,
     PencilSimpleIcon,
-    WarningCircleIcon,
-    WrenchIcon
+    PlugChargingIcon,
+    WarningCircleIcon
 } from "@phosphor-icons/react";
 import { Button, Tooltip, ImageViewer } from "@/components/ui";
 import { cn } from "@/lib/cn";
@@ -548,7 +548,7 @@ function ToolCallIcon({
             ? MagnifyingGlassIcon
             : toolName === "scrape"
               ? GlobeHemisphereWestIcon
-              : WrenchIcon;
+              : PlugChargingIcon;
 
     return (
         <Icon className={cn("size-3.5 shrink-0", className)} weight="bold" />
