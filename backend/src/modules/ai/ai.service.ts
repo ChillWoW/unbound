@@ -548,6 +548,14 @@ function startBackgroundGeneration(
                     generation.accumulatedText += event.text;
                 } else if (event.type === "reasoning" && thinking) {
                     generation.accumulatedReasoning += event.text;
+                } else if (event.type === "tool-call-start") {
+                    upsertToolInvocationPart(generation.toolParts, {
+                        type: "tool-invocation",
+                        toolInvocationId: event.toolCallId,
+                        toolName: event.toolName,
+                        args: {},
+                        state: "call"
+                    });
                 } else if (event.type === "tool-call") {
                     logger.debug("Tool call", {
                         conversationId: generation.conversationId,

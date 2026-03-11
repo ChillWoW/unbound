@@ -601,6 +601,17 @@ function createStreamCallbacks(state: StreamState, deps: StreamCallbackDeps) {
             }
             scheduleFlush();
         },
+        onToolCallStart(toolCall: { toolCallId: string; toolName: string }) {
+            upsertToolInvocationPart(state.parts, {
+                type: "tool-invocation",
+                toolInvocationId: toolCall.toolCallId,
+                toolName: toolCall.toolName,
+                args: {},
+                state: "call"
+            });
+            dirty = true;
+            flushNow();
+        },
         onToolCall(toolCall: {
             toolCallId: string;
             toolName: string;
@@ -613,6 +624,7 @@ function createStreamCallbacks(state: StreamState, deps: StreamCallbackDeps) {
                 args: toolCall.args,
                 state: "call"
             });
+            dirty = true;
             flushNow();
             deps.setConversationTodos((current) => {
                 const currentTodos = current[deps.conversationId] ?? [];
@@ -631,6 +643,7 @@ function createStreamCallbacks(state: StreamState, deps: StreamCallbackDeps) {
             result: unknown;
         }) {
             applyToolResult(state.parts, toolResult);
+            dirty = true;
             flushNow();
             const sources = extractSourcesFromToolResult(
                 toolResult.toolName,

@@ -7,6 +7,7 @@ export type SSEEvent =
     | { type: "conversation-title"; title: string; titleSource: string }
     | { type: "text-delta"; text: string }
     | { type: "reasoning"; text: string }
+    | { type: "tool-call-start"; toolCallId: string; toolName: string }
     | {
           type: "tool-call";
           toolCallId: string;

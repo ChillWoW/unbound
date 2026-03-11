@@ -24,6 +24,10 @@ export interface StreamCallbacks {
     onConversationTitle?: (title: string, titleSource: string) => void;
     onTextDelta?: (text: string) => void;
     onReasoning?: (text: string) => void;
+    onToolCallStart?: (toolCall: {
+        toolCallId: string;
+        toolName: string;
+    }) => void;
     onToolCall?: (toolCall: {
         toolCallId: string;
         toolName: string;
@@ -99,6 +103,13 @@ export async function parseAIStream(
                     case "reasoning":
                     case "reasoning-delta":
                         callbacks.onReasoning?.(event.text as string);
+                        break;
+
+                    case "tool-call-start":
+                        callbacks.onToolCallStart?.({
+                            toolCallId: event.toolCallId as string,
+                            toolName: event.toolName as string
+                        });
                         break;
 
                     case "tool-call":

@@ -1003,7 +1003,7 @@ function UserMessageMetadataDisplay({
     );
 }
 
-function StreamingIndicator() {
+function StreamingIndicator({ label = "Planning next moves" }: { label?: string }) {
     return (
         <div className="flex items-center gap-1.5 py-1">
             <BrainIcon
@@ -1011,7 +1011,7 @@ function StreamingIndicator() {
                 weight="fill"
             />
             <span className="wave-text text-xs font-medium">
-                Planning next moves
+                {label}
             </span>
         </div>
     );
@@ -1103,6 +1103,12 @@ function AssistantMessage({
     const isPending = message.status === "pending";
     const hasText = message.parts.some((p) => p.type === "text");
     const isWaiting = isPending && message.parts.length === 0;
+    const lastPart = message.parts[message.parts.length - 1];
+    const isThinkingBetweenSteps =
+        isPending &&
+        message.parts.length > 0 &&
+        lastPart?.type === "tool-invocation" &&
+        lastPart?.state === "result";
     const errorRecovery = parseChatErrorRecovery(
         message.metadata?.errorRecovery
     );
@@ -1158,6 +1164,7 @@ function AssistantMessage({
             })}
 
             {isWaiting && <StreamingIndicator />}
+            {isThinkingBetweenSteps && <StreamingIndicator label="Analyzing results..." />}
 
             <CitationList
                 sources={sources}

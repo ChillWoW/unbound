@@ -13,6 +13,13 @@ export function mapChunkToEvent(chunk: unknown): SSEEvent | null {
         case "text-delta":
             return { type: "text-delta", text: c.text as string };
 
+        case "tool-call-streaming-start":
+            return {
+                type: "tool-call-start",
+                toolCallId: c.toolCallId as string,
+                toolName: c.toolName as string
+            };
+
         case "tool-call":
             return {
                 type: "tool-call",
