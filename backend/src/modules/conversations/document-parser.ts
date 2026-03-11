@@ -18,6 +18,7 @@ export async function extractDocumentText(
     }
 
     let document: any = null;
+    const startedAt = Date.now();
 
     try {
         document = await getDocument({ data }).promise;
@@ -43,12 +44,22 @@ export async function extractDocumentText(
         }
 
         const joined = chunks.join("\n\n").slice(0, MAX_PARSED_TEXT_LENGTH);
+
+        logger.info("Document text extracted", {
+            mimeType,
+            filename: filename ?? null,
+            pageCount,
+            extractedChars: joined.length,
+            durationMs: Date.now() - startedAt
+        });
+
         return joined || null;
     } catch (error) {
         logger.warn("Document text extraction failed", {
             mimeType,
             filename: filename ?? null,
-            error: error instanceof Error ? error.message : String(error)
+            error: error instanceof Error ? error.message : String(error),
+            durationMs: Date.now() - startedAt
         });
         return null;
     } finally {

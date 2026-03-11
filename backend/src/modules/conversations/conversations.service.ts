@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { logger } from "../../lib/logger";
 import { requireVerifiedAuth } from "../../middleware/require-auth";
 import { generationManager } from "../ai/generation-manager";
 import { conversationsRepository } from "./conversations.repository";
@@ -104,22 +105,28 @@ async function getConversationDetailOrThrow(
     userId: string,
     conversationId: string
 ) {
-    const conversation =
-        await conversationsRepository.findConversationByIdForUser(
+    const startedAt = Date.now();
+    const [conversation, messages, readState] = await Promise.all([
+        conversationsRepository.findConversationByIdForUser(
             userId,
             conversationId
-        );
+        ),
+        conversationsRepository.listMessagesByConversationId(conversationId),
+        conversationsRepository.findConversationRead(userId, conversationId)
+    ]);
 
     if (!conversation) {
         throw new ConversationError(404, "Conversation not found.");
     }
 
-    const [messages, readState] = await Promise.all([
-        conversationsRepository.listMessagesByConversationId(conversationId),
-        conversationsRepository.findConversationRead(userId, conversationId)
-    ]);
-
     await markStalePendingMessages(messages, conversationId);
+
+    logger.info("Conversation detail loaded", {
+        userId,
+        conversationId,
+        messageCount: messages.length,
+        durationMs: Date.now() - startedAt
+    });
 
     return toConversationDetail({
         conversation,
@@ -168,11 +175,14 @@ export const conversationsService = {
     },
 
     async createConversation(request: Request, input: { content: string; attachments?: Array<{ data: string; mimeType: string; filename?: string; size?: number }> }) {
+        const startedAt = Date.now();
         const user = await requireVerifiedAuth(request);
+        const partsStartedAt = Date.now();
         const messageParts = await createMessageParts(
             input.content,
             input.attachments
         );
+        const partsDurationMs = Date.now() - partsStartedAt;
         const title = createConversationTitle(input.content, input.attachments);
 
         const { conversation } =
@@ -190,7 +200,17 @@ export const conversationsService = {
                 }
             });
 
-        return getConversationDetailOrThrow(user.id, conversation.id);
+        const detail = await getConversationDetailOrThrow(user.id, conversation.id);
+
+        logger.info("Conversation created", {
+            userId: user.id,
+            conversationId: conversation.id,
+            attachmentCount: input.attachments?.length ?? 0,
+            messagePartsDurationMs: partsDurationMs,
+            durationMs: Date.now() - startedAt
+        });
+
+        return detail;
     },
 
     async createConversationMessage(
@@ -202,6 +222,7 @@ export const conversationsService = {
             parentMessageId?: string | null;
         }
     ) {
+        const startedAt = Date.now();
         const user = await requireVerifiedAuth(request);
         const conversation =
             await conversationsRepository.findConversationByIdForUser(
@@ -213,11 +234,18 @@ export const conversationsService = {
             throw new ConversationError(404, "Conversation not found.");
         }
 
+        const partsStartedAt = Date.now();
+        const messageParts = await createMessageParts(
+            input.content,
+            input.attachments
+        );
+        const partsDurationMs = Date.now() - partsStartedAt;
+
         const result = await conversationsRepository.appendMessageToConversation({
             conversationId,
             messageId: createCustomId("msg"),
             messageRole: "user",
-            messageParts: await createMessageParts(input.content, input.attachments),
+            messageParts,
             messageStatus: "complete",
             messageMetadata: {
                 sentAt: new Date().toISOString()
@@ -226,6 +254,16 @@ export const conversationsService = {
         });
 
         const detail = await getConversationDetailOrThrow(user.id, conversationId);
+
+        logger.info("Conversation message created", {
+            userId: user.id,
+            conversationId,
+            messageId: result.message.id,
+            attachmentCount: input.attachments?.length ?? 0,
+            messagePartsDurationMs: partsDurationMs,
+            durationMs: Date.now() - startedAt
+        });
+
         return { ...detail, newMessageId: result.message.id };
     },
 
@@ -238,6 +276,7 @@ export const conversationsService = {
             attachments?: Array<{ data: string; mimeType: string; filename?: string; size?: number }>;
         }
     ) {
+        const startedAt = Date.now();
         const user = await requireVerifiedAuth(request);
         const conversation =
             await conversationsRepository.findConversationByIdForUser(
@@ -262,11 +301,18 @@ export const conversationsService = {
             throw new ConversationError(400, "Only user messages can be edited.");
         }
 
+        const partsStartedAt = Date.now();
+        const messageParts = await createMessageParts(
+            input.content,
+            input.attachments
+        );
+        const partsDurationMs = Date.now() - partsStartedAt;
+
         const result = await conversationsRepository.appendMessageToConversation({
             conversationId,
             messageId: createCustomId("msg"),
             messageRole: "user",
-            messageParts: await createMessageParts(input.content, input.attachments),
+            messageParts,
             messageStatus: "complete",
             messageMetadata: {
                 sentAt: new Date().toISOString()
@@ -275,6 +321,17 @@ export const conversationsService = {
         });
 
         const detail = await getConversationDetailOrThrow(user.id, conversationId);
+
+        logger.info("Conversation message edited", {
+            userId: user.id,
+            conversationId,
+            originalMessageId: messageId,
+            newMessageId: result.message.id,
+            attachmentCount: input.attachments?.length ?? 0,
+            messagePartsDurationMs: partsDurationMs,
+            durationMs: Date.now() - startedAt
+        });
+
         return { ...detail, newMessageId: result.message.id };
     },
 

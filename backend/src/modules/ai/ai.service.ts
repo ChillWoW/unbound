@@ -351,6 +351,8 @@ function startBackgroundGeneration(
     const model = createModelInstance(provider, modelId, apiKey);
     const assistantMessageId = generation.messageId;
     const providerOptions = buildProviderOptions(provider, modelId, thinking);
+    const generationStartedMs = Date.parse(generationStartedAt);
+    let firstEventLogged = false;
 
     logger.info("Generation started", {
         conversationId: generation.conversationId,
@@ -530,6 +532,18 @@ function startBackgroundGeneration(
                 const event = mapChunkToEvent(chunk);
                 if (!event) continue;
 
+                if (!firstEventLogged) {
+                    firstEventLogged = true;
+                    logger.info("Generation first event", {
+                        conversationId: generation.conversationId,
+                        messageId: assistantMessageId,
+                        modelId,
+                        provider,
+                        eventType: event.type,
+                        latencyMs: Date.now() - generationStartedMs
+                    });
+                }
+
                 if (event.type === "text-delta") {
                     generation.accumulatedText += event.text;
                 } else if (event.type === "reasoning" && thinking) {
@@ -652,7 +666,9 @@ export const aiService = {
         thinking = false,
         replyToMessageId?: string
     ): Promise<Response> {
+        const startedAt = Date.now();
         const user = await requireVerifiedAuth(request);
+        const authDurationMs = Date.now() - startedAt;
 
         if (generationManager.isActive(conversationId)) {
             throw new ConversationError(
@@ -665,20 +681,45 @@ export const aiService = {
             ? provider
             : "openrouter";
 
-        const conversation =
-            await conversationsRepository.findConversationByIdForUser(
+        const conversationLookupPromise = (async () => {
+            const lookupStartedAt = Date.now();
+            const value = await conversationsRepository.findConversationByIdForUser(
                 user.id,
                 conversationId
             );
+
+            return {
+                value,
+                durationMs: Date.now() - lookupStartedAt
+            };
+        })();
+
+        const apiKeyLookupPromise = (async () => {
+            const lookupStartedAt = Date.now();
+            const value = await settingsService.getDecryptedApiKeyForUser(
+                user.id,
+                resolvedProvider
+            );
+
+            return {
+                value,
+                durationMs: Date.now() - lookupStartedAt
+            };
+        })();
+
+        const [conversationResult, apiKeyResult] = await Promise.all([
+            conversationLookupPromise,
+            apiKeyLookupPromise
+        ]);
+        const conversation = conversationResult.value;
+        const conversationLookupDurationMs = conversationResult.durationMs;
 
         if (!conversation) {
             throw new ConversationError(404, "Conversation not found.");
         }
 
-        const apiKey = await settingsService.getDecryptedApiKeyForUser(
-            user.id,
-            resolvedProvider
-        );
+        const apiKey = apiKeyResult.value;
+        const apiKeyLookupDurationMs = apiKeyResult.durationMs;
 
         if (!apiKey) {
             const recovery = createMissingApiKeyRecovery(resolvedProvider);
@@ -706,6 +747,7 @@ export const aiService = {
             );
         }
 
+        const messageLoadStartedAt = Date.now();
         const messageRecords = replyToMessageId
             ? await conversationsRepository.getMessageAncestorChain(
                   conversationId,
@@ -714,6 +756,7 @@ export const aiService = {
             : await conversationsRepository.listMessagesByConversationId(
                   conversationId
               );
+        const messageLoadDurationMs = Date.now() - messageLoadStartedAt;
 
         const initialPrompt = getInitialConversationPrompt(
             messageRecords
@@ -724,6 +767,7 @@ export const aiService = {
         let messagesWithSystemPrompt: ModelMessage[];
 
         try {
+            const contextStartedAt = Date.now();
             const contextResult = buildOptimizedContext(
                 messageRecords,
                 buildSystemPrompt(),
@@ -745,7 +789,8 @@ export const aiService = {
                 originalMessages: contextResult.originalMessageCount,
                 includedMessages: contextResult.includedMessageCount,
                 estimatedTokens: contextResult.estimatedTokens,
-                truncated: contextResult.truncated
+                truncated: contextResult.truncated,
+                durationMs: Date.now() - contextStartedAt
             });
         } catch (ctxError) {
             logger.warn("Context optimization failed, using raw messages", {
@@ -765,6 +810,7 @@ export const aiService = {
         const assistantMessageId = createMessageId();
         const generationStartedAt = new Date().toISOString();
 
+        const assistantInsertStartedAt = Date.now();
         await conversationsRepository.appendMessageToConversation({
             conversationId,
             messageId: assistantMessageId,
@@ -779,6 +825,7 @@ export const aiService = {
             },
             parentMessageId: replyToMessageId ?? null
         });
+        const assistantInsertDurationMs = Date.now() - assistantInsertStartedAt;
 
         const generation = generationManager.register(
             conversationId,
@@ -811,6 +858,21 @@ export const aiService = {
             tools,
             modelMaxOutputTokens
         );
+
+        logger.info("Generation prepared", {
+            conversationId,
+            messageId: assistantMessageId,
+            userId: user.id,
+            modelId,
+            provider: resolvedProvider,
+            messageCount: messageRecords.length,
+            authDurationMs,
+            conversationLookupDurationMs,
+            apiKeyLookupDurationMs,
+            messageLoadDurationMs,
+            assistantInsertDurationMs,
+            durationMs: Date.now() - startedAt
+        });
 
         return createSubscriberStream(generation, false);
     },

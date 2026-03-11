@@ -1,5 +1,6 @@
 import type { InferSelectModel } from "drizzle-orm";
 import { conversationReads, conversations, messages } from "../../db/schema";
+import { logger } from "../../lib/logger";
 import { extractDocumentText } from "./document-parser";
 
 export type ConversationRecord = InferSelectModel<typeof conversations>;
@@ -219,6 +220,7 @@ export async function createMessageParts(
     content: string,
     attachments?: MessageAttachmentInput[]
 ): Promise<MessagePart[]> {
+    const startedAt = Date.now();
     const parts: MessagePart[] = [];
     const normalized = content.trim();
 
@@ -226,12 +228,27 @@ export async function createMessageParts(
         parts.push({ type: "text", text: normalized });
     }
 
-    for (const [index, attachment] of (attachments ?? []).entries()) {
-        parts.push(await createAttachmentPart(attachment, index));
+    const attachmentInputs = attachments ?? [];
+
+    if (attachmentInputs.length > 0) {
+        const attachmentParts = await Promise.all(
+            attachmentInputs.map((attachment, index) =>
+                createAttachmentPart(attachment, index)
+            )
+        );
+
+        parts.push(...attachmentParts);
     }
 
     if (parts.length === 0) {
         throw new ConversationError(400, "Message content is required.");
+    }
+
+    if (attachmentInputs.length > 0) {
+        logger.info("Message attachments prepared", {
+            attachmentCount: attachmentInputs.length,
+            durationMs: Date.now() - startedAt
+        });
     }
 
     return parts;

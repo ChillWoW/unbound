@@ -9,20 +9,16 @@ import {
 } from "./models.types";
 import { DEFAULT_CONTEXT_LENGTH } from "../ai/token-estimator";
 import { DIRECT_PROVIDERS } from "../../lib/provider-registry";
+import { logger } from "../../lib/logger";
+import {
+    getCachedModel,
+    getCachedModelsList,
+    updateModelsCache
+} from "./models.cache";
 
 const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
 const OPENROUTER_FREE_EFFECTIVE_CONTEXT_LENGTH = 32_768;
 const OPENROUTER_FREE_EFFECTIVE_MAX_OUTPUT_TOKENS = 2_048;
-
-const CACHE_TTL_MS = 10 * 60 * 1000;
-const MAX_CACHE_ENTRIES = 100;
-
-interface CacheEntry {
-    models: ModelSummary[];
-    timestamp: number;
-}
-
-const userCache = new Map<string, CacheEntry>();
 
 function applyEffectiveModelLimits(model: ModelSummary): ModelSummary {
     if (model.source !== "openrouter" || !model.free) {
@@ -48,29 +44,25 @@ function applyEffectiveModelLimits(model: ModelSummary): ModelSummary {
     };
 }
 
-function updateCache(userId: string | null, models: ModelSummary[]) {
-    if (!userId) return;
-    if (userCache.size >= MAX_CACHE_ENTRIES) {
-        userCache.clear();
-    }
-    userCache.set(userId, { models, timestamp: Date.now() });
-}
-
-function getCachedModel(
-    userId: string,
-    modelId: string
-): ModelSummary | null {
-    const entry = userCache.get(userId);
-    if (!entry || Date.now() - entry.timestamp > CACHE_TTL_MS) {
-        return null;
-    }
-
-    return entry.models.find((m) => m.id === modelId) ?? null;
-}
-
 export const modelsService = {
     async listModels(request: Request) {
+        const startedAt = Date.now();
         const user = await authService.getCurrentUser(request);
+
+        if (user) {
+            const cached = getCachedModelsList(user.id);
+
+            if (cached) {
+                logger.info("Models list served from cache", {
+                    userId: user.id,
+                    durationMs: Date.now() - startedAt,
+                    modelCount: cached.models.length,
+                    configuredProviders: cached.configuredProviders
+                });
+                return cached;
+            }
+        }
+
         const allModels: ModelSummary[] = [];
         const configuredProviders: string[] = [];
 
@@ -154,7 +146,17 @@ export const modelsService = {
             }
         }
 
-        updateCache(user?.id ?? null, allModels);
+        if (user) {
+            updateModelsCache(user.id, allModels, configuredProviders);
+        }
+
+        logger.info("Models list loaded", {
+            userId: user?.id ?? null,
+            durationMs: Date.now() - startedAt,
+            modelCount: allModels.length,
+            configuredProviders
+        });
+
         return { models: allModels, configuredProviders };
     },
 

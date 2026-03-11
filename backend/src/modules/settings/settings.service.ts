@@ -3,6 +3,7 @@ import { requireVerifiedAuth } from "../../middleware/require-auth";
 import { decryptText, encryptText } from "../../lib/encryption";
 import { PROVIDER_LABELS, type ProviderType } from "../../lib/provider-registry";
 import { settingsRepository } from "./settings.repository";
+import { invalidateModelsCache } from "../models/models.cache";
 import {
     SettingsError,
     getCiphertextField,
@@ -70,12 +71,15 @@ export const settingsService = {
             preview
         });
 
+        invalidateModelsCache(user.id);
+
         return toUserSettingsSummary(settings);
     },
 
     async clearProviderApiKey(request: Request, provider: ProviderType) {
         const user = await requireVerifiedAuth(request);
         await settingsRepository.clearProviderApiKey(user.id, provider);
+        invalidateModelsCache(user.id);
         const settings = await settingsRepository.findByUserId(user.id);
         return toUserSettingsSummary(settings);
     },
