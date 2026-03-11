@@ -11,6 +11,8 @@ import { DEFAULT_CONTEXT_LENGTH } from "../ai/token-estimator";
 import { DIRECT_PROVIDERS } from "../../lib/provider-registry";
 
 const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
+const OPENROUTER_FREE_EFFECTIVE_CONTEXT_LENGTH = 32_768;
+const OPENROUTER_FREE_EFFECTIVE_MAX_OUTPUT_TOKENS = 2_048;
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 100;
@@ -21,6 +23,30 @@ interface CacheEntry {
 }
 
 const userCache = new Map<string, CacheEntry>();
+
+function applyEffectiveModelLimits(model: ModelSummary): ModelSummary {
+    if (model.source !== "openrouter" || !model.free) {
+        return model;
+    }
+
+    return {
+        ...model,
+        contextLength:
+            model.contextLength === null
+                ? OPENROUTER_FREE_EFFECTIVE_CONTEXT_LENGTH
+                : Math.min(
+                      model.contextLength,
+                      OPENROUTER_FREE_EFFECTIVE_CONTEXT_LENGTH
+                  ),
+        maxOutputTokens:
+            model.maxOutputTokens === null
+                ? OPENROUTER_FREE_EFFECTIVE_MAX_OUTPUT_TOKENS
+                : Math.min(
+                      model.maxOutputTokens,
+                      OPENROUTER_FREE_EFFECTIVE_MAX_OUTPUT_TOKENS
+                  )
+    };
+}
 
 function updateCache(userId: string | null, models: ModelSummary[]) {
     if (!userId) return;
@@ -104,7 +130,7 @@ export const modelsService = {
 
             const openrouterModels = selectSupportedModels(
                 normalizeModelsResponse(payload)
-            );
+            ).map(applyEffectiveModelLimits);
             allModels.push(...openrouterModels);
         }
 
