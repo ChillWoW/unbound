@@ -9,6 +9,7 @@ import {
     getCiphertextField,
     toUserSettingsSummary
 } from "./settings.types";
+import type { MemoryWritePolicy } from "../memory/memory.types";
 
 function normalizeApiKey(value: string, providerLabel: string): string {
     const normalized = value.trim();
@@ -81,6 +82,31 @@ export const settingsService = {
         await settingsRepository.clearProviderApiKey(user.id, provider);
         invalidateModelsCache(user.id);
         const settings = await settingsRepository.findByUserId(user.id);
+        return toUserSettingsSummary(settings);
+    },
+
+    async updateMemorySettings(
+        request: Request,
+        input: MemoryWritePolicy
+    ) {
+        const user = await requireVerifiedAuth(request);
+        const customInstructions = input.customInstructions?.trim() || null;
+
+        if (customInstructions && customInstructions.length > 1000) {
+            throw new SettingsError(
+                400,
+                "Memory policy notes must be 1000 characters or less."
+            );
+        }
+
+        const settings = await settingsRepository.upsertMemorySettings({
+            userId: user.id,
+            enabled: input.enabled,
+            minConfidence: input.minConfidence,
+            allowedKinds: input.allowedKinds,
+            customInstructions
+        });
+
         return toUserSettingsSummary(settings);
     },
 

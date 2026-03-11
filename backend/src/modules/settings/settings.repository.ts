@@ -65,6 +65,56 @@ export const settingsRepository = {
             .where(eq(userSettings.userId, userId));
     },
 
+    async upsertMemorySettings(input: {
+        userId: string;
+        enabled: boolean;
+        minConfidence: "low" | "medium" | "high";
+        allowedKinds: {
+            preference: boolean;
+            workflow: boolean;
+            profile: boolean;
+            project_context: boolean;
+        };
+        customInstructions: string | null;
+    }) {
+        const now = new Date();
+
+        const [settings] = await db
+            .insert(userSettings)
+            .values({
+                userId: input.userId,
+                memoryEnabled: input.enabled,
+                memoryMinConfidence: input.minConfidence,
+                memoryAllowPreference: input.allowedKinds.preference,
+                memoryAllowWorkflow: input.allowedKinds.workflow,
+                memoryAllowProfile: input.allowedKinds.profile,
+                memoryAllowProjectContext: input.allowedKinds.project_context,
+                memoryCustomInstructions: input.customInstructions,
+                createdAt: now,
+                updatedAt: now
+            })
+            .onConflictDoUpdate({
+                target: [userSettings.userId],
+                set: {
+                    memoryEnabled: input.enabled,
+                    memoryMinConfidence: input.minConfidence,
+                    memoryAllowPreference: input.allowedKinds.preference,
+                    memoryAllowWorkflow: input.allowedKinds.workflow,
+                    memoryAllowProfile: input.allowedKinds.profile,
+                    memoryAllowProjectContext: input.allowedKinds.project_context,
+                    memoryCustomInstructions: input.customInstructions,
+                    updatedAt: now
+                }
+            })
+            .returning();
+
+        if (!settings) {
+            throw new Error("Failed to save memory settings.");
+        }
+
+        return settings;
+    },
+
     async deleteByUserId(userId: string) {
         await db.delete(userSettings).where(eq(userSettings.userId, userId));
     }
