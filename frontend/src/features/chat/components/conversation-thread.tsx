@@ -463,6 +463,12 @@ function CitationList({
                                 title={source.title}
                                 className="inline-flex items-center gap-1.5 rounded-md border border-dark-600 bg-dark-850 px-3 py-0.5 text-xs text-dark-100 transition-colors hover:border-dark-500 hover:bg-dark-800 hover:text-dark-50"
                             >
+                                <img
+                                    src={`https://www.google.com/s2/favicons?domain=${source.host}&sz=16`}
+                                    alt=""
+                                    className="size-3.5 shrink-0 rounded-sm"
+                                    onError={(e) => { e.currentTarget.style.display = "none"; }}
+                                />
                                 <span className="max-w-36 truncate">
                                     {source.host}
                                 </span>
