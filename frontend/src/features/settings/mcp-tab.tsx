@@ -8,8 +8,7 @@ import {
     PlusIcon,
     ShieldCheckIcon,
     TrashIcon,
-    WarningCircleIcon,
-    WrenchIcon
+    WarningCircleIcon
 } from "@phosphor-icons/react";
 import {
     Button,
@@ -69,28 +68,11 @@ function getErrorMessage(error: unknown): string {
     return "Something went wrong. Please try again.";
 }
 
-function formatDate(value: string | null): string {
-    if (!value) return "Never";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "Never";
-    return date.toLocaleString(undefined, {
-        month: "short",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit"
-    });
-}
 
-function statusTone(status: UserMcpServerSummary["lastHealthStatus"]) {
-    if (status === "healthy") {
-        return "border-emerald-500/30 bg-emerald-500/10 text-emerald-200";
-    }
-
-    if (status === "error") {
-        return "border-red-500/30 bg-red-500/10 text-red-200";
-    }
-
-    return "border-dark-600 bg-dark-800 text-dark-200";
+function statusDot(status: UserMcpServerSummary["lastHealthStatus"]) {
+    if (status === "healthy") return "bg-emerald-400";
+    if (status === "error") return "bg-red-400";
+    return "bg-dark-400";
 }
 
 function buildFormState(server: UserMcpServerSummary | null): McpFormState {
@@ -362,178 +344,98 @@ export function McpTab({ isActive }: { isActive: boolean }) {
                         </p>
                     </div>
                 ) : (
-                    <div className="rounded-md border border-dark-600 bg-dark-900">
-                        {servers.map((server, index) => {
+                    <div className="rounded-md border border-dark-600 bg-dark-900 px-4 sm:px-6">
+                        {servers.map((server) => {
                             const isBusy = busyServerId === server.id;
+                            const authLabel =
+                                server.authMode === "none"
+                                    ? "No auth"
+                                    : server.authMode === "bearer"
+                                      ? (server.authTokenPreview ?? "Bearer token")
+                                      : `${server.authHeaderName}: ${server.authTokenPreview ?? "configured"}`;
 
                             return (
-                                <div
-                                    key={server.id}
-                                    className={index > 0 ? "border-t border-dark-600" : ""}
-                                >
-                                    <div className="px-5 py-4 sm:px-6">
-                                        <div className="flex flex-col gap-3">
-                                            {/* Header row */}
-                                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                                <div className="min-w-0 space-y-1.5">
-                                                    <div className="flex flex-wrap items-center gap-2">
-                                                        <p className="text-sm font-medium text-white">
-                                                            {server.name}
-                                                        </p>
-                                                        <span
-                                                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusTone(server.lastHealthStatus)}`}
-                                                        >
-                                                            {server.lastHealthStatus}
-                                                        </span>
-                                                        <span className="inline-flex items-center rounded-full border border-dark-600 bg-dark-800 px-2 py-0.5 text-[11px] font-medium text-dark-200">
-                                                            {server.toolPrefix}
-                                                        </span>
-                                                    </div>
+                                <div key={server.id} className="border-b border-dark-600 py-4 last:border-b-0">
+                                    <div className="flex flex-wrap items-center gap-4">
+                                        {/* Icon + status dot */}
+                                        <div className="relative flex size-9 shrink-0 items-center justify-center rounded-md bg-dark-800">
+                                            <PlugChargingIcon className="size-4 text-dark-100" />
+                                            <span className={`absolute -bottom-0.5 -right-0.5 size-2 rounded-full ring-1 ring-dark-900 ${statusDot(server.lastHealthStatus)}`} />
+                                        </div>
 
-                                                    <div className="flex flex-wrap items-center gap-3 text-xs text-dark-300">
-                                                        <span className="inline-flex items-center gap-1.5">
-                                                            <GlobeIcon className="size-3.5" />
-                                                            {server.urlPreview}
-                                                        </span>
-                                                        <span className="inline-flex items-center gap-1.5">
-                                                            <ShieldCheckIcon className="size-3.5" />
-                                                            {server.authMode === "none"
-                                                                ? "No auth"
-                                                                : server.authMode === "bearer"
-                                                                  ? server.authTokenPreview ?? "Bearer token"
-                                                                  : `${server.authHeaderName}: ${server.authTokenPreview ?? "configured"}`}
-                                                        </span>
-                                                    </div>
-                                                </div>
+                                        {/* Name + meta */}
+                                        <div className="w-44 shrink-0">
+                                            <span className="text-sm font-medium text-white">
+                                                {server.name}
+                                            </span>
+                                            <p className="mt-0.5 text-xs leading-snug text-dark-300">
+                                                {server.urlPreview} · {authLabel}
+                                            </p>
+                                        </div>
 
-                                                <div className="flex flex-wrap items-center gap-2">
-                                                    <div className="flex items-center gap-2 text-xs text-dark-200">
-                                                        <span>Enabled</span>
-                                                        <Switch
-                                                            checked={server.enabled}
-                                                            onCheckedChange={(checked) =>
-                                                                void handleToggleEnabled(server, checked)
-                                                            }
-                                                            disabled={isBusy}
-                                                            aria-label={`Toggle ${server.name}`}
-                                                        />
-                                                    </div>
-
-                                                    <Button
-                                                        type="button"
-                                                        size="sm"
-                                                        variant="outline"
-                                                        onClick={() => void handleRefresh(server, "test")}
-                                                        disabled={isBusy}
-                                                    >
-                                                        <CheckCircleIcon className="size-4" />
-                                                        Test
-                                                    </Button>
-                                                    <Button
-                                                        type="button"
-                                                        size="sm"
-                                                        variant="outline"
-                                                        onClick={() => void handleRefresh(server, "discover")}
-                                                        disabled={isBusy}
-                                                    >
-                                                        <ArrowsClockwiseIcon className="size-4" />
-                                                        Refresh tools
-                                                    </Button>
-                                                    <Button
-                                                        type="button"
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        onClick={() => openEditModal(server)}
-                                                        disabled={isBusy}
-                                                    >
-                                                        <PencilSimpleIcon className="size-4" />
-                                                        Edit
-                                                    </Button>
-                                                    <Button
-                                                        type="button"
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        onClick={() => void handleDelete(server)}
-                                                        disabled={isBusy}
-                                                        className="text-red-300 hover:bg-red-500/10 hover:text-red-200"
-                                                    >
-                                                        <TrashIcon className="size-4" />
-                                                        Delete
-                                                    </Button>
-                                                </div>
+                                        {/* Actions */}
+                                        <div className="flex w-full flex-wrap items-center gap-2 md:flex-1">
+                                            <Switch
+                                                checked={server.enabled}
+                                                onCheckedChange={(checked) =>
+                                                    void handleToggleEnabled(server, checked)
+                                                }
+                                                disabled={isBusy}
+                                                aria-label={`Toggle ${server.name}`}
+                                            />
+                                            <div className="ml-auto flex flex-wrap items-center gap-2">
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => void handleRefresh(server, "test")}
+                                                    disabled={isBusy}
+                                                >
+                                                    <CheckCircleIcon className="size-4" />
+                                                    Test
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => void handleRefresh(server, "discover")}
+                                                    disabled={isBusy}
+                                                >
+                                                    <ArrowsClockwiseIcon className="size-4" />
+                                                    Refresh tools
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() => openEditModal(server)}
+                                                    disabled={isBusy}
+                                                >
+                                                    <PencilSimpleIcon className="size-4" />
+                                                    Edit
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() => void handleDelete(server)}
+                                                    disabled={isBusy}
+                                                    className="text-red-300 hover:bg-red-500/10 hover:text-red-200"
+                                                >
+                                                    <TrashIcon className="size-4" />
+                                                    Delete
+                                                </Button>
                                             </div>
-
-                                            {/* Error */}
-                                            {server.lastHealthError ? (
-                                                <div className="rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">
-                                                    <div className="inline-flex items-center gap-2 font-medium">
-                                                        <WarningCircleIcon className="size-4" />
-                                                        Connection issue
-                                                    </div>
-                                                    <p className="mt-1 text-xs leading-5">
-                                                        {server.lastHealthError}
-                                                    </p>
-                                                </div>
-                                            ) : null}
-
-                                            {/* Stats */}
-                                            <div className="flex flex-wrap gap-4 border-t border-dark-600 pt-3 text-xs text-dark-300">
-                                                <div>
-                                                    <span className="text-dark-200">Last checked</span>
-                                                    <span className="ml-2 text-white">
-                                                        {formatDate(server.lastConnectedAt)}
-                                                    </span>
-                                                </div>
-                                                <div>
-                                                    <span className="text-dark-200">Tools</span>
-                                                    <span className="ml-2 text-white">
-                                                        {server.discoveredTools.length} discovered
-                                                        {!server.allowAllTools
-                                                            ? `, ${server.allowedTools.length} allowed`
-                                                            : ", all allowed"}
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                            {/* Tools list */}
-                                            {server.discoveredTools.length > 0 ? (
-                                                <div className="border-t border-dark-600 pt-3">
-                                                    <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-dark-200">
-                                                        <WrenchIcon className="size-3.5" />
-                                                        Available tools
-                                                    </div>
-                                                    <div className="divide-y divide-dark-600">
-                                                        {server.discoveredTools.map((toolInfo) => {
-                                                            const isAllowed =
-                                                                server.allowAllTools ||
-                                                                server.allowedTools.includes(toolInfo.name);
-
-                                                            return (
-                                                                <div
-                                                                    key={toolInfo.name}
-                                                                    className="flex items-start justify-between gap-3 py-2"
-                                                                >
-                                                                    <div className="min-w-0">
-                                                                        <p className="text-sm text-white">
-                                                                            {toolInfo.title ?? toolInfo.name}
-                                                                        </p>
-                                                                        {toolInfo.description ? (
-                                                                            <p className="mt-0.5 text-xs leading-5 text-dark-300">
-                                                                                {toolInfo.description}
-                                                                            </p>
-                                                                        ) : null}
-                                                                    </div>
-                                                                    <span className="shrink-0 text-xs text-dark-200">
-                                                                        {isAllowed ? "Enabled" : "Blocked"}
-                                                                    </span>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            ) : null}
                                         </div>
                                     </div>
+
+                                    {/* Error */}
+                                    {server.lastHealthError ? (
+                                        <div className="mt-2 flex items-start gap-1.5 pl-[52px] text-xs text-red-300">
+                                            <WarningCircleIcon className="mt-0.5 size-3.5 shrink-0" />
+                                            {server.lastHealthError}
+                                        </div>
+                                    ) : null}
                                 </div>
                             );
                         })}
