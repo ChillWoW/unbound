@@ -631,6 +631,43 @@ function startBackgroundGeneration(
                     generation.emitter.emit("event", event);
                 }
             }
+
+            if (generation.abortController.signal.aborted && !generation.finished) {
+                logger.info("Generation stopped by user (post-stream)", {
+                    conversationId: generation.conversationId,
+                    messageId: assistantMessageId
+                });
+                try {
+                    const stoppedParts = buildAccumulatedParts(
+                        generation,
+                        thinking,
+                        false
+                    );
+                    const sources = extractSourcesFromParts(stoppedParts);
+                    await conversationsRepository.updateMessage(
+                        assistantMessageId,
+                        {
+                            parts: stoppedParts,
+                            status: "complete",
+                            metadata: {
+                                model: modelId,
+                                provider,
+                                thinkingEnabled: thinking,
+                                generationStartedAt,
+                                generationCompletedAt: new Date().toISOString(),
+                                ...(sources.length > 0 ? { sources } : {})
+                            }
+                        }
+                    );
+                } catch (dbError) {
+                    logger.error("Failed to persist stopped state", {
+                        conversationId: generation.conversationId,
+                        messageId: assistantMessageId,
+                        error: dbError instanceof Error ? dbError.message : String(dbError)
+                    });
+                }
+                generationManager.complete(generation.conversationId);
+            }
         } catch (error) {
             const isAbort =
                 (error instanceof Error && error.name === "AbortError") ||
