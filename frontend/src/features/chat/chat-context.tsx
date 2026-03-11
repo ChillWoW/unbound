@@ -11,9 +11,14 @@ import {
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/features/auth/use-auth";
 import { chatApi } from "./api";
-import { parseAIStream, type ReconnectState } from "./utils/parse-ai-stream";
+import {
+    parseAIStream,
+    type ReconnectState,
+    type StreamErrorEvent
+} from "./utils/parse-ai-stream";
 import type { ChatAttachment } from "./components/chat-input";
 import type {
+    ChatErrorRecovery,
     ChatModel,
     ConversationDetail,
     ConversationMessage,
@@ -25,6 +30,10 @@ import type {
     TodoStatus,
     ToolInvocationPart
 } from "./types";
+import {
+    getApiErrorRecovery,
+    parseChatErrorRecovery
+} from "./recovery";
 
 function fileToBase64(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -167,6 +176,7 @@ interface ChatContextValue {
         assistantMessageId: string
     ) => Promise<void>;
     modelsError: string | null;
+    modelsErrorRecovery: ChatErrorRecovery | null;
     renameConversation: (
         conversationId: string,
         title: string
@@ -512,7 +522,7 @@ function createStreamCallbacks(state: StreamState, deps: StreamCallbackDeps) {
                 }));
             }
         },
-        onError(error: string) {
+        onError(error: StreamErrorEvent) {
             if (deps.abortSignal.aborted) return;
             flushNow();
             const mid = state.messageId;
@@ -528,7 +538,17 @@ function createStreamCallbacks(state: StreamState, deps: StreamCallbackDeps) {
                                 ? {
                                       ...m,
                                       status: "failed" as const,
-                                      errorMessage: error
+                                      errorMessage: error.message,
+                                      metadata: {
+                                          ...(m.metadata ?? {}),
+                                          errorMessage: error.message,
+                                          ...(error.recovery
+                                              ? {
+                                                    errorRecovery:
+                                                        error.recovery
+                                                }
+                                              : {})
+                                      }
                                   }
                                 : m
                         )
@@ -570,6 +590,8 @@ export function ChatProvider({ children }: PropsWithChildren) {
         null
     );
     const [modelsError, setModelsError] = useState<string | null>(null);
+    const [modelsErrorRecovery, setModelsErrorRecovery] =
+        useState<ChatErrorRecovery | null>(null);
     const [isLoadingConversations, setIsLoadingConversations] = useState(false);
     const [isLoadingModels, setIsLoadingModels] = useState(false);
     const [isCreatingConversation, setIsCreatingConversation] = useState(false);
@@ -752,6 +774,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
     const loadModels = useCallback(async () => {
         setIsLoadingModels(true);
         setModelsError(null);
+        setModelsErrorRecovery(null);
 
         try {
             const response = await chatApi.listModels();
@@ -803,6 +826,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
             setSelectedModelIdState(null);
             selectedModelSourceRef.current = null;
             setModelsError(getErrorMessage(error));
+            setModelsErrorRecovery(getApiErrorRecovery(error));
             throw error;
         } finally {
             setIsLoadingModels(false);
@@ -894,6 +918,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
             const thinking = isThinkingEnabledRef.current;
             const abortController = new AbortController();
             activeGenerationsRef.current.set(conversationId, abortController);
+            const generationStartedAt = new Date().toISOString();
 
             const optimisticId = `msg_optimistic_${Date.now()}`;
             const optimisticMessage: ConversationMessage = {
@@ -903,7 +928,54 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 parts: [],
                 status: "pending",
                 createdAt: new Date().toISOString(),
-                metadata: { model: modelId, thinkingEnabled: thinking }
+                metadata: {
+                    model: modelId,
+                    provider,
+                    thinkingEnabled: thinking,
+                    generationStartedAt
+                }
+            };
+
+            const markGenerationStartFailure = (
+                message: string,
+                recovery?: ChatErrorRecovery | null,
+                assistantMessageId?: string | null
+            ) => {
+                const generationCompletedAt = new Date().toISOString();
+                setConversationDetails((current) => {
+                    const existing = current[conversationId];
+                    if (!existing) return current;
+                    return {
+                        ...current,
+                        [conversationId]: {
+                            ...existing,
+                            messages: existing.messages.map((m) =>
+                                m.id === optimisticId
+                                    ? {
+                                          ...m,
+                                          id: assistantMessageId ?? optimisticId,
+                                          status: "failed" as const,
+                                          errorMessage: message,
+                                          metadata: {
+                                              ...(m.metadata ?? {}),
+                                              model: modelId,
+                                              provider,
+                                              thinkingEnabled: thinking,
+                                              generationStartedAt,
+                                              generationCompletedAt,
+                                              errorMessage: message,
+                                              ...(recovery
+                                                  ? {
+                                                        errorRecovery: recovery
+                                                    }
+                                                  : {})
+                                          }
+                                      }
+                                    : m
+                            )
+                        }
+                    };
+                });
             };
 
             setConversationDetails((current) => {
@@ -932,18 +1004,36 @@ export function ChatProvider({ children }: PropsWithChildren) {
                 activeGenerationsRef.current.delete(conversationId);
                 if (error instanceof Error && error.name === "AbortError")
                     return;
-                throw error;
+                markGenerationStartFailure(getErrorMessage(error));
+                return;
             }
 
             if (!streamResponse.ok) {
                 let errorMessage = "Generation failed.";
+                let errorRecovery: ChatErrorRecovery | null = null;
+                let assistantMessageId: string | null = null;
                 try {
                     const errorData = await streamResponse.json();
                     if (errorData?.message) errorMessage = errorData.message;
+                    if (errorData && typeof errorData === "object") {
+                        const payload = errorData as Record<string, unknown>;
+                        errorRecovery = parseChatErrorRecovery(payload.recovery);
+                        assistantMessageId =
+                            typeof payload.assistantMessageId === "string"
+                                ? payload.assistantMessageId
+                                : null;
+                    }
                 } catch {
                     // use default
                 }
-                throw new Error(errorMessage);
+
+                markGenerationStartFailure(
+                    errorMessage,
+                    errorRecovery,
+                    assistantMessageId
+                );
+                activeGenerationsRef.current.delete(conversationId);
+                return;
             }
 
             const streamState: StreamState = {
@@ -1615,6 +1705,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
             loadModels,
             markConversationRead,
             modelsError,
+            modelsErrorRecovery,
             regenerateMessage,
             renameConversation,
             isThinkingEnabled,
@@ -1648,6 +1739,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
             loadModels,
             markConversationRead,
             modelsError,
+            modelsErrorRecovery,
             regenerateMessage,
             renameConversation,
             reconnectToGeneration,

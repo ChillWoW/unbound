@@ -21,6 +21,7 @@ function ConversationPage() {
         isLoadingModels,
         loadConversation,
         modelsError,
+        modelsErrorRecovery,
         markConversationRead,
         reconnectToGeneration,
         isThinkingEnabled,
@@ -134,6 +135,7 @@ function ConversationPage() {
             isLoadingModels={isLoadingModels}
             isThinkingEnabled={isThinkingEnabled}
             modelsError={modelsError}
+            modelsErrorRecovery={modelsErrorRecovery}
             onModelChange={setSelectedModelId}
             onStop={() => stopGeneration(conversationId)}
             onSubmit={handleSubmit}

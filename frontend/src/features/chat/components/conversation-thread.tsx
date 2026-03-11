@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import {
     ArrowDownIcon,
     ArrowsClockwiseIcon,
@@ -18,6 +19,7 @@ import {
 import { Button, Tooltip, ImageViewer } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type {
+    ChatErrorRecovery,
     ChatModel,
     ConversationDetail,
     ConversationMessage,
@@ -39,6 +41,11 @@ import {
     type BranchSelections,
     type MessageChildrenMap
 } from "../utils/message-tree";
+import {
+    formatGenerationError,
+    parseChatErrorRecovery
+} from "../recovery";
+import { ModelSelector } from "./model-selector";
 
 const TODO_TOOLS = new Set([
     "todoWrite",
@@ -671,71 +678,6 @@ function UserMessageMetadataDisplay({
     );
 }
 
-const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
-    openrouter: "OpenRouter",
-    openai: "OpenAI",
-    anthropic: "Anthropic",
-    google: "Google",
-    kimi: "Kimi"
-};
-
-function formatGenerationError(
-    raw: string | undefined,
-    provider?: string
-): string {
-    if (!raw) return "Generation failed. Please try again.";
-
-    const providerName = provider
-        ? (PROVIDER_DISPLAY_NAMES[provider] ?? provider)
-        : "your provider";
-
-    const lower = raw.toLowerCase();
-    if (
-        lower.includes("api key") ||
-        lower.includes("unauthorized") ||
-        lower.includes("401")
-    )
-        return `Invalid or missing API key. Check your ${providerName} key in settings.`;
-    if (
-        lower.includes("rate limit") ||
-        lower.includes("rate-limit") ||
-        lower.includes("rate limited") ||
-        lower.includes("rate-limited") ||
-        lower.includes("429")
-    )
-        return "Rate limit reached. Wait a moment, then try again.";
-    if (
-        lower.includes("quota") ||
-        lower.includes("insufficient") ||
-        lower.includes("credits") ||
-        lower.includes("balance")
-    )
-        return `Insufficient credits or quota on your ${providerName} account.`;
-    if (
-        lower.includes("context length") ||
-        lower.includes("too long") ||
-        lower.includes("maximum context")
-    )
-        return "The conversation is too long for this model. Start a new conversation or switch to a model with a larger context window.";
-    if (
-        lower.includes("model") &&
-        (lower.includes("not found") ||
-            lower.includes("unavailable") ||
-            lower.includes("404"))
-    )
-        return "The selected model is unavailable. Try a different model.";
-    if (lower.includes("timeout") || lower.includes("timed out"))
-        return "The request timed out. Please try again.";
-    if (
-        lower.includes("no response body") ||
-        lower.includes("fetch") ||
-        lower.includes("network") ||
-        lower.includes("connection")
-    )
-        return "Connection failed. Check your internet and try again.";
-    return "Generation failed. Please try again.";
-}
-
 function StreamingIndicator() {
     return (
         <div className="flex items-center gap-1.5 py-1">
@@ -750,25 +692,93 @@ function StreamingIndicator() {
     );
 }
 
+function AssistantRecoveryActions({
+    recovery,
+    canRegenerate,
+    onRegenerate,
+    availableModels,
+    configuredProviders,
+    selectedModelId,
+    onModelChange
+}: {
+    recovery: ChatErrorRecovery | null;
+    canRegenerate: boolean;
+    onRegenerate?: () => void;
+    availableModels: ChatModel[];
+    configuredProviders: ProviderType[];
+    selectedModelId: string | null;
+    onModelChange: (modelId: string | null, source?: ProviderType) => void;
+}) {
+    const navigate = useNavigate();
+
+    if (!recovery && !canRegenerate) return null;
+
+    return (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+            {recovery?.action === "open_settings" && (
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate({ to: "/settings" })}
+                >
+                    Open settings
+                </Button>
+            )}
+
+            {recovery?.action === "switch_model" && (
+                <div className="max-w-full">
+                    <ModelSelector
+                        selectedModelId={selectedModelId}
+                        models={availableModels}
+                        configuredProviders={configuredProviders}
+                        onModelSelected={(model) =>
+                            onModelChange(model.id, model.source)
+                        }
+                    />
+                </div>
+            )}
+
+            {canRegenerate && onRegenerate && (
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={onRegenerate}
+                >
+                    Try again
+                </Button>
+            )}
+        </div>
+    );
+}
+
 function AssistantMessage({
     message,
     availableModels,
+    configuredProviders,
     tree,
     onBranchSelect,
+    onModelChange,
     onRegenerate,
-    isSending
+    isSending,
+    selectedModelId
 }: {
     message: ConversationMessage;
     availableModels: ChatModel[];
+    configuredProviders: ProviderType[];
     tree: MessageChildrenMap;
     onBranchSelect: (parentKey: string | null, messageId: string) => void;
+    onModelChange: (modelId: string | null, source?: ProviderType) => void;
     onRegenerate?: () => void;
     isSending: boolean;
+    selectedModelId: string | null;
 }) {
     const text = getMessageText(message.parts);
     const isPending = message.status === "pending";
     const hasText = message.parts.some((p) => p.type === "text");
     const isWaiting = isPending && message.parts.length === 0;
+    const errorRecovery = parseChatErrorRecovery(message.metadata?.errorRecovery);
     const lastReasoningIndex = message.parts.reduce(
         (lastIndex, part, index) =>
             part.type === "reasoning" ? index : lastIndex,
@@ -776,7 +786,7 @@ function AssistantMessage({
     );
 
     const canRegenerate =
-        onRegenerate &&
+        !!onRegenerate &&
         !isSending &&
         (message.status === "complete" || message.status === "failed") &&
         message.parentMessageId != null;
@@ -825,15 +835,27 @@ function AssistantMessage({
                         className="mt-px size-3.5 shrink-0"
                         weight="fill"
                     />
-                    <span>
-                        {formatGenerationError(
-                            message.metadata?.errorMessage ??
-                                message.errorMessage,
-                            typeof message.metadata?.provider === "string"
-                                ? message.metadata.provider
-                                : undefined
-                        )}
-                    </span>
+                    <div>
+                        <span>
+                            {formatGenerationError(
+                                message.metadata?.errorMessage ??
+                                    message.errorMessage,
+                                errorRecovery,
+                                typeof message.metadata?.provider === "string"
+                                    ? message.metadata.provider
+                                    : undefined
+                            )}
+                        </span>
+                        <AssistantRecoveryActions
+                            recovery={errorRecovery}
+                            canRegenerate={canRegenerate}
+                            onRegenerate={onRegenerate}
+                            availableModels={availableModels}
+                            configuredProviders={configuredProviders}
+                            selectedModelId={selectedModelId}
+                            onModelChange={onModelChange}
+                        />
+                    </div>
                 </div>
             )}
 
@@ -879,6 +901,7 @@ interface ConversationThreadProps {
     isLoadingModels?: boolean;
     isThinkingEnabled?: boolean;
     modelsError?: string | null;
+    modelsErrorRecovery?: ChatErrorRecovery | null;
     onModelChange: (modelId: string | null, source?: ProviderType) => void;
     onStop?: () => void;
     onSubmit: (
@@ -899,6 +922,7 @@ export function ConversationThread({
     isLoadingModels = false,
     isThinkingEnabled = false,
     modelsError = null,
+    modelsErrorRecovery = null,
     onModelChange,
     onStop,
     onThinkingChange,
@@ -1166,12 +1190,15 @@ export function ConversationThread({
                                 key={message.id}
                                 message={message}
                                 availableModels={availableModels}
+                                configuredProviders={configuredProviders}
                                 tree={tree}
                                 onBranchSelect={handleBranchSelect}
+                                onModelChange={onModelChange}
                                 onRegenerate={() =>
                                     handleRegenerate(message.id)
                                 }
                                 isSending={isSending}
+                                selectedModelId={selectedModelId}
                             />
                         );
                     })}
@@ -1226,6 +1253,7 @@ export function ConversationThread({
                         isModelsLoading={isLoadingModels}
                         isThinkingEnabled={isThinkingEnabled}
                         modelsError={modelsError}
+                        modelsErrorRecovery={modelsErrorRecovery}
                         onThinkingChange={onThinkingChange}
                         showContextBadge
                         placeholder="Send a message..."

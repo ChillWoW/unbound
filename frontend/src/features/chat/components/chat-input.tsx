@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState, useCallback, type ReactNode } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import TextareaAutosize from "react-textarea-autosize";
 import {
     ArrowUpIcon,
@@ -11,8 +12,14 @@ import {
 } from "@phosphor-icons/react";
 import { Button, Tooltip } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import type { ChatModel, ConversationMessage, ProviderType } from "../types";
+import type {
+    ChatErrorRecovery,
+    ChatModel,
+    ConversationMessage,
+    ProviderType
+} from "../types";
 import { ModelSelector } from "./model-selector";
+import { useChat } from "../chat-context";
 
 const IMAGE_MIME_TYPES: Record<string, true> = {
     "image/png": true,
@@ -238,6 +245,7 @@ export interface ChatInputProps {
     isThinkingEnabled?: boolean;
     models?: ChatModel[];
     modelsError?: string | null;
+    modelsErrorRecovery?: ChatErrorRecovery | null;
     onSelectedModelChange?: (
         modelId: string | null,
         source?: ProviderType
@@ -265,6 +273,8 @@ export function ChatInput({
     isModelsLoading = false,
     isThinkingEnabled = false,
     models = [],
+    modelsError = null,
+    modelsErrorRecovery = null,
     onSelectedModelChange,
     onThinkingChange,
     showContextBadge = false,
@@ -276,6 +286,8 @@ export function ChatInput({
     placeholder = "Ask anything, sketch an idea, or start a new thread...",
     selectedModelId = null
 }: ChatInputProps) {
+    const navigate = useNavigate();
+    const { loadModels } = useChat();
     const [internalValue, setInternalValue] = useState("");
     const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
     const [fileError, setFileError] = useState<string | null>(null);
@@ -456,6 +468,35 @@ export function ChatInput({
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
         >
+            {modelsError && (
+                <div className="mx-3 mt-3 rounded-md border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs text-red-100">
+                    <p>{modelsErrorRecovery?.message ?? modelsError}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                        {modelsErrorRecovery?.action === "open_settings" && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => navigate({ to: "/settings" })}
+                            >
+                                Open settings
+                            </Button>
+                        )}
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={isModelsLoading}
+                            onClick={() => {
+                                void loadModels().catch(() => undefined);
+                            }}
+                        >
+                            {isModelsLoading ? "Reloading..." : "Reload models"}
+                        </Button>
+                    </div>
+                </div>
+            )}
+
             {attachments.length > 0 && (
                 <div className="flex flex-wrap gap-2 px-3 pt-3">
                     {attachments.map((attachment) => (

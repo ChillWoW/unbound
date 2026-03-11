@@ -32,6 +32,12 @@ import {
     buildAccumulatedParts
 } from "./message-parts";
 import { encodeSSE, mapChunkToEvent, createSubscriberStream } from "./sse";
+import {
+    AIGenerationError,
+    createMissingApiKeyRecovery,
+    inferAIRecovery,
+    type AIRecoveryInfo
+} from "./ai-recovery";
 
 function createMessageId(): string {
     return `msg_${randomBytes(10).toString("hex")}`;
@@ -58,6 +64,70 @@ function extractErrorMessage(error: unknown): string {
         }
     }
     return String(error);
+}
+
+function buildErrorMetadata(input: {
+    modelId: string;
+    provider: ProviderType;
+    thinking: boolean;
+    generationStartedAt: string;
+    generationCompletedAt: string;
+    errorMessage: string;
+    recovery?: AIRecoveryInfo | null;
+}) {
+    const {
+        modelId,
+        provider,
+        thinking,
+        generationStartedAt,
+        generationCompletedAt,
+        errorMessage,
+        recovery
+    } = input;
+
+    return {
+        model: modelId,
+        provider,
+        thinkingEnabled: thinking,
+        generationStartedAt,
+        generationCompletedAt,
+        errorMessage,
+        ...(recovery ? { errorRecovery: recovery } : {})
+    };
+}
+
+async function appendFailedAssistantMessage(input: {
+    conversationId: string;
+    modelId: string;
+    provider: ProviderType;
+    thinking: boolean;
+    replyToMessageId?: string;
+    errorMessage: string;
+    recovery?: AIRecoveryInfo | null;
+}) {
+    const assistantMessageId = createMessageId();
+    const generationStartedAt = new Date().toISOString();
+    const generationCompletedAt = generationStartedAt;
+
+    await conversationsRepository.appendMessageToConversation({
+        conversationId: input.conversationId,
+        messageId: assistantMessageId,
+        messageRole: "assistant",
+        messageParts: [],
+        messageStatus: "failed",
+        messageMetadata: buildErrorMetadata({
+            modelId: input.modelId,
+            provider: input.provider,
+            thinking: input.thinking,
+            generationStartedAt,
+            generationCompletedAt,
+            errorMessage: input.errorMessage,
+            recovery: input.recovery
+        }),
+        parentMessageId: input.replyToMessageId ?? null
+    });
+
+    return assistantMessageId;
 }
 
 function hasMeaningfulAssistantOutput(parts: MessagePart[]): boolean {
@@ -407,6 +477,7 @@ function startBackgroundGeneration(
                 new Date(generationCompletedAt).getTime() -
                 new Date(generationStartedAt).getTime();
             const errorMessage = extractErrorMessage(event.error);
+            const recovery = inferAIRecovery(errorMessage, provider);
 
             logger.error("Generation failed (onError)", {
                 conversationId: generation.conversationId,
@@ -425,17 +496,22 @@ function startBackgroundGeneration(
             await conversationsRepository.updateMessage(assistantMessageId, {
                 parts: errorParts,
                 status: "failed",
-                metadata: {
-                    model: modelId,
+                metadata: buildErrorMetadata({
+                    modelId,
                     provider,
-                    thinkingEnabled: thinking,
+                    thinking,
                     generationStartedAt,
                     generationCompletedAt,
-                    errorMessage
-                }
+                    errorMessage,
+                    recovery
+                })
             });
 
-            generationManager.fail(generation.conversationId, errorMessage);
+            generationManager.fail(
+                generation.conversationId,
+                errorMessage,
+                recovery ?? undefined
+            );
         }
     });
 
@@ -517,6 +593,7 @@ function startBackgroundGeneration(
             }
 
             const streamErrorMessage = extractErrorMessage(error);
+            const recovery = inferAIRecovery(streamErrorMessage, provider);
 
             logger.error("Stream loop error", {
                 conversationId: generation.conversationId,
@@ -533,19 +610,21 @@ function startBackgroundGeneration(
             await conversationsRepository.updateMessage(assistantMessageId, {
                 parts: errorParts,
                 status: "failed",
-                metadata: {
-                    model: modelId,
+                metadata: buildErrorMetadata({
+                    modelId,
                     provider,
-                    thinkingEnabled: thinking,
+                    thinking,
                     generationStartedAt,
                     generationCompletedAt: new Date().toISOString(),
-                    errorMessage: streamErrorMessage
-                }
+                    errorMessage: streamErrorMessage,
+                    recovery
+                })
             });
 
             generationManager.fail(
                 generation.conversationId,
-                streamErrorMessage
+                streamErrorMessage,
+                recovery ?? undefined
             );
         }
     })();
@@ -573,23 +652,6 @@ export const aiService = {
             ? provider
             : "openrouter";
 
-        const apiKey = await settingsService.getDecryptedApiKeyForUser(
-            user.id,
-            resolvedProvider
-        );
-
-        if (!apiKey) {
-            logger.warn("Generation rejected: no API key", {
-                conversationId,
-                userId: user.id,
-                provider: resolvedProvider
-            });
-            throw new ConversationError(
-                400,
-                `Add your ${resolvedProvider === "openrouter" ? "OpenRouter" : resolvedProvider.charAt(0).toUpperCase() + resolvedProvider.slice(1)} API key in settings to use this model.`
-            );
-        }
-
         const conversation =
             await conversationsRepository.findConversationByIdForUser(
                 user.id,
@@ -598,6 +660,37 @@ export const aiService = {
 
         if (!conversation) {
             throw new ConversationError(404, "Conversation not found.");
+        }
+
+        const apiKey = await settingsService.getDecryptedApiKeyForUser(
+            user.id,
+            resolvedProvider
+        );
+
+        if (!apiKey) {
+            const recovery = createMissingApiKeyRecovery(resolvedProvider);
+            logger.warn("Generation rejected: no API key", {
+                conversationId,
+                userId: user.id,
+                provider: resolvedProvider
+            });
+            const assistantMessageId = await appendFailedAssistantMessage({
+                conversationId,
+                modelId,
+                provider: resolvedProvider,
+                thinking,
+                replyToMessageId,
+                errorMessage: recovery.message,
+                recovery
+            });
+            throw new AIGenerationError(
+                400,
+                recovery.message,
+                {
+                    recovery,
+                    assistantMessageId
+                }
+            );
         }
 
         const messageRecords = replyToMessageId

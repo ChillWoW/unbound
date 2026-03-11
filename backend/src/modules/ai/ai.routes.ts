@@ -4,6 +4,7 @@ import {
     requireVerifiedAuth
 } from "../../middleware/require-auth";
 import { ConversationError } from "../conversations/conversations.types";
+import { AIGenerationError } from "./ai-recovery";
 import { aiService } from "./ai.service";
 import { generationManager } from "./generation-manager";
 
@@ -22,6 +23,15 @@ function handleAiError(error: unknown, set: { status?: number | string }) {
     if (error instanceof UnauthorizedError) {
         set.status = error.status;
         return { message: error.message };
+    }
+
+    if (error instanceof AIGenerationError) {
+        set.status = error.status;
+        return {
+            message: error.message,
+            recovery: error.recovery,
+            assistantMessageId: error.assistantMessageId
+        };
     }
 
     if (error instanceof ConversationError) {

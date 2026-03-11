@@ -1,3 +1,5 @@
+import type { ProviderType } from "@/lib/provider-types";
+
 export interface TextMessagePart {
     type: "text";
     text: string;
@@ -29,6 +31,26 @@ export interface ReasoningMessagePart {
     text: string;
 }
 
+export type ChatRecoveryCode =
+    | "missing_api_key"
+    | "invalid_api_key"
+    | "rate_limited"
+    | "insufficient_quota"
+    | "model_unavailable"
+    | "context_length_exceeded"
+    | "request_timeout"
+    | "network_error";
+
+export type ChatRecoveryAction = "open_settings" | "switch_model" | "retry";
+
+export interface ChatErrorRecovery {
+    code: ChatRecoveryCode;
+    action: ChatRecoveryAction;
+    message: string;
+    provider?: ProviderType;
+    retryable: boolean;
+}
+
 export type MessagePart =
     | TextMessagePart
     | ImageMessagePart
@@ -42,10 +64,12 @@ export type MessageStatus = "pending" | "complete" | "failed";
 export interface MessageMetadata {
     sentAt?: string;
     model?: string;
+    provider?: string;
     thinkingEnabled?: boolean;
     generationStartedAt?: string;
     generationCompletedAt?: string;
     errorMessage?: string;
+    errorRecovery?: ChatErrorRecovery | null;
     [key: string]: unknown;
 }
 
@@ -78,8 +102,6 @@ export interface ConversationSummary {
 export interface ConversationDetail extends ConversationSummary {
     messages: ConversationMessage[];
 }
-
-import type { ProviderType } from "@/lib/provider-types";
 
 export type { ProviderType };
 

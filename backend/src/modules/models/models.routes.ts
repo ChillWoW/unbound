@@ -1,5 +1,6 @@
 import { Elysia } from "elysia";
 import { AppError } from "../../lib/app-error";
+import { inferAIRecovery } from "../ai/ai-recovery";
 import { modelsService } from "./models.service";
 
 function handleModelsError(
@@ -8,7 +9,10 @@ function handleModelsError(
 ) {
     if (error instanceof AppError) {
         set.status = error.status;
-        return { message: error.message };
+        return {
+            message: error.message,
+            recovery: inferAIRecovery(error.message, "openrouter")
+        };
     }
 
     throw error;

@@ -1,3 +1,6 @@
+import { parseChatErrorRecovery } from "../recovery";
+import type { ChatErrorRecovery } from "../types";
+
 export interface ReconnectState {
     text: string;
     reasoning: string;
@@ -9,6 +12,11 @@ export interface ReconnectState {
         state: "call" | "result" | "error";
         result?: unknown;
     }>;
+}
+
+export interface StreamErrorEvent {
+    message: string;
+    recovery?: ChatErrorRecovery;
 }
 
 export interface StreamCallbacks {
@@ -27,7 +35,7 @@ export interface StreamCallbacks {
         result: unknown;
     }) => void;
     onFinish?: (finishReason: string) => void;
-    onError?: (error: string) => void;
+    onError?: (error: StreamErrorEvent) => void;
     onReconnectState?: (state: ReconnectState) => void;
 }
 
@@ -38,7 +46,7 @@ export async function parseAIStream(
     const body = response.body;
 
     if (!body) {
-        callbacks.onError?.("No response body");
+        callbacks.onError?.({ message: "No response body" });
         return;
     }
 
@@ -114,7 +122,11 @@ export async function parseAIStream(
                         break;
 
                     case "error":
-                        callbacks.onError?.(event.error as string);
+                        callbacks.onError?.({
+                            message: event.error as string,
+                            recovery:
+                                parseChatErrorRecovery(event.recovery) ?? undefined
+                        });
                         break;
 
                     case "reconnect-state":
@@ -137,7 +149,11 @@ export async function parseAIStream(
                     if (event.type === "done") {
                         // stream complete
                     } else if (event.type === "error") {
-                        callbacks.onError?.(event.error as string);
+                        callbacks.onError?.({
+                            message: event.error as string,
+                            recovery:
+                                parseChatErrorRecovery(event.recovery) ?? undefined
+                        });
                     }
                 } catch {
                     // ignore partial data
@@ -145,9 +161,10 @@ export async function parseAIStream(
             }
         }
     } catch (error) {
-        callbacks.onError?.(
-            error instanceof Error ? error.message : "Stream reading failed"
-        );
+        callbacks.onError?.({
+            message:
+                error instanceof Error ? error.message : "Stream reading failed"
+        });
     } finally {
         reader.releaseLock();
     }

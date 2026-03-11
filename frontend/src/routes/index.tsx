@@ -35,6 +35,7 @@ function HomePage() {
         isCreatingConversation,
         isLoadingModels,
         modelsError,
+        modelsErrorRecovery,
         isThinkingEnabled,
         selectedModelId,
         setSelectedModelId,
@@ -95,6 +96,7 @@ function HomePage() {
                         models={availableModels}
                         configuredProviders={configuredProviders}
                         modelsError={modelsError}
+                        modelsErrorRecovery={modelsErrorRecovery}
                         selectedModelId={selectedModelId}
                         onSelectedModelChange={setSelectedModelId}
                         onThinkingChange={setThinkingEnabled}

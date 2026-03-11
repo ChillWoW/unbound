@@ -41,7 +41,10 @@ export function mapChunkToEvent(chunk: unknown): SSEEvent | null {
         }
 
         case "error":
-            return { type: "error", error: String(c.error) };
+            return {
+                type: "error",
+                error: String(c.error)
+            };
 
         case "finish":
             return { type: "finish", finishReason: c.finishReason as string };

@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import type { ToolInvocationPart } from "../conversations/conversations.types";
+import type { AIRecoveryInfo } from "./ai-recovery";
 
 export type SSEEvent =
     | { type: "message-start"; messageId: string }
@@ -19,7 +20,7 @@ export type SSEEvent =
           result: unknown;
       }
     | { type: "finish"; finishReason: string }
-    | { type: "error"; error: string }
+    | { type: "error"; error: string; recovery?: AIRecoveryInfo }
     | {
           type: "reconnect-state";
           text: string;
@@ -90,13 +91,14 @@ class GenerationManager {
         setTimeout(() => this.remove(conversationId), 5000);
     }
 
-    fail(conversationId: string, error?: string) {
+    fail(conversationId: string, error?: string, recovery?: AIRecoveryInfo) {
         const entry = this.active.get(conversationId);
         if (!entry) return;
         entry.finished = true;
         entry.emitter.emit("event", {
             type: "error",
-            error: error ?? "Generation failed"
+            error: error ?? "Generation failed",
+            recovery
         } satisfies SSEEvent);
         entry.emitter.emit("event", { type: "done" } satisfies SSEEvent);
         setTimeout(() => this.remove(conversationId), 5000);
