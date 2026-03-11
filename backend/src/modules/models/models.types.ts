@@ -16,6 +16,26 @@ export interface ModelSummary {
     free?: boolean;
 }
 
+const SUPPORTED_INPUT_MODALITIES = new Set(["text", "image", "file"]);
+
+export function sanitizeInputModalities(modalities: string[]): string[] {
+    const seen = new Set<string>();
+
+    for (const modality of modalities) {
+        const normalized = modality.trim().toLowerCase();
+        if (!SUPPORTED_INPUT_MODALITIES.has(normalized) || seen.has(normalized)) {
+            continue;
+        }
+        seen.add(normalized);
+    }
+
+    if (seen.size === 0) {
+        return ["text"];
+    }
+
+    return Array.from(seen);
+}
+
 interface OpenRouterModelRecord {
     id?: unknown;
     name?: unknown;
@@ -92,7 +112,9 @@ function toModelSummary(value: unknown): ModelSummary | null {
         ),
         promptPricing: toStringOrNull(model.pricing?.prompt),
         completionPricing: toStringOrNull(model.pricing?.completion),
-        inputModalities: toStringArray(model.architecture?.input_modalities),
+        inputModalities: sanitizeInputModalities(
+            toStringArray(model.architecture?.input_modalities)
+        ),
         outputModalities: toStringArray(model.architecture?.output_modalities)
     };
 }

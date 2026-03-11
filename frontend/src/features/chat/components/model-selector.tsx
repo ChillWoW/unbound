@@ -10,8 +10,6 @@ import {
     MagnifyingGlassIcon,
     ChatTextIcon,
     ImageIcon,
-    MicrophoneIcon,
-    FilmStripIcon,
     FileIcon,
     InfoIcon,
     FunnelIcon,
@@ -86,8 +84,6 @@ const MODALITY_ICONS: Record<
 > = {
     text: { icon: ChatTextIcon, label: "Text" },
     image: { icon: ImageIcon, label: "Image" },
-    audio: { icon: MicrophoneIcon, label: "Audio" },
-    video: { icon: FilmStripIcon, label: "Video" },
     file: { icon: FileIcon, label: "File" }
 };
 
@@ -281,7 +277,7 @@ export function ModelSelector({
     );
 
     const allModalities = useMemo(() => {
-        const priority = ["text", "image", "audio", "video", "file"];
+        const priority = ["text", "image", "file"];
         const seen = new Set(
             models.flatMap((m) =>
                 m.inputModalities.map((mod) => mod.toLowerCase())

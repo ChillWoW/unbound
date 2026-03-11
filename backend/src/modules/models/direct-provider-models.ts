@@ -1,5 +1,5 @@
 import type { ProviderType } from "../../lib/provider-registry";
-import type { ModelSummary } from "./models.types";
+import { sanitizeInputModalities, type ModelSummary } from "./models.types";
 
 interface DirectModelDefinition {
     id: string;
@@ -180,7 +180,7 @@ const googleDirectModels: DirectModelDefinition[] = [
         description: "Google's most advanced model to date",
         contextLength: 1_048_576,
         maxOutputTokens: 65_536,
-        inputModalities: ["text", "image", "video", "audio", "file"],
+        inputModalities: ["text", "image", "file"],
         outputModalities: ["text"]
     },
     {
@@ -191,7 +191,7 @@ const googleDirectModels: DirectModelDefinition[] = [
         description: "Google's fastest model for quick responses",
         contextLength: 1_048_576,
         maxOutputTokens: 65_536,
-        inputModalities: ["text", "image", "video", "audio", "file"],
+        inputModalities: ["text", "image", "file"],
         outputModalities: ["text"]
     }
 ];
@@ -248,7 +248,9 @@ export function getDirectProviderModels(
             def.outputPerMillion != null
                 ? perMillionToPerToken(def.outputPerMillion)
                 : null,
-        inputModalities: def.inputModalities ?? ["text"],
+        inputModalities: sanitizeInputModalities(
+            def.inputModalities ?? ["text"]
+        ),
         outputModalities: def.outputModalities ?? ["text"],
         free: def.free
     }));
