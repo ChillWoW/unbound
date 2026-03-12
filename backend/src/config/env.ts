@@ -29,6 +29,11 @@ function getOptionalEnv(name: string): string | null {
     return value ? value : null;
 }
 
+function getPathEnv(name: string, fallback: string): string {
+    const value = process.env[name]?.trim();
+    return value ? value : fallback;
+}
+
 function getHex32ByteEnv(name: string): Buffer {
     const value = getRequiredEnv(name).trim();
 
@@ -59,6 +64,7 @@ export const env = {
     ),
     settingsEncryptionKey: getHex32ByteEnv("SETTINGS_ENCRYPTION_KEY"),
     openrouterTitleApiKey: getOptionalEnv("OPENROUTER_TITLE_API_KEY"),
+    blobStorageRoot: getPathEnv("BLOB_STORAGE_ROOT", "./storage/blobs"),
     emailEnabled: process.env.EMAIL_ENABLED === "true",
     emailFrom: getOptionalEnv("EMAIL_FROM"),
     emailReplyTo: getOptionalEnv("EMAIL_REPLY_TO"),

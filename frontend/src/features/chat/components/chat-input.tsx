@@ -1,4 +1,11 @@
-import { useMemo, useRef, useState, useCallback, type ReactNode } from "react";
+import {
+    useMemo,
+    useRef,
+    useState,
+    useCallback,
+    type ReactNode,
+    type RefObject
+} from "react";
 import { useNavigate } from "@tanstack/react-router";
 import TextareaAutosize from "react-textarea-autosize";
 import {
@@ -46,6 +53,8 @@ function estimateTokens(messages: ConversationMessage[]): number {
                 tokens += Math.ceil(part.text.length / CHARS_PER_TOKEN);
             } else if (part.type === "image") {
                 tokens += IMAGE_TOKEN_ESTIMATE;
+            } else if (part.type === "file") {
+                tokens += Math.ceil((part.size ?? 0) / 4);
             } else if (part.type === "tool-invocation") {
                 tokens += Math.ceil(
                     JSON.stringify(part.args).length / CHARS_PER_TOKEN
@@ -74,6 +83,16 @@ const IMAGE_ACCEPT_STRING = Object.keys(IMAGE_MIME_TYPES).join(",");
 const FILE_ACCEPT_STRING = Object.keys(FILE_MIME_TYPES).join(",");
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
 const MAX_ATTACHMENTS = 10;
+const EMPTY_CONFIGURED_PROVIDERS: ProviderType[] = [];
+const EMPTY_CONVERSATION_MESSAGES: ConversationMessage[] = [];
+const EMPTY_MODELS: ChatModel[] = [];
+
+function collectAcceptedFiles(files: File[]) {
+    const imageFiles = files.filter((file) => IMAGE_MIME_TYPES[file.type]);
+    const fileFiles = files.filter((file) => FILE_MIME_TYPES[file.type]);
+
+    return { imageFiles, fileFiles };
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -233,6 +252,309 @@ function AttachmentChip({
     );
 }
 
+function ModelErrorBanner({
+    isModelsLoading,
+    modelsError,
+    modelsErrorRecovery,
+    onReloadModels
+}: {
+    isModelsLoading: boolean;
+    modelsError: string | null;
+    modelsErrorRecovery: ChatErrorRecovery | null;
+    onReloadModels: () => void;
+}) {
+    const navigate = useNavigate();
+
+    if (!modelsError) {
+        return null;
+    }
+
+    return (
+        <div className="mx-3 mt-3 rounded-md border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs text-red-100">
+            <p>{modelsErrorRecovery?.message ?? modelsError}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+                {modelsErrorRecovery?.action === "open_settings" && (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigate({ to: "/settings" })}
+                    >
+                        Open settings
+                    </Button>
+                )}
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isModelsLoading}
+                    onClick={onReloadModels}
+                >
+                    {isModelsLoading ? "Reloading..." : "Reload models"}
+                </Button>
+            </div>
+        </div>
+    );
+}
+
+function AttachmentPreviewList({
+    attachments,
+    disabled,
+    isSubmitting,
+    onRemove
+}: {
+    attachments: ChatAttachment[];
+    disabled: boolean;
+    isSubmitting: boolean;
+    onRemove: (id: string) => void;
+}) {
+    if (attachments.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="flex flex-wrap gap-2 px-3 pt-3">
+            {attachments.map((attachment) => (
+                <AttachmentChip
+                    key={attachment.id}
+                    attachment={attachment}
+                    onRemove={() => onRemove(attachment.id)}
+                    disabled={disabled || isSubmitting}
+                />
+            ))}
+        </div>
+    );
+}
+
+function ChatComposerTextarea({
+    addFiles,
+    disabled,
+    draft,
+    onSubmit,
+    placeholder,
+    supportsFiles,
+    supportsImages,
+    updateValue
+}: {
+    addFiles: (files: FileList | File[], kind: "image" | "file") => void;
+    disabled: boolean;
+    draft: string;
+    onSubmit: () => void;
+    placeholder: string;
+    supportsFiles: boolean;
+    supportsImages: boolean;
+    updateValue: (value: string) => void;
+}) {
+    return (
+        <div className="px-3 pt-3">
+            <TextareaAutosize
+                className="w-full resize-none bg-transparent text-sm text-white outline-none placeholder:text-dark-200"
+                minRows={1}
+                maxRows={8}
+                disabled={disabled}
+                placeholder={placeholder}
+                value={draft}
+                onChange={(event) => updateValue(event.target.value)}
+                onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                        event.preventDefault();
+                        onSubmit();
+                    }
+                }}
+                onPaste={(event) => {
+                    const items = event.clipboardData?.items;
+                    if (!items) return;
+
+                    const files: File[] = [];
+                    for (const item of Array.from(items)) {
+                        if (item.kind !== "file") continue;
+                        const file = item.getAsFile();
+                        if (file) files.push(file);
+                    }
+
+                    const { imageFiles, fileFiles } = collectAcceptedFiles(files);
+                    if (supportsImages && imageFiles.length > 0) {
+                        addFiles(imageFiles, "image");
+                    }
+                    if (supportsFiles && fileFiles.length > 0) {
+                        addFiles(fileFiles, "file");
+                    }
+                }}
+            />
+        </div>
+    );
+}
+
+function ChatInputToolbar({
+    attachmentsCount,
+    configuredProviders,
+    conversationMessages,
+    disabled,
+    fileInputRef,
+    handleFileInputChange,
+    handleImageInputChange,
+    imageInputRef,
+    isModelSelectDisabled,
+    isSubmitting,
+    isThinkingEnabled,
+    models,
+    onSelectedModelChange,
+    onStop,
+    onThinkingChange,
+    selectedModel,
+    selectedModelId,
+    showContextBadge,
+    supportsFiles,
+    supportsImages,
+    toolbarSlot,
+    hasContent
+}: {
+    attachmentsCount: number;
+    configuredProviders: ProviderType[];
+    conversationMessages: ConversationMessage[];
+    disabled: boolean;
+    fileInputRef: RefObject<HTMLInputElement | null>;
+    handleFileInputChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+    handleImageInputChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+    imageInputRef: RefObject<HTMLInputElement | null>;
+    isModelSelectDisabled: boolean;
+    isSubmitting: boolean;
+    isThinkingEnabled: boolean;
+    models: ChatModel[];
+    onSelectedModelChange?: (modelId: string | null, source?: ProviderType) => void;
+    onStop?: () => void;
+    onThinkingChange?: (enabled: boolean) => void;
+    selectedModel: ChatModel | null;
+    selectedModelId: string | null;
+    showContextBadge: boolean;
+    supportsFiles: boolean;
+    supportsImages: boolean;
+    toolbarSlot?: ReactNode;
+    hasContent: boolean;
+}) {
+    const attachmentsDisabled =
+        disabled || isSubmitting || attachmentsCount >= MAX_ATTACHMENTS;
+
+    return (
+        <div className="flex items-center justify-between gap-4 px-2 pb-2 pt-1">
+            <div className="flex min-w-0 items-center gap-1">
+                <div className="min-w-0">
+                    <ModelSelector
+                        selectedModelId={selectedModelId}
+                        models={models}
+                        configuredProviders={configuredProviders}
+                        onModelSelected={(model) =>
+                            onSelectedModelChange?.(model.id, model.source)
+                        }
+                        disabled={isModelSelectDisabled}
+                        isThinkingEnabled={isThinkingEnabled}
+                    />
+                </div>
+                {onThinkingChange && (
+                    <Tooltip content="Thinking" side="top">
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            className={cn(
+                                "size-8 p-0 hover:bg-dark-700",
+                                isThinkingEnabled
+                                    ? "text-dark-100 hover:text-dark-50"
+                                    : "text-dark-300 hover:text-dark-50"
+                            )}
+                            onClick={() => onThinkingChange(!isThinkingEnabled)}
+                        >
+                            <BrainIcon
+                                className="size-4"
+                                weight={isThinkingEnabled ? "fill" : "bold"}
+                            />
+                        </Button>
+                    </Tooltip>
+                )}
+                {toolbarSlot}
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
+                {showContextBadge ? (
+                    <ContextWindowMeter
+                        model={selectedModel}
+                        estimatedTokenCount={estimateTokens(conversationMessages)}
+                    />
+                ) : null}
+
+                <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept={IMAGE_ACCEPT_STRING}
+                    multiple
+                    className="hidden"
+                    onChange={handleImageInputChange}
+                    disabled={disabled || isSubmitting}
+                />
+
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={FILE_ACCEPT_STRING}
+                    multiple
+                    className="hidden"
+                    onChange={handleFileInputChange}
+                    disabled={disabled || isSubmitting}
+                />
+
+                {supportsImages && (
+                    <Tooltip content="Attach images">
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            className="size-8 p-0 text-dark-200 hover:bg-dark-700 hover:text-dark-50"
+                            disabled={attachmentsDisabled}
+                            onClick={() => imageInputRef.current?.click()}
+                        >
+                            <ImageIcon className="size-4" weight="bold" />
+                        </Button>
+                    </Tooltip>
+                )}
+
+                {supportsFiles && (
+                    <Tooltip content="Attach files">
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            className="size-8 p-0 text-dark-200 hover:bg-dark-700 hover:text-dark-50"
+                            disabled={attachmentsDisabled}
+                            onClick={() => fileInputRef.current?.click()}
+                        >
+                            <PaperclipIcon className="size-4" weight="bold" />
+                        </Button>
+                    </Tooltip>
+                )}
+
+                {isSubmitting && onStop ? (
+                    <Tooltip content="Stop generation">
+                        <Button
+                            type="button"
+                            variant="primary"
+                            className="size-8 p-0"
+                            onClick={onStop}
+                        >
+                            <StopIcon className="size-4" weight="fill" />
+                        </Button>
+                    </Tooltip>
+                ) : (
+                    <Button
+                        type="submit"
+                        variant="primary"
+                        disabled={disabled || isSubmitting || !hasContent}
+                        className="size-8 p-0"
+                    >
+                        <ArrowUpIcon className="size-4" weight="bold" />
+                    </Button>
+                )}
+            </div>
+        </div>
+    );
+}
+
 // ── Chat Input ───────────────────────────────────────────────────────────────
 
 export interface ChatInputProps {
@@ -266,13 +588,13 @@ export interface ChatInputProps {
 
 export function ChatInput({
     className,
-    configuredProviders = [],
-    conversationMessages = [],
+    configuredProviders = EMPTY_CONFIGURED_PROVIDERS,
+    conversationMessages = EMPTY_CONVERSATION_MESSAGES,
     disabled = false,
     isSubmitting = false,
     isModelsLoading = false,
     isThinkingEnabled = false,
-    models = [],
+    models = EMPTY_MODELS,
     modelsError = null,
     modelsErrorRecovery = null,
     onSelectedModelChange,
@@ -286,7 +608,6 @@ export function ChatInput({
     placeholder = "Ask anything, sketch an idea, or start a new thread...",
     selectedModelId = null
 }: ChatInputProps) {
-    const navigate = useNavigate();
     const { loadModels } = useChat();
     const [internalValue, setInternalValue] = useState("");
     const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
@@ -421,9 +742,9 @@ export function ChatInput({
         event.preventDefault();
         setIsDragOver(false);
         if (!disabled && !isSubmitting && event.dataTransfer.files.length > 0) {
-            const files = Array.from(event.dataTransfer.files);
-            const imageFiles = files.filter((f) => IMAGE_MIME_TYPES[f.type]);
-            const fileFiles = files.filter((f) => FILE_MIME_TYPES[f.type]);
+            const { imageFiles, fileFiles } = collectAcceptedFiles(
+                Array.from(event.dataTransfer.files)
+            );
             if (supportsImages && imageFiles.length > 0)
                 addFiles(imageFiles, "image");
             if (supportsFiles && fileFiles.length > 0)
@@ -476,223 +797,61 @@ export function ChatInput({
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
         >
-            {modelsError && (
-                <div className="mx-3 mt-3 rounded-md border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs text-red-100">
-                    <p>{modelsErrorRecovery?.message ?? modelsError}</p>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                        {modelsErrorRecovery?.action === "open_settings" && (
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => navigate({ to: "/settings" })}
-                            >
-                                Open settings
-                            </Button>
-                        )}
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={isModelsLoading}
-                            onClick={() => {
-                                void loadModels().catch(() => undefined);
-                            }}
-                        >
-                            {isModelsLoading ? "Reloading..." : "Reload models"}
-                        </Button>
-                    </div>
-                </div>
-            )}
+            <ModelErrorBanner
+                isModelsLoading={isModelsLoading}
+                modelsError={modelsError}
+                modelsErrorRecovery={modelsErrorRecovery}
+                onReloadModels={() => {
+                    void loadModels().catch(() => undefined);
+                }}
+            />
 
-            {attachments.length > 0 && (
-                <div className="flex flex-wrap gap-2 px-3 pt-3">
-                    {attachments.map((attachment) => (
-                        <AttachmentChip
-                            key={attachment.id}
-                            attachment={attachment}
-                            onRemove={() => removeAttachment(attachment.id)}
-                            disabled={disabled || isSubmitting}
-                        />
-                    ))}
-                </div>
-            )}
+            <AttachmentPreviewList
+                attachments={attachments}
+                disabled={disabled}
+                isSubmitting={isSubmitting}
+                onRemove={removeAttachment}
+            />
 
             {fileError && (
                 <p className="px-3 pt-2 text-xs text-red-400">{fileError}</p>
             )}
 
-            <div className="px-3 pt-3">
-                <TextareaAutosize
-                    className="w-full resize-none bg-transparent text-sm text-white outline-none placeholder:text-dark-200"
-                    minRows={1}
-                    maxRows={8}
-                    disabled={disabled}
-                    placeholder={placeholder}
-                    value={draft}
-                    onChange={(event) => updateValue(event.target.value)}
-                    onKeyDown={(event) => {
-                        if (event.key === "Enter" && !event.shiftKey) {
-                            event.preventDefault();
-                            handleKeySubmit();
-                        }
-                    }}
-                    onPaste={(event) => {
-                        const items = event.clipboardData?.items;
-                        if (!items) return;
+            <ChatComposerTextarea
+                addFiles={addFiles}
+                disabled={disabled}
+                draft={draft}
+                onSubmit={handleKeySubmit}
+                placeholder={placeholder}
+                supportsFiles={supportsFiles}
+                supportsImages={supportsImages}
+                updateValue={updateValue}
+            />
 
-                        const imageFiles: File[] = [];
-                        const fileFiles: File[] = [];
-                        for (const item of Array.from(items)) {
-                            if (item.kind === "file") {
-                                const file = item.getAsFile();
-                                if (!file) continue;
-                                if (IMAGE_MIME_TYPES[file.type])
-                                    imageFiles.push(file);
-                                else if (FILE_MIME_TYPES[file.type])
-                                    fileFiles.push(file);
-                            }
-                        }
-
-                        if (supportsImages && imageFiles.length > 0)
-                            addFiles(imageFiles, "image");
-                        if (supportsFiles && fileFiles.length > 0)
-                            addFiles(fileFiles, "file");
-                    }}
-                />
-            </div>
-
-            <div className="flex items-center justify-between gap-4 px-2 pb-2 pt-1">
-                <div className="flex min-w-0 items-center gap-1">
-                    <div className="min-w-0">
-                        <ModelSelector
-                            selectedModelId={selectedModelId}
-                            models={models}
-                            configuredProviders={configuredProviders}
-                            onModelSelected={(model) =>
-                                onSelectedModelChange?.(model.id, model.source)
-                            }
-                            disabled={isModelSelectDisabled}
-                            isThinkingEnabled={isThinkingEnabled}
-                        />
-                    </div>
-                    {onThinkingChange && (
-                        <Tooltip content="Thinking" side="top">
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                className={cn(
-                                    "size-8 p-0 hover:bg-dark-700",
-                                    isThinkingEnabled
-                                        ? "text-dark-100 hover:text-dark-50"
-                                        : "text-dark-300 hover:text-dark-50"
-                                )}
-                                onClick={() =>
-                                    onThinkingChange(!isThinkingEnabled)
-                                }
-                            >
-                                <BrainIcon
-                                    className="size-4"
-                                    weight={isThinkingEnabled ? "fill" : "bold"}
-                                />
-                            </Button>
-                        </Tooltip>
-                    )}
-                    {toolbarSlot}
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                    {showContextBadge ? (
-                        <ContextWindowMeter
-                            model={selectedModel}
-                            estimatedTokenCount={estimateTokens(
-                                conversationMessages
-                            )}
-                        />
-                    ) : null}
-
-                    <input
-                        ref={imageInputRef}
-                        type="file"
-                        accept={IMAGE_ACCEPT_STRING}
-                        multiple
-                        className="hidden"
-                        onChange={handleImageInputChange}
-                        disabled={disabled || isSubmitting}
-                    />
-
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept={FILE_ACCEPT_STRING}
-                        multiple
-                        className="hidden"
-                        onChange={handleFileInputChange}
-                        disabled={disabled || isSubmitting}
-                    />
-
-                    {supportsImages && (
-                        <Tooltip content="Attach images">
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                className="size-8 p-0 text-dark-200 hover:text-dark-50 hover:bg-dark-700"
-                                disabled={
-                                    disabled ||
-                                    isSubmitting ||
-                                    attachments.length >= MAX_ATTACHMENTS
-                                }
-                                onClick={() => imageInputRef.current?.click()}
-                            >
-                                <ImageIcon className="size-4" weight="bold" />
-                            </Button>
-                        </Tooltip>
-                    )}
-
-                    {supportsFiles && (
-                        <Tooltip content="Attach files">
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                className="size-8 p-0 text-dark-200 hover:text-dark-50 hover:bg-dark-700"
-                                disabled={
-                                    disabled ||
-                                    isSubmitting ||
-                                    attachments.length >= MAX_ATTACHMENTS
-                                }
-                                onClick={() => fileInputRef.current?.click()}
-                            >
-                                <PaperclipIcon
-                                    className="size-4"
-                                    weight="bold"
-                                />
-                            </Button>
-                        </Tooltip>
-                    )}
-
-                    {isSubmitting && onStop ? (
-                        <Tooltip content="Stop generation">
-                            <Button
-                                type="button"
-                                variant="primary"
-                                className="size-8 p-0"
-                                onClick={onStop}
-                            >
-                                <StopIcon className="size-4" weight="fill" />
-                            </Button>
-                        </Tooltip>
-                    ) : (
-                        <Button
-                            type="submit"
-                            variant="primary"
-                            disabled={disabled || isSubmitting || !hasContent}
-                            className="size-8 p-0"
-                        >
-                            <ArrowUpIcon className="size-4" weight="bold" />
-                        </Button>
-                    )}
-                </div>
-            </div>
+            <ChatInputToolbar
+                attachmentsCount={attachments.length}
+                configuredProviders={configuredProviders}
+                conversationMessages={conversationMessages}
+                disabled={disabled}
+                fileInputRef={fileInputRef}
+                handleFileInputChange={handleFileInputChange}
+                handleImageInputChange={handleImageInputChange}
+                imageInputRef={imageInputRef}
+                isModelSelectDisabled={isModelSelectDisabled}
+                isSubmitting={isSubmitting}
+                isThinkingEnabled={isThinkingEnabled}
+                models={models}
+                onSelectedModelChange={onSelectedModelChange}
+                onStop={onStop}
+                onThinkingChange={onThinkingChange}
+                selectedModel={selectedModel}
+                selectedModelId={selectedModelId}
+                showContextBadge={showContextBadge}
+                supportsFiles={supportsFiles}
+                supportsImages={supportsImages}
+                toolbarSlot={toolbarSlot}
+                hasContent={hasContent}
+            />
         </form>
     );
 }

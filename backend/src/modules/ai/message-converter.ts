@@ -4,7 +4,9 @@ import type {
     ToolResultPart,
     UserModelMessage
 } from "ai";
+import { blobStorage } from "../attachments/blob-storage";
 import type {
+    MessageAttachmentRecord,
     MessagePart,
     MessageRecord
 } from "../conversations/conversations.types";
@@ -25,9 +27,12 @@ function describeAttachment(
     return details || part.mimeType;
 }
 
-function createFileContextText(part: Extract<MessagePart, { type: "file" }>) {
+function createFileContextText(
+    part: Extract<MessagePart, { type: "file" }>,
+    attachment: MessageAttachmentRecord | undefined
+) {
     const description = describeAttachment(part);
-    const extractedText = part.extractedText?.trim();
+    const extractedText = attachment?.extractedText?.trim();
 
     if (!extractedText) {
         return `Attached file: ${description}.`;
@@ -50,8 +55,32 @@ function toToolResultOutput(result: unknown): ToolResultPart["output"] {
     };
 }
 
-export function toModelMessages(records: MessageRecord[]): ModelMessage[] {
+export async function toModelMessages(
+    records: MessageRecord[],
+    attachments: MessageAttachmentRecord[]
+): Promise<ModelMessage[]> {
     const result: ModelMessage[] = [];
+    const attachmentsById = new Map(
+        attachments.map((attachment) => [attachment.id, attachment])
+    );
+    const base64Cache = new Map<string, string>();
+
+    async function getAttachmentBase64(attachmentId: string): Promise<string | null> {
+        const attachment = attachmentsById.get(attachmentId);
+
+        if (!attachment) {
+            return null;
+        }
+
+        const cached = base64Cache.get(attachmentId);
+        if (cached) {
+            return cached;
+        }
+
+        const data = await blobStorage.readBase64(attachment.storageKey);
+        base64Cache.set(attachmentId, data);
+        return data;
+    }
 
     for (const record of records) {
         const role = record.role as string;
@@ -59,73 +88,94 @@ export function toModelMessages(records: MessageRecord[]): ModelMessage[] {
 
         if (role === "user") {
             const hasMediaParts = parts.some(
-                (p) => p.type === "image" || p.type === "file"
+                (part) => part.type === "image" || part.type === "file"
             );
 
             if (!hasMediaParts) {
                 const text = parts
-                    .filter((p) => p.type === "text")
-                    .map((p) => p.text)
+                    .filter((part) => part.type === "text")
+                    .map((part) => part.text)
                     .join("\n\n");
 
                 if (text) {
                     result.push({ role: "user", content: text });
                 }
-            } else {
-                const content: Extract<
-                    UserModelMessage["content"],
-                    Array<unknown>
-                > = [];
+                continue;
+            }
 
-                for (const p of parts) {
-                    if (p.type === "text" && p.text) {
-                        content.push({ type: "text", text: p.text });
-                    } else if (p.type === "image") {
-                        content.push({
-                            type: "text",
-                            text: `Attached image: ${describeAttachment(p)}.`
-                        });
+            const content: Extract<
+                UserModelMessage["content"],
+                Array<unknown>
+            > = [];
+
+            for (const part of parts) {
+                if (part.type === "text" && part.text) {
+                    content.push({ type: "text", text: part.text });
+                    continue;
+                }
+
+                if (part.type === "image") {
+                    const imageData = await getAttachmentBase64(part.attachmentId);
+                    content.push({
+                        type: "text",
+                        text: `Attached image: ${describeAttachment(part)}.`
+                    });
+
+                    if (imageData) {
                         content.push({
                             type: "image",
-                            image: p.data,
-                            mediaType: p.mimeType
+                            image: imageData,
+                            mediaType: part.mimeType
                         });
-                    } else if (p.type === "file") {
-                        content.push({
-                            type: "text",
-                            text: createFileContextText(p)
-                        });
+                    }
+
+                    continue;
+                }
+
+                if (part.type === "file") {
+                    const attachment = attachmentsById.get(part.attachmentId);
+                    const fileData = await getAttachmentBase64(part.attachmentId);
+
+                    content.push({
+                        type: "text",
+                        text: createFileContextText(part, attachment)
+                    });
+
+                    if (fileData) {
                         content.push({
                             type: "file",
-                            data: p.data,
-                            mediaType: p.mimeType
+                            data: fileData,
+                            mediaType: part.mimeType
                         });
                     }
                 }
-
-                if (content.length > 0) {
-                    result.push({ role: "user", content });
-                }
             }
-        } else if (role === "assistant") {
-            const textParts = parts.filter((p) => p.type === "text");
-            const toolParts = parts.filter((p) => p.type === "tool-invocation");
+
+            if (content.length > 0) {
+                result.push({ role: "user", content });
+            }
+            continue;
+        }
+
+        if (role === "assistant") {
+            const textParts = parts.filter((part) => part.type === "text");
+            const toolParts = parts.filter((part) => part.type === "tool-invocation");
 
             const content: Extract<
                 AssistantModelMessage["content"],
                 Array<unknown>
             > = [];
 
-            for (const p of textParts) {
-                if (p.text) content.push({ type: "text", text: p.text });
+            for (const part of textParts) {
+                if (part.text) content.push({ type: "text", text: part.text });
             }
 
-            for (const p of toolParts) {
+            for (const part of toolParts) {
                 content.push({
                     type: "tool-call",
-                    toolCallId: p.toolInvocationId,
-                    toolName: p.toolName,
-                    input: p.args
+                    toolCallId: part.toolInvocationId,
+                    toolName: part.toolName,
+                    input: part.args
                 });
             }
 
@@ -136,22 +186,25 @@ export function toModelMessages(records: MessageRecord[]): ModelMessage[] {
             if (toolParts.length > 0) {
                 result.push({
                     role: "tool",
-                    content: toolParts.map((p) => ({
+                    content: toolParts.map((part) => ({
                         type: "tool-result" as const,
-                        toolCallId: p.toolInvocationId,
-                        toolName: p.toolName,
+                        toolCallId: part.toolInvocationId,
+                        toolName: part.toolName,
                         output: toToolResultOutput(
-                            p.state === "result" && p.result !== undefined
-                                ? p.result
+                            part.state === "result" && part.result !== undefined
+                                ? part.result
                                 : { error: "Tool execution failed" }
                         )
                     }))
                 });
             }
-        } else if (role === "system") {
+            continue;
+        }
+
+        if (role === "system") {
             const text = parts
-                .filter((p) => p.type === "text")
-                .map((p) => p.text)
+                .filter((part) => part.type === "text")
+                .map((part) => part.text)
                 .join("\n\n");
 
             if (text) {

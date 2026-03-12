@@ -867,6 +867,12 @@ export const aiService = {
                   conversationId
               );
         const messageLoadDurationMs = Date.now() - messageLoadStartedAt;
+        const attachmentLoadStartedAt = Date.now();
+        const messageAttachmentRecords =
+            await conversationsRepository.listMessageAttachmentsByMessageIds(
+                messageRecords.map((message) => message.id)
+            );
+        const attachmentLoadDurationMs = Date.now() - attachmentLoadStartedAt;
 
         const initialPrompt = getInitialConversationPrompt(
             messageRecords
@@ -883,7 +889,7 @@ export const aiService = {
 
         try {
             const contextStartedAt = Date.now();
-            const contextResult = buildOptimizedContext(
+            const contextResult = await buildOptimizedContext(
                 messageRecords,
                 systemPrompt,
                 {
@@ -893,7 +899,8 @@ export const aiService = {
                     ),
                     thinking
                 },
-                toModelMessages
+                async (records) =>
+                    toModelMessages(records, messageAttachmentRecords)
             );
 
             messagesWithSystemPrompt = contextResult.messages;
@@ -918,7 +925,7 @@ export const aiService = {
 
             messagesWithSystemPrompt = [
                 { role: "system", content: systemPrompt },
-                ...toModelMessages(messageRecords)
+                ...(await toModelMessages(messageRecords, messageAttachmentRecords))
             ];
         }
 
@@ -986,10 +993,12 @@ export const aiService = {
             modelId,
             provider: resolvedProvider,
             messageCount: messageRecords.length,
+            attachmentCount: messageAttachmentRecords.length,
             authDurationMs,
             conversationLookupDurationMs,
             apiKeyLookupDurationMs,
             messageLoadDurationMs,
+            attachmentLoadDurationMs,
             assistantInsertDurationMs,
             durationMs: Date.now() - startedAt
         });

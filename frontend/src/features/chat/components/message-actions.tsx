@@ -6,7 +6,6 @@ import {
     CopyIcon
 } from "@phosphor-icons/react";
 import { Button, Tooltip } from "@/components/ui";
-import { cn } from "@/lib/cn";
 import type { ConversationMessage } from "../types";
 import { getSiblingInfo, type MessageChildrenMap } from "../utils/message-tree";
 

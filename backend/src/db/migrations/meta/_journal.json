@@ -92,6 +92,20 @@
       "when": 1773255964334,
       "tag": "0012_dizzy_captain_cross",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1774195200000,
+      "tag": "0014_rebuild_chat_storage",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1774195800000,
+      "tag": "0015_ensure_user_mcp_servers",
+      "breakpoints": true
     }
   ]
 }

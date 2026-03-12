@@ -16,18 +16,21 @@ export const messages = pgTable(
                     | { type: "text"; text: string }
                     | {
                           type: "image";
-                          data: string;
+                          attachmentId: string;
                           mimeType: string;
                           filename?: string;
                           size?: number;
+                          url?: string;
+                          downloadUrl?: string;
                       }
                     | {
                           type: "file";
-                          data: string;
+                          attachmentId: string;
                           mimeType: string;
                           filename?: string;
                           size?: number;
-                          extractedText?: string | null;
+                          url?: string;
+                          downloadUrl?: string;
                       }
                     | {
                           type: "tool-invocation";

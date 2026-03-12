@@ -14,6 +14,7 @@ import type {
 } from "../types";
 import { BranchNavigator, CopyButton, InlineEditForm } from "./message-actions";
 import {
+    createAttachmentDownloadUrl,
     createAttachmentUrl,
     createMessagePartKey,
     formatBytes,
@@ -24,7 +25,7 @@ import {
 import type { MessageChildrenMap } from "../utils/message-tree";
 
 function MessageFileCard({ part }: { part: FileMessagePart }) {
-    const href = createAttachmentUrl(part);
+    const href = createAttachmentDownloadUrl(part);
     const size = formatBytes(part.size);
 
     return (
@@ -122,16 +123,16 @@ export function UserMessage({
                         {images.length > 0 && (
                             <div className="flex flex-wrap justify-end gap-2.5 mb-1">
                                 {images.map((img, i) => (
-                                    <ImageViewer
-                                        key={createMessagePartKey(
-                                            message.id,
-                                            img,
-                                            i
-                                        )}
-                                        src={createAttachmentUrl(img)}
-                                        alt={getAttachmentName(img)}
-                                        imgClassName="max-h-32 w-auto max-w-full rounded-md"
-                                    />
+                                     <ImageViewer
+                                         key={createMessagePartKey(
+                                             message.id,
+                                             img,
+                                             i
+                                         )}
+                                         src={createAttachmentUrl(img)}
+                                         alt={getAttachmentName(img)}
+                                         imgClassName="max-h-32 w-auto max-w-full rounded-md"
+                                     />
                                 ))}
                             </div>
                         )}

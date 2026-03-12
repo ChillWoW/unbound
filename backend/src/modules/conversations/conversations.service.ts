@@ -3,53 +3,19 @@ import { logger } from "../../lib/logger";
 import { requireVerifiedAuth } from "../../middleware/require-auth";
 import { generationManager } from "../ai/generation-manager";
 import { endSandboxSessionForConversation } from "../ai/sandbox-tools";
+import { blobStorage } from "../attachments/blob-storage";
 import { conversationsRepository } from "./conversations.repository";
 import {
     ConversationError,
     createConversationTitle,
-    createMessageParts,
+    prepareMessagePayload,
     toConversationDetail,
     toConversationSummary,
-    type ConversationReadRecord,
     type MessageRecord
 } from "./conversations.types";
 
 function createCustomId(prefix: string): string {
     return `${prefix}_${randomBytes(10).toString("hex")}`;
-}
-
-function getLatestMessageMap(messages: MessageRecord[]) {
-    const byConversationId = new Map<string, MessageRecord>();
-
-    for (const message of messages) {
-        if (!byConversationId.has(message.conversationId)) {
-            byConversationId.set(message.conversationId, message);
-        }
-    }
-
-    return byConversationId;
-}
-
-function getLatestAssistantMessageMap(messages: MessageRecord[]) {
-    const byConversationId = new Map<string, MessageRecord>();
-
-    for (const message of messages) {
-        if (message.role !== "assistant") {
-            continue;
-        }
-
-        if (!byConversationId.has(message.conversationId)) {
-            byConversationId.set(message.conversationId, message);
-        }
-    }
-
-    return byConversationId;
-}
-
-function getReadStateMap(readStates: ConversationReadRecord[]) {
-    return new Map(
-        readStates.map((readState) => [readState.conversationId, readState])
-    );
 }
 
 const STALE_PENDING_THRESHOLD_MS = 5 * 60 * 1000;
@@ -107,12 +73,10 @@ async function getConversationDetailOrThrow(
     conversationId: string
 ) {
     const startedAt = Date.now();
-    const [conversation, messages, readState] = await Promise.all([
-        conversationsRepository.findConversationByIdForUser(
-            userId,
-            conversationId
-        ),
+    const [conversation, messages, attachments, readState] = await Promise.all([
+        conversationsRepository.findConversationByIdForUser(userId, conversationId),
         conversationsRepository.listMessagesByConversationId(conversationId),
+        conversationsRepository.listMessageAttachmentsByConversationId(conversationId),
         conversationsRepository.findConversationRead(userId, conversationId)
     ]);
 
@@ -126,12 +90,14 @@ async function getConversationDetailOrThrow(
         userId,
         conversationId,
         messageCount: messages.length,
+        attachmentCount: attachments.length,
         durationMs: Date.now() - startedAt
     });
 
     return toConversationDetail({
         conversation,
         messages,
+        attachments,
         readState
     });
 }
@@ -144,26 +110,18 @@ export const conversationsService = {
         const conversationIds = conversationRecords.map(
             (conversation) => conversation.id
         );
-        const [messageRecords, readStates] = await Promise.all([
-            conversationsRepository.listMessagesByConversationIds(
-                conversationIds
-            ),
-            conversationsRepository.listConversationReadsByConversationIds(
+        const readStates =
+            await conversationsRepository.listConversationReadsByConversationIds(
                 user.id,
                 conversationIds
-            )
-        ]);
-        const latestMessageMap = getLatestMessageMap(messageRecords);
-        const latestAssistantMessageMap =
-            getLatestAssistantMessageMap(messageRecords);
-        const readStateMap = getReadStateMap(readStates);
+            );
+        const readStateMap = new Map(
+            readStates.map((readState) => [readState.conversationId, readState])
+        );
 
         return conversationRecords.map((conversation) =>
             toConversationSummary({
                 conversation,
-                latestMessage: latestMessageMap.get(conversation.id) ?? null,
-                latestAssistantMessage:
-                    latestAssistantMessageMap.get(conversation.id) ?? null,
                 readState: readStateMap.get(conversation.id) ?? null
             })
         );
@@ -175,14 +133,22 @@ export const conversationsService = {
         return getConversationDetailOrThrow(user.id, conversationId);
     },
 
-    async createConversation(request: Request, input: { content: string; attachments?: Array<{ data: string; mimeType: string; filename?: string; size?: number }> }) {
+    async createConversation(
+        request: Request,
+        input: {
+            content: string;
+            attachments?: Array<{
+                data: string;
+                mimeType: string;
+                filename?: string;
+                size?: number;
+            }>;
+        }
+    ) {
         const startedAt = Date.now();
         const user = await requireVerifiedAuth(request);
         const partsStartedAt = Date.now();
-        const messageParts = await createMessageParts(
-            input.content,
-            input.attachments
-        );
+        const payload = await prepareMessagePayload(input.content, input.attachments);
         const partsDurationMs = Date.now() - partsStartedAt;
         const title = createConversationTitle(input.content, input.attachments);
 
@@ -194,7 +160,8 @@ export const conversationsService = {
                 titleSource: "prompt",
                 messageId: createCustomId("msg"),
                 messageRole: "user",
-                messageParts,
+                messageParts: payload.parts,
+                messageAttachments: payload.attachments,
                 messageStatus: "complete",
                 messageMetadata: {
                     sentAt: new Date().toISOString()
@@ -206,7 +173,7 @@ export const conversationsService = {
         logger.info("Conversation created", {
             userId: user.id,
             conversationId: conversation.id,
-            attachmentCount: input.attachments?.length ?? 0,
+            attachmentCount: payload.attachments.length,
             messagePartsDurationMs: partsDurationMs,
             durationMs: Date.now() - startedAt
         });
@@ -219,7 +186,12 @@ export const conversationsService = {
         conversationId: string,
         input: {
             content: string;
-            attachments?: Array<{ data: string; mimeType: string; filename?: string; size?: number }>;
+            attachments?: Array<{
+                data: string;
+                mimeType: string;
+                filename?: string;
+                size?: number;
+            }>;
             parentMessageId?: string | null;
         }
     ) {
@@ -236,17 +208,15 @@ export const conversationsService = {
         }
 
         const partsStartedAt = Date.now();
-        const messageParts = await createMessageParts(
-            input.content,
-            input.attachments
-        );
+        const payload = await prepareMessagePayload(input.content, input.attachments);
         const partsDurationMs = Date.now() - partsStartedAt;
 
         const result = await conversationsRepository.appendMessageToConversation({
             conversationId,
             messageId: createCustomId("msg"),
             messageRole: "user",
-            messageParts,
+            messageParts: payload.parts,
+            messageAttachments: payload.attachments,
             messageStatus: "complete",
             messageMetadata: {
                 sentAt: new Date().toISOString()
@@ -260,7 +230,7 @@ export const conversationsService = {
             userId: user.id,
             conversationId,
             messageId: result.message.id,
-            attachmentCount: input.attachments?.length ?? 0,
+            attachmentCount: payload.attachments.length,
             messagePartsDurationMs: partsDurationMs,
             durationMs: Date.now() - startedAt
         });
@@ -274,7 +244,12 @@ export const conversationsService = {
         messageId: string,
         input: {
             content: string;
-            attachments?: Array<{ data: string; mimeType: string; filename?: string; size?: number }>;
+            attachments?: Array<{
+                data: string;
+                mimeType: string;
+                filename?: string;
+                size?: number;
+            }>;
         }
     ) {
         const startedAt = Date.now();
@@ -303,17 +278,15 @@ export const conversationsService = {
         }
 
         const partsStartedAt = Date.now();
-        const messageParts = await createMessageParts(
-            input.content,
-            input.attachments
-        );
+        const payload = await prepareMessagePayload(input.content, input.attachments);
         const partsDurationMs = Date.now() - partsStartedAt;
 
         const result = await conversationsRepository.appendMessageToConversation({
             conversationId,
             messageId: createCustomId("msg"),
             messageRole: "user",
-            messageParts,
+            messageParts: payload.parts,
+            messageAttachments: payload.attachments,
             messageStatus: "complete",
             messageMetadata: {
                 sentAt: new Date().toISOString()
@@ -328,7 +301,7 @@ export const conversationsService = {
             conversationId,
             originalMessageId: messageId,
             newMessageId: result.message.id,
-            attachmentCount: input.attachments?.length ?? 0,
+            attachmentCount: payload.attachments.length,
             messagePartsDurationMs: partsDurationMs,
             durationMs: Date.now() - startedAt
         });
@@ -423,6 +396,10 @@ export const conversationsService = {
 
     async deleteConversation(request: Request, conversationId: string) {
         const user = await requireVerifiedAuth(request);
+        const attachments =
+            await conversationsRepository.listMessageAttachmentsByConversationId(
+                conversationId
+            );
 
         const deleted = await conversationsRepository.deleteConversationByIdForUser(
             user.id,
@@ -437,6 +414,9 @@ export const conversationsService = {
             generationManager.fail(conversationId, "Conversation deleted.");
         }
 
+        await Promise.allSettled(
+            attachments.map((attachment) => blobStorage.delete(attachment.storageKey))
+        );
         await endSandboxSessionForConversation(conversationId, user.id);
 
         return {

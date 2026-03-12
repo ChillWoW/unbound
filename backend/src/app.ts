@@ -6,6 +6,7 @@ import { conversationsRoutes } from "./modules/conversations/conversations.route
 import { modelsRoutes } from "./modules/models/models.routes";
 import { settingsRoutes } from "./modules/settings/settings.routes";
 import { aiRoutes } from "./modules/ai/ai.routes";
+import { attachmentsRoutes } from "./modules/attachments/attachments.routes";
 import { todosRoutes } from "./modules/todos/todos.routes";
 import { memoryRoutes } from "./modules/memory/memory.routes";
 import { mcpRoutes } from "./modules/mcp/mcp.routes";
@@ -57,4 +58,5 @@ export const app = new Elysia()
     .use(mcpRoutes)
     .use(memoryRoutes)
     .use(todosRoutes)
+    .use(attachmentsRoutes)
     .use(aiRoutes);

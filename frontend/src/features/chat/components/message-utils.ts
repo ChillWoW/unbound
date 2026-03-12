@@ -5,6 +5,7 @@ import type {
     MessagePart,
     ToolInvocationPart
 } from "../types";
+import { API_BASE_URL } from "@/lib/api";
 
 export const TODO_TOOLS = new Set([
     "todoWrite",
@@ -159,7 +160,33 @@ export function formatBytes(bytes?: number): string | null {
 export function createAttachmentUrl(
     part: ImageMessagePart | FileMessagePart
 ): string {
-    return `data:${part.mimeType};base64,${part.data}`;
+    const value = part.url ?? part.downloadUrl ?? "";
+
+    if (!value) {
+        return "";
+    }
+
+    try {
+        return new URL(value, API_BASE_URL).toString();
+    } catch {
+        return value;
+    }
+}
+
+export function createAttachmentDownloadUrl(
+    part: ImageMessagePart | FileMessagePart
+): string {
+    const value = part.downloadUrl ?? part.url ?? "";
+
+    if (!value) {
+        return "";
+    }
+
+    try {
+        return new URL(value, API_BASE_URL).toString();
+    } catch {
+        return value;
+    }
 }
 
 export function getAttachmentName(

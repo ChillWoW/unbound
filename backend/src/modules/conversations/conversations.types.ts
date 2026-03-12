@@ -1,14 +1,23 @@
+import { randomBytes } from "node:crypto";
 import type { InferSelectModel } from "drizzle-orm";
-import { conversationReads, conversations, messages } from "../../db/schema";
+import {
+    conversationReads,
+    conversations,
+    messageAttachments,
+    messages
+} from "../../db/schema";
 import { logger } from "../../lib/logger";
+import { blobStorage } from "../attachments/blob-storage";
 import { extractDocumentText } from "./document-parser";
 
 export type ConversationRecord = InferSelectModel<typeof conversations>;
 export type ConversationReadRecord = InferSelectModel<typeof conversationReads>;
 export type MessageRecord = InferSelectModel<typeof messages>;
+export type MessageAttachmentRecord = InferSelectModel<typeof messageAttachments>;
 
 export type MessageRole = "user" | "assistant" | "system" | "tool";
 export type MessageStatus = "pending" | "complete" | "failed";
+export type MessageAttachmentKind = "image" | "file";
 
 export interface TextMessagePart {
     type: "text";
@@ -17,19 +26,22 @@ export interface TextMessagePart {
 
 export interface ImageMessagePart {
     type: "image";
-    data: string; // base64
+    attachmentId: string;
     mimeType: string;
     filename?: string;
     size?: number;
+    url?: string;
+    downloadUrl?: string;
 }
 
 export interface FileMessagePart {
     type: "file";
-    data: string; // base64
+    attachmentId: string;
     mimeType: string;
     filename?: string;
     size?: number;
-    extractedText?: string | null;
+    url?: string;
+    downloadUrl?: string;
 }
 
 export interface MessageAttachmentInput {
@@ -37,6 +49,17 @@ export interface MessageAttachmentInput {
     mimeType: string;
     filename?: string;
     size?: number;
+}
+
+export interface PreparedMessageAttachment {
+    id: string;
+    kind: MessageAttachmentKind;
+    storageKey: string;
+    mimeType: string;
+    filename: string;
+    size: number;
+    sha256: string;
+    extractedText?: string | null;
 }
 
 export interface ToolInvocationPart {
@@ -102,6 +125,11 @@ export interface ConversationDetail extends ConversationSummary {
     messages: ConversationMessage[];
 }
 
+export interface PreparedMessagePayload {
+    parts: MessagePart[];
+    attachments: PreparedMessageAttachment[];
+}
+
 export class ConversationError extends Error {
     readonly status: number;
 
@@ -110,6 +138,10 @@ export class ConversationError extends Error {
         this.name = "ConversationError";
         this.status = status;
     }
+}
+
+function createAttachmentId(): string {
+    return `att_${randomBytes(10).toString("hex")}`;
 }
 
 function normalizeWhitespace(value: string): string {
@@ -161,26 +193,45 @@ function getAttachmentSize(input: MessageAttachmentInput, data: string): number 
     return size;
 }
 
-async function createAttachmentPart(
+async function prepareAttachment(
     attachment: MessageAttachmentInput,
     index: number
-): Promise<ImageMessagePart | FileMessagePart> {
+): Promise<{
+    part: ImageMessagePart | FileMessagePart;
+    record: PreparedMessageAttachment;
+}> {
     const mimeType = attachment.mimeType.trim();
 
     if (!mimeType) {
         throw new ConversationError(400, "Attachment mime type is required.");
     }
 
+    const attachmentId = createAttachmentId();
     const size = getAttachmentSize(attachment, attachment.data);
     const filename = clampFilename(attachment.filename, index);
+    const stored = await blobStorage.saveBase64({
+        data: attachment.data,
+        attachmentId
+    });
 
     if (IMAGE_MIME_TYPES.has(mimeType)) {
         return {
-            type: "image",
-            data: attachment.data,
-            mimeType,
-            filename,
-            size
+            part: {
+                type: "image",
+                attachmentId,
+                mimeType,
+                filename,
+                size
+            },
+            record: {
+                id: attachmentId,
+                kind: "image",
+                storageKey: stored.storageKey,
+                mimeType,
+                filename,
+                size,
+                sha256: stored.sha256
+            }
         };
     }
 
@@ -191,12 +242,43 @@ async function createAttachmentPart(
     );
 
     return {
-        type: "file",
-        data: attachment.data,
-        mimeType,
-        filename,
-        size,
-        extractedText
+        part: {
+            type: "file",
+            attachmentId,
+            mimeType,
+            filename,
+            size
+        },
+        record: {
+            id: attachmentId,
+            kind: "file",
+            storageKey: stored.storageKey,
+            mimeType,
+            filename,
+            size,
+            sha256: stored.sha256,
+            extractedText
+        }
+    };
+}
+
+function hydrateAttachmentPart(
+    part: ImageMessagePart | FileMessagePart,
+    attachmentMap: Map<string, MessageAttachmentRecord>
+): ImageMessagePart | FileMessagePart {
+    const attachment = attachmentMap.get(part.attachmentId);
+
+    if (!attachment) {
+        return part;
+    }
+
+    return {
+        ...part,
+        mimeType: attachment.mimeType,
+        filename: attachment.filename,
+        size: attachment.size,
+        url: blobStorage.resolvePublicPath(attachment.id, false),
+        downloadUrl: blobStorage.resolvePublicPath(attachment.id, true)
     };
 }
 
@@ -221,12 +303,13 @@ export function createConversationTitle(
     return `${normalized.slice(0, 57).trimEnd()}...`;
 }
 
-export async function createMessageParts(
+export async function prepareMessagePayload(
     content: string,
     attachments?: MessageAttachmentInput[]
-): Promise<MessagePart[]> {
+): Promise<PreparedMessagePayload> {
     const startedAt = Date.now();
     const parts: MessagePart[] = [];
+    const preparedAttachments: PreparedMessageAttachment[] = [];
     const normalized = content.trim();
 
     if (normalized) {
@@ -235,33 +318,34 @@ export async function createMessageParts(
 
     const attachmentInputs = attachments ?? [];
 
-    if (attachmentInputs.length > 0) {
-        const attachmentParts: MessagePart[] = [];
-
-        for (const [index, attachment] of attachmentInputs.entries()) {
-            attachmentParts.push(await createAttachmentPart(attachment, index));
-        }
-
-        parts.push(...attachmentParts);
+    for (const [index, attachment] of attachmentInputs.entries()) {
+        const prepared = await prepareAttachment(attachment, index);
+        parts.push(prepared.part);
+        preparedAttachments.push(prepared.record);
     }
 
     if (parts.length === 0) {
         throw new ConversationError(400, "Message content is required.");
     }
 
-    if (attachmentInputs.length > 0) {
+    if (preparedAttachments.length > 0) {
         logger.info("Message attachments prepared", {
-            attachmentCount: attachmentInputs.length,
+            attachmentCount: preparedAttachments.length,
+            storageRoot: blobStorage.rootPath(),
             durationMs: Date.now() - startedAt
         });
     }
 
-    return parts;
+    return {
+        parts,
+        attachments: preparedAttachments
+    };
 }
 
-/** @deprecated Use createMessageParts instead */
+/** @deprecated Use prepareMessagePayload instead */
 export async function createTextMessageParts(content: string): Promise<MessagePart[]> {
-    return createMessageParts(content);
+    const payload = await prepareMessagePayload(content);
+    return payload.parts;
 }
 
 export function getMessagePreview(parts: MessagePart[]): string {
@@ -285,13 +369,20 @@ export function getMessagePreview(parts: MessagePart[]): string {
 }
 
 export function toConversationMessage(
-    message: MessageRecord
+    message: MessageRecord,
+    attachmentMap: Map<string, MessageAttachmentRecord>
 ): ConversationMessage {
     return {
         id: message.id,
         parentMessageId: message.parentMessageId ?? null,
         role: message.role as MessageRole,
-        parts: message.parts,
+        parts: (message.parts as MessagePart[]).map((part) => {
+            if (part.type === "image" || part.type === "file") {
+                return hydrateAttachmentPart(part, attachmentMap);
+            }
+
+            return part;
+        }),
         status: message.status as MessageStatus,
         createdAt: message.createdAt.toISOString(),
         metadata: message.metadata ?? null
@@ -300,15 +391,12 @@ export function toConversationMessage(
 
 export function toConversationSummary(input: {
     conversation: ConversationRecord;
-    latestMessage: MessageRecord | null;
-    latestAssistantMessage: MessageRecord | null;
     readState: ConversationReadRecord | null;
 }): ConversationSummary {
-    const { conversation, latestMessage, latestAssistantMessage, readState } =
-        input;
+    const { conversation, readState } = input;
     const lastReadAssistantMessageId =
         readState?.lastReadAssistantMessageId ?? null;
-    const latestAssistantMessageId = latestAssistantMessage?.id ?? null;
+    const latestAssistantMessageId = conversation.latestAssistantMessageId ?? null;
 
     return {
         id: conversation.id,
@@ -318,12 +406,8 @@ export function toConversationSummary(input: {
         createdAt: conversation.createdAt.toISOString(),
         updatedAt: conversation.updatedAt.toISOString(),
         lastMessageAt: conversation.lastMessageAt.toISOString(),
-        lastMessagePreview: latestMessage
-            ? getMessagePreview(latestMessage.parts)
-            : "",
-        lastMessageRole: latestMessage
-            ? (latestMessage.role as MessageRole)
-            : null,
+        lastMessagePreview: conversation.lastMessagePreview,
+        lastMessageRole: (conversation.lastMessageRole as MessageRole | null) ?? null,
         latestAssistantMessageId,
         lastReadAssistantMessageId,
         hasUnreadAssistantReply:
@@ -335,21 +419,20 @@ export function toConversationSummary(input: {
 export function toConversationDetail(input: {
     conversation: ConversationRecord;
     messages: MessageRecord[];
+    attachments: MessageAttachmentRecord[];
     readState: ConversationReadRecord | null;
 }): ConversationDetail {
-    const latestMessage = input.messages.at(-1) ?? null;
-    const latestAssistantMessage =
-        [...input.messages]
-            .reverse()
-            .find((message) => message.role === "assistant") ?? null;
+    const attachmentMap = new Map(
+        input.attachments.map((attachment) => [attachment.id, attachment])
+    );
 
     return {
         ...toConversationSummary({
             conversation: input.conversation,
-            latestMessage,
-            latestAssistantMessage,
             readState: input.readState
         }),
-        messages: input.messages.map(toConversationMessage)
+        messages: input.messages.map((message) =>
+            toConversationMessage(message, attachmentMap)
+        )
     };
 }

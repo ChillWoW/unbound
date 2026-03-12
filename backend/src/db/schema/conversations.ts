@@ -26,7 +26,13 @@ export const conversations = pgTable(
             .notNull(),
         lastMessageAt: timestamp("last_message_at", { withTimezone: true })
             .defaultNow()
-            .notNull()
+            .notNull(),
+        latestMessageId: text("latest_message_id"),
+        lastMessagePreview: text("last_message_preview")
+            .default("")
+            .notNull(),
+        lastMessageRole: text("last_message_role"),
+        latestAssistantMessageId: text("latest_assistant_message_id")
     },
     (table) => ({
         userLastMessageAtIndex: index(

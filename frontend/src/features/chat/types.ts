@@ -7,19 +7,22 @@ export interface TextMessagePart {
 
 export interface ImageMessagePart {
     type: "image";
-    data: string; // base64
+    attachmentId: string;
     mimeType: string;
     filename?: string;
     size?: number;
+    url?: string;
+    downloadUrl?: string;
 }
 
 export interface FileMessagePart {
     type: "file";
-    data: string; // base64
+    attachmentId: string;
     mimeType: string;
     filename?: string;
     size?: number;
-    extractedText?: string | null;
+    url?: string;
+    downloadUrl?: string;
 }
 
 export interface AttachmentPayload {

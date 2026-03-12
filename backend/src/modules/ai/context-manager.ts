@@ -329,12 +329,12 @@ function applyTokenBudget(
  *  4. Convert to ModelMessage[] via the caller-supplied converter
  *  5. Estimate tokens and apply a sliding window to fit the budget
  */
-export function buildOptimizedContext(
+export async function buildOptimizedContext(
     records: MessageRecord[],
     systemPrompt: string,
     config: ContextConfig,
-    toModelMessages: (records: MessageRecord[]) => ModelMessage[]
-): ContextResult {
+    toModelMessages: (records: MessageRecord[]) => Promise<ModelMessage[]>
+): Promise<ContextResult> {
     const recentWindow = config.recentWindowSize ?? DEFAULT_RECENT_WINDOW;
     const mediaRetention =
         config.mediaRetentionWindow ?? DEFAULT_MEDIA_RETENTION;
@@ -352,7 +352,7 @@ export function buildOptimizedContext(
     processed = compressOldTools(processed, recentWindow);
 
     // Stage 4 – convert to model messages
-    const modelMessages = toModelMessages(processed);
+    const modelMessages = await toModelMessages(processed);
 
     // Stage 5 – token budget + sliding window
     const systemMessage: ModelMessage = {

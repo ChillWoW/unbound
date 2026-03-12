@@ -1,14 +1,39 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "../../db/client";
-import { conversationReads, conversations, messages } from "../../db/schema";
+import {
+    conversationReads,
+    conversations,
+    messageAttachments,
+    messages
+} from "../../db/schema";
 import type {
     ConversationReadRecord,
-    ConversationRecord,
+    MessageAttachmentRecord,
     MessagePart,
     MessageRecord,
     MessageRole,
-    MessageStatus
+    MessageStatus,
+    PreparedMessageAttachment
 } from "./conversations.types";
+import { getMessagePreview } from "./conversations.types";
+
+function buildConversationMessageSet(input: {
+    messageId: string;
+    role: MessageRole;
+    parts: MessagePart[];
+    now: Date;
+}) {
+    return {
+        updatedAt: input.now,
+        lastMessageAt: input.now,
+        latestMessageId: input.messageId,
+        lastMessagePreview: getMessagePreview(input.parts),
+        lastMessageRole: input.role,
+        ...(input.role === "assistant"
+            ? { latestAssistantMessageId: input.messageId }
+            : {})
+    };
+}
 
 export const conversationsRepository = {
     async listConversationsByUserId(userId: string) {
@@ -46,16 +71,59 @@ export const conversationsRepository = {
             .orderBy(messages.createdAt);
     },
 
-    async listMessagesByConversationIds(conversationIds: string[]) {
-        if (conversationIds.length === 0) {
-            return [] as MessageRecord[];
+    async listMessageAttachmentsByConversationId(
+        conversationId: string
+    ): Promise<MessageAttachmentRecord[]> {
+        return db
+            .select()
+            .from(messageAttachments)
+            .where(eq(messageAttachments.conversationId, conversationId))
+            .orderBy(messageAttachments.createdAt);
+    },
+
+    async listMessageAttachmentsByMessageIds(
+        messageIds: string[]
+    ): Promise<MessageAttachmentRecord[]> {
+        if (messageIds.length === 0) {
+            return [];
         }
 
         return db
             .select()
-            .from(messages)
-            .where(inArray(messages.conversationId, conversationIds))
-            .orderBy(desc(messages.createdAt));
+            .from(messageAttachments)
+            .where(inArray(messageAttachments.messageId, messageIds))
+            .orderBy(messageAttachments.createdAt);
+    },
+
+    async findAttachmentByIdForUser(userId: string, attachmentId: string) {
+        const [attachment] = await db
+            .select({
+                id: messageAttachments.id,
+                conversationId: messageAttachments.conversationId,
+                messageId: messageAttachments.messageId,
+                kind: messageAttachments.kind,
+                storageKey: messageAttachments.storageKey,
+                mimeType: messageAttachments.mimeType,
+                filename: messageAttachments.filename,
+                size: messageAttachments.size,
+                sha256: messageAttachments.sha256,
+                extractedText: messageAttachments.extractedText,
+                createdAt: messageAttachments.createdAt
+            })
+            .from(messageAttachments)
+            .innerJoin(
+                conversations,
+                eq(messageAttachments.conversationId, conversations.id)
+            )
+            .where(
+                and(
+                    eq(messageAttachments.id, attachmentId),
+                    eq(conversations.userId, userId)
+                )
+            )
+            .limit(1);
+
+        return attachment ?? null;
     },
 
     async findConversationRead(userId: string, conversationId: string) {
@@ -102,6 +170,7 @@ export const conversationsRepository = {
         messageParts: MessagePart[];
         messageStatus: MessageStatus;
         messageMetadata?: Record<string, unknown> | null;
+        messageAttachments?: PreparedMessageAttachment[];
         parentMessageId?: string | null;
     }) {
         return db.transaction(async (tx) => {
@@ -115,7 +184,12 @@ export const conversationsRepository = {
                     titleSource: input.titleSource,
                     createdAt: now,
                     updatedAt: now,
-                    lastMessageAt: now
+                    lastMessageAt: now,
+                    latestMessageId: input.messageId,
+                    lastMessagePreview: getMessagePreview(input.messageParts),
+                    lastMessageRole: input.messageRole,
+                    latestAssistantMessageId:
+                        input.messageRole === "assistant" ? input.messageId : null
                 })
                 .returning();
 
@@ -132,6 +206,24 @@ export const conversationsRepository = {
                     createdAt: now
                 })
                 .returning();
+
+            if ((input.messageAttachments?.length ?? 0) > 0) {
+                await tx.insert(messageAttachments).values(
+                    (input.messageAttachments ?? []).map((attachment) => ({
+                        id: attachment.id,
+                        conversationId: input.conversationId,
+                        messageId: input.messageId,
+                        kind: attachment.kind,
+                        storageKey: attachment.storageKey,
+                        mimeType: attachment.mimeType,
+                        filename: attachment.filename,
+                        size: attachment.size,
+                        sha256: attachment.sha256,
+                        extractedText: attachment.extractedText ?? null,
+                        createdAt: now
+                    }))
+                );
+            }
 
             if (!conversation || !message) {
                 throw new Error("Failed to create conversation.");
@@ -148,6 +240,7 @@ export const conversationsRepository = {
         messageParts: MessagePart[];
         messageStatus: MessageStatus;
         messageMetadata?: Record<string, unknown> | null;
+        messageAttachments?: PreparedMessageAttachment[];
         parentMessageId?: string | null;
     }) {
         return db.transaction(async (tx) => {
@@ -166,12 +259,34 @@ export const conversationsRepository = {
                 })
                 .returning();
 
+            if ((input.messageAttachments?.length ?? 0) > 0) {
+                await tx.insert(messageAttachments).values(
+                    (input.messageAttachments ?? []).map((attachment) => ({
+                        id: attachment.id,
+                        conversationId: input.conversationId,
+                        messageId: input.messageId,
+                        kind: attachment.kind,
+                        storageKey: attachment.storageKey,
+                        mimeType: attachment.mimeType,
+                        filename: attachment.filename,
+                        size: attachment.size,
+                        sha256: attachment.sha256,
+                        extractedText: attachment.extractedText ?? null,
+                        createdAt: now
+                    }))
+                );
+            }
+
             const [conversation] = await tx
                 .update(conversations)
-                .set({
-                    updatedAt: now,
-                    lastMessageAt: now
-                })
+                .set(
+                    buildConversationMessageSet({
+                        messageId: input.messageId,
+                        role: input.messageRole,
+                        parts: input.messageParts,
+                        now
+                    })
+                )
                 .where(eq(conversations.id, input.conversationId))
                 .returning();
 
@@ -207,7 +322,7 @@ export const conversationsRepository = {
             .from(messages)
             .where(eq(messages.conversationId, conversationId));
 
-        const byId = new Map(allMessages.map((m) => [m.id, m]));
+        const byId = new Map(allMessages.map((message) => [message.id, message]));
         const chain: MessageRecord[] = [];
         let current = byId.get(messageId);
 
@@ -237,13 +352,41 @@ export const conversationsRepository = {
 
         if (Object.keys(set).length === 0) return null;
 
-        const [updated] = await db
-            .update(messages)
-            .set(set)
-            .where(eq(messages.id, messageId))
-            .returning();
+        return db.transaction(async (tx) => {
+            const [updated] = await tx
+                .update(messages)
+                .set(set)
+                .where(eq(messages.id, messageId))
+                .returning();
 
-        return updated ?? null;
+            if (!updated) {
+                return null;
+            }
+
+            if (input.parts !== undefined) {
+                const [conversation] = await tx
+                    .select()
+                    .from(conversations)
+                    .where(eq(conversations.id, updated.conversationId))
+                    .limit(1);
+
+                if (conversation && conversation.latestMessageId === updated.id) {
+                    await tx
+                        .update(conversations)
+                        .set({
+                            updatedAt: new Date(),
+                            lastMessagePreview: getMessagePreview(updated.parts as MessagePart[]),
+                            lastMessageRole: updated.role,
+                            ...(updated.role === "assistant"
+                                ? { latestAssistantMessageId: updated.id }
+                                : {})
+                        })
+                        .where(eq(conversations.id, updated.conversationId));
+                }
+            }
+
+            return updated;
+        });
     },
 
     async upsertConversationRead(input: {
