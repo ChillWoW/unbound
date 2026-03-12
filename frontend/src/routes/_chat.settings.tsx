@@ -57,35 +57,35 @@ const PROVIDERS: ProviderConfig[] = [
     {
         id: "openrouter",
         label: "OpenRouter",
-        description: "Access hundreds of models through a single API",
+        description: "Use one API key to access models across many providers",
         placeholder: "sk-or-v1-...",
         icon: OpenRouter
     },
     {
         id: "openai",
         label: "OpenAI",
-        description: "GPT-4o, o3 and other OpenAI models",
+        description: "GPT-5.4, GPT-5.3 Codex, o4 Mini, GPT-4.1, and more",
         placeholder: "sk-...",
         icon: OpenAI
     },
     {
         id: "anthropic",
         label: "Anthropic",
-        description: "Claude Sonnet, Opus and Haiku models",
+        description: "Claude Opus, Sonnet, and Haiku models",
         placeholder: "sk-ant-...",
         icon: Anthropic
     },
     {
         id: "google",
         label: "Google",
-        description: "Gemini Pro, Flash and other Google models",
+        description: "Gemini 3.1 Pro and Flash Lite models",
         placeholder: "AIza...",
         icon: Google
     },
     {
         id: "kimi",
         label: "Kimi",
-        description: "Kimi Code models through Kimi's coding API",
+        description: "Kimi K2.5 and K2 Thinking models",
         placeholder: "sk-kimi-...",
         icon: Moonshot
     }
@@ -297,8 +297,8 @@ function SettingsPage() {
                             Settings
                         </h1>
                         <p className="text-sm text-dark-200">
-                            Manage provider access, durable memory, and MCP tool
-                            integrations.
+                            Add provider API keys, tune memory behavior, and
+                            manage MCP tool connections.
                         </p>
                     </div>
 
@@ -348,6 +348,11 @@ function SettingsPage() {
 
                 {activeTab === "api-keys" ? (
                     <>
+                        <div className="mb-4 rounded-md border border-dark-600 bg-dark-900/60 px-4 py-3 text-sm text-dark-200 sm:px-6">
+                            Connect the providers you want to use in chat. Once
+                            a key is saved, its models become available in the
+                            model picker.
+                        </div>
                         <div className="rounded-md border border-dark-600 bg-dark-900 px-4 sm:px-6">
                             {PROVIDERS.map((config) => (
                                 <ProviderRow
