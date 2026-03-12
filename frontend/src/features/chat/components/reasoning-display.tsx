@@ -52,25 +52,21 @@ export function ReasoningDisplay({
             <button
                 type="button"
                 onClick={() => setExpanded(!expanded)}
-                className="flex items-center gap-1.5 text-xs"
+                className={cn(
+                    "flex items-center gap-1.5 text-xs text-dark-200 transition-colors",
+                    !isStreaming && "hover:text-dark-50"
+                )}
             >
                 <BrainIcon
-                    className="size-3.5 shrink-0 text-dark-200"
+                    className="size-3.5 shrink-0"
                     weight="fill"
                 />
-                <span
-                    className={cn(
-                        "font-medium transition-colors",
-                        isStreaming
-                            ? "wave-text"
-                            : "text-dark-200 hover:text-dark-50"
-                    )}
-                >
+                <span className={cn("font-medium", isStreaming && "wave-text")}>
                     Thinking
                 </span>
                 <CaretRightIcon
                     className={cn(
-                        "size-3 text-dark-200 transition-transform",
+                        "size-3 transition-transform",
                         expanded && "rotate-90"
                     )}
                     weight="bold"

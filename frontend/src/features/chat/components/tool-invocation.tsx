@@ -146,21 +146,19 @@ function SandboxToolDisplay({ part }: { part: ToolInvocationPart }) {
             <button
                 type="button"
                 onClick={() => canExpand && setExpanded((v) => !v)}
-                className="flex items-center gap-1.5 text-xs"
+                className={cn(
+                    "flex items-center gap-1.5 text-xs transition-colors",
+                    isPending
+                        ? "text-dark-200"
+                        : tone === "danger"
+                          ? "text-red-300"
+                          : tone === "warning"
+                            ? "text-amber-200"
+                            : "text-dark-200 hover:text-dark-50"
+                )}
             >
-                <ToolCallIcon toolName={part.toolName} className="text-dark-200" />
-                <span
-                    className={cn(
-                        "font-medium transition-colors",
-                        isPending
-                            ? "wave-text"
-                            : tone === "danger"
-                              ? "text-red-300"
-                              : tone === "warning"
-                                ? "text-amber-200"
-                                : "text-dark-200 hover:text-dark-50"
-                    )}
-                >
+                <ToolCallIcon toolName={part.toolName} />
+                <span className={cn("font-medium", isPending && "wave-text")}>
                     {label}
                 </span>
                 {duration && !isPending ? (
@@ -172,7 +170,7 @@ function SandboxToolDisplay({ part }: { part: ToolInvocationPart }) {
                 {canExpand ? (
                     <CaretRightIcon
                         className={cn(
-                            "size-2.5 text-dark-300 transition-transform",
+                            "size-2.5 transition-transform",
                             expanded && "rotate-90"
                         )}
                         weight="bold"
@@ -221,27 +219,18 @@ export function ToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
     if (isMemoryTool) {
         return (
             <div className="my-1.5">
-                <span className="flex items-center gap-1.5 text-xs">
-                    <ToolCallIcon
-                        toolName={part.toolName}
-                        className={cn(
-                            isPending
-                                ? "wave-text"
-                                : isErrored
-                                  ? "text-red-300"
-                                  : "text-dark-200"
-                        )}
-                    />
-                    <span
-                        className={cn(
-                            "font-medium transition-colors",
-                            isPending
-                                ? "wave-text"
-                                : isErrored
-                                  ? "text-red-300"
-                                  : "text-dark-200 hover:text-dark-50"
-                        )}
-                    >
+                <span
+                    className={cn(
+                        "flex items-center gap-1.5 text-xs transition-colors",
+                        isPending
+                            ? "text-dark-200"
+                            : isErrored
+                              ? "text-red-300"
+                              : "text-dark-200 hover:text-dark-50"
+                    )}
+                >
+                    <ToolCallIcon toolName={part.toolName} className={cn(isPending && "wave-text")} />
+                    <span className={cn("font-medium", isPending && "wave-text")}>
                         {label}
                     </span>
                 </span>
@@ -263,18 +252,13 @@ export function ToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
                     <button
                         type="button"
                         onClick={() => setExpanded(!expanded)}
-                        className="flex items-center gap-1.5 text-xs"
+                        className="flex items-center gap-1.5 text-xs text-dark-200 transition-colors hover:text-dark-50"
                     >
-                        <ToolCallIcon
-                            toolName={part.toolName}
-                            className="text-dark-200"
-                        />
-                        <span className="font-medium text-dark-200 hover:text-dark-50 transition-colors">
-                            {label}
-                        </span>
+                        <ToolCallIcon toolName={part.toolName} />
+                        <span className="font-medium">{label}</span>
                         <CaretRightIcon
                             className={cn(
-                                "size-2.5 text-dark-200 transition-transform",
+                                "size-2.5 transition-transform",
                                 expanded && "rotate-90"
                             )}
                             weight="bold"
@@ -291,21 +275,14 @@ export function ToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
 
         return (
             <div className="my-1.5">
-                <span className="flex items-center gap-1.5 text-xs">
-                    <ToolCallIcon
-                        toolName={part.toolName}
-                        className={cn(
-                            isPending ? "wave-text" : "text-dark-200"
-                        )}
-                    />
-                    <span
-                        className={cn(
-                            "font-medium transition-colors",
-                            isPending
-                                ? "wave-text"
-                                : "text-dark-200 hover:text-dark-50"
-                        )}
-                    >
+                <span
+                    className={cn(
+                        "flex items-center gap-1.5 text-xs text-dark-200 transition-colors",
+                        !isPending && "hover:text-dark-50"
+                    )}
+                >
+                    <ToolCallIcon toolName={part.toolName} className={cn(isPending && "wave-text")} />
+                    <span className={cn("font-medium", isPending && "wave-text")}>
                         {label}
                     </span>
                 </span>
@@ -319,27 +296,18 @@ export function ToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
 
     if (isCompactTool) {
         return (
-            <div className="my-1.5 flex items-center gap-2 text-xs text-dark-200">
-                <ToolCallIcon
-                    toolName={part.toolName}
-                    className={cn(
-                        isPending
-                            ? "wave-text"
-                            : isErrored
-                              ? "text-red-300"
-                              : "text-dark-200"
-                    )}
-                />
-                <span
-                    className={cn(
-                        "font-medium transition-colors",
-                        isPending
-                            ? "wave-text"
-                            : isErrored
-                              ? "text-red-300"
-                              : "text-dark-200 hover:text-dark-50"
-                    )}
-                >
+            <div
+                className={cn(
+                    "my-1.5 flex items-center gap-2 text-xs transition-colors",
+                    isPending
+                        ? "text-dark-200"
+                        : isErrored
+                          ? "text-red-300"
+                          : "text-dark-200 hover:text-dark-50"
+                )}
+            >
+                <ToolCallIcon toolName={part.toolName} className={cn(isPending && "wave-text")} />
+                <span className={cn("font-medium", isPending && "wave-text")}>
                     {label}
                 </span>
                 {toolUrl ? (
@@ -356,25 +324,21 @@ export function ToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
             <button
                 type="button"
                 onClick={() => setExpanded(!expanded)}
-                className="flex items-center gap-1.5 text-xs"
+                className={cn(
+                    "flex items-center gap-1.5 text-xs text-dark-200 transition-colors",
+                    !isPending && "hover:text-dark-50"
+                )}
             >
                 <ToolCallIcon
                     toolName={part.toolName}
-                    className={cn(isPending ? "wave-text" : "text-dark-200")}
+                    className={cn(isPending && "wave-text")}
                 />
-                <span
-                    className={cn(
-                        "font-medium transition-colors",
-                        isPending
-                            ? "wave-text"
-                            : "text-dark-200 hover:text-dark-50"
-                    )}
-                >
+                <span className={cn("font-medium", isPending && "wave-text")}>
                     {label}
                 </span>
                 <CaretRightIcon
                     className={cn(
-                        "size-2.5 text-dark-200 transition-transform",
+                        "size-2.5 transition-transform",
                         expanded && "rotate-90"
                     )}
                     weight="bold"
