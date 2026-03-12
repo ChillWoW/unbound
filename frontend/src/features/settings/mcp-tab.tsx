@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
     ArrowsClockwiseIcon,
-    CheckCircleIcon,
     GlobeIcon,
     PencilSimpleIcon,
     PlugChargingIcon,
@@ -356,82 +355,68 @@ export function McpTab({ isActive }: { isActive: boolean }) {
 
                             return (
                                 <div key={server.id} className="border-b border-dark-600 py-4 last:border-b-0">
-                                    <div className="flex flex-wrap items-center gap-4">
-                                        {/* Icon + status dot */}
+                                    {/* Row 1: icon + name + toggle */}
+                                    <div className="flex items-center gap-3">
                                         <div className="relative flex size-9 shrink-0 items-center justify-center rounded-md bg-dark-800">
                                             <PlugChargingIcon className="size-4 text-dark-100" />
                                             <span className={`absolute -bottom-0.5 -right-0.5 size-2 rounded-full ring-1 ring-dark-900 ${statusDot(server.lastHealthStatus)}`} />
                                         </div>
-
-                                        {/* Name + meta */}
-                                        <div className="w-44 shrink-0">
-                                            <span className="text-sm font-medium text-white">
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-sm font-medium text-white">
                                                 {server.name}
-                                            </span>
-                                            <p className="mt-0.5 text-xs leading-snug text-dark-300">
+                                            </p>
+                                            <p className="mt-0.5 truncate text-xs leading-snug text-dark-300">
                                                 {server.urlPreview} · {authLabel}
                                             </p>
                                         </div>
+                                        <Switch
+                                            checked={server.enabled}
+                                            onCheckedChange={(checked) =>
+                                                void handleToggleEnabled(server, checked)
+                                            }
+                                            disabled={isBusy}
+                                            aria-label={`Toggle ${server.name}`}
+                                        />
+                                    </div>
 
-                                        {/* Actions */}
-                                        <div className="flex w-full flex-wrap items-center gap-2 md:flex-1">
-                                            <Switch
-                                                checked={server.enabled}
-                                                onCheckedChange={(checked) =>
-                                                    void handleToggleEnabled(server, checked)
-                                                }
-                                                disabled={isBusy}
-                                                aria-label={`Toggle ${server.name}`}
-                                            />
-                                            <div className="ml-auto flex flex-wrap items-center gap-2">
-                                                <Button
-                                                    type="button"
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={() => void handleRefresh(server, "test")}
-                                                    disabled={isBusy}
-                                                >
-                                                    <CheckCircleIcon className="size-4" />
-                                                    Test
-                                                </Button>
-                                                <Button
-                                                    type="button"
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={() => void handleRefresh(server, "discover")}
-                                                    disabled={isBusy}
-                                                >
-                                                    <ArrowsClockwiseIcon className="size-4" />
-                                                    Refresh tools
-                                                </Button>
-                                                <Button
-                                                    type="button"
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    onClick={() => openEditModal(server)}
-                                                    disabled={isBusy}
-                                                >
-                                                    <PencilSimpleIcon className="size-4" />
-                                                    Edit
-                                                </Button>
-                                                <Button
-                                                    type="button"
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    onClick={() => void handleDelete(server)}
-                                                    disabled={isBusy}
-                                                    className="text-red-300 hover:bg-red-500/10 hover:text-red-200"
-                                                >
-                                                    <TrashIcon className="size-4" />
-                                                    Delete
-                                                </Button>
-                                            </div>
-                                        </div>
+                                    {/* Row 2: action buttons */}
+                                    <div className="mt-3 flex flex-wrap items-center gap-2 pl-12">
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => void handleRefresh(server, "discover")}
+                                            disabled={isBusy}
+                                        >
+                                            <ArrowsClockwiseIcon className="size-4" />
+                                            Refresh
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() => openEditModal(server)}
+                                            disabled={isBusy}
+                                        >
+                                            <PencilSimpleIcon className="size-4" />
+                                            Edit
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() => void handleDelete(server)}
+                                            disabled={isBusy}
+                                            className="text-red-300 hover:bg-red-500/10 hover:text-red-200"
+                                        >
+                                            <TrashIcon className="size-4" />
+                                            Delete
+                                        </Button>
                                     </div>
 
                                     {/* Error */}
                                     {server.lastHealthError ? (
-                                        <div className="mt-2 flex items-start gap-1.5 pl-[52px] text-xs text-red-300">
+                                        <div className="mt-2 flex items-start gap-1.5 pl-12 text-xs text-red-300">
                                             <WarningCircleIcon className="mt-0.5 size-3.5 shrink-0" />
                                             {server.lastHealthError}
                                         </div>
