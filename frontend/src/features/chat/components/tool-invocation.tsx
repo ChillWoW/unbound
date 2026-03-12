@@ -229,8 +229,16 @@ export function ToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
                               : "text-dark-200 hover:text-dark-50"
                     )}
                 >
-                    <ToolCallIcon toolName={part.toolName} className={cn(isPending && "wave-text")} />
-                    <span className={cn("font-medium", isPending && "wave-text")}>
+                    <ToolCallIcon
+                        toolName={part.toolName}
+                        className={cn(isPending && "wave-text")}
+                    />
+                    <span
+                        className={cn(
+                            "font-medium shrink-0",
+                            isPending && "wave-text"
+                        )}
+                    >
                         {label}
                     </span>
                 </span>
@@ -255,7 +263,7 @@ export function ToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
                         className="flex items-center gap-1.5 text-xs text-dark-200 transition-colors hover:text-dark-50"
                     >
                         <ToolCallIcon toolName={part.toolName} />
-                        <span className="font-medium">{label}</span>
+                        <span className="font-medium shrink-0">{label}</span>
                         <CaretRightIcon
                             className={cn(
                                 "size-2.5 transition-transform",
@@ -281,8 +289,16 @@ export function ToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
                         !isPending && "hover:text-dark-50"
                     )}
                 >
-                    <ToolCallIcon toolName={part.toolName} className={cn(isPending && "wave-text")} />
-                    <span className={cn("font-medium", isPending && "wave-text")}>
+                    <ToolCallIcon
+                        toolName={part.toolName}
+                        className={cn(isPending && "wave-text")}
+                    />
+                    <span
+                        className={cn(
+                            "font-medium shrink-0",
+                            isPending && "wave-text"
+                        )}
+                    >
                         {label}
                     </span>
                 </span>
@@ -306,8 +322,16 @@ export function ToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
                           : "text-dark-200 hover:text-dark-50"
                 )}
             >
-                <ToolCallIcon toolName={part.toolName} className={cn(isPending && "wave-text")} />
-                <span className={cn("font-medium", isPending && "wave-text")}>
+                <ToolCallIcon
+                    toolName={part.toolName}
+                    className={cn(isPending && "wave-text")}
+                />
+                <span
+                    className={cn(
+                        "font-medium shrink-0",
+                        isPending && "wave-text"
+                    )}
+                >
                     {label}
                 </span>
                 {toolUrl ? (
@@ -333,7 +357,12 @@ export function ToolInvocationDisplay({ part }: { part: ToolInvocationPart }) {
                     toolName={part.toolName}
                     className={cn(isPending && "wave-text")}
                 />
-                <span className={cn("font-medium", isPending && "wave-text")}>
+                <span
+                    className={cn(
+                        "font-medium shrink-0",
+                        isPending && "wave-text"
+                    )}
+                >
                     {label}
                 </span>
                 <CaretRightIcon
