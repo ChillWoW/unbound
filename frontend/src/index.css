@@ -130,7 +130,9 @@ body {
 
 ::-webkit-scrollbar-thumb {
     background: var(--color-dark-500);
-    border-radius: 9999px;
+    border-radius: none;
+    border: 1px solid transparent;
+    background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
