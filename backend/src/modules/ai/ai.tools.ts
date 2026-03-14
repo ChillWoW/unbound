@@ -6,6 +6,7 @@ import { createMcpToolsForServers } from "../mcp/mcp-runtime";
 import { mcpService } from "../mcp/mcp.service";
 import { todosRepository } from "../todos/todos.repository";
 import { memoryService } from "../memory/memory.service";
+import { conversationSearchService } from "../conversations/conversation-search.service";
 import {
     MEMORY_CONFIDENCE_LEVELS,
     MEMORY_KINDS
@@ -501,6 +502,84 @@ function createBuiltInTools(
                 const todos =
                     await todosRepository.listByConversationId(conversationId);
                 return { todos: formatTodos(todos) };
+            }
+        }),
+
+        conversationSearch: tool({
+            description:
+                "Search the user's earlier conversations by content, date range, model, provider, role, status, favorites, and deep-research usage. Returns compact message-level matches with snippets.",
+            inputSchema: z.object({
+                query: z
+                    .string()
+                    .max(240)
+                    .optional()
+                    .describe("Optional text to match against conversation titles, message text, and selected metadata."),
+                conversationId: z
+                    .string()
+                    .min(1)
+                    .max(64)
+                    .optional()
+                    .describe("Optional conversation id to narrow the search to one thread."),
+                dateFrom: z
+                    .string()
+                    .optional()
+                    .describe("Optional inclusive ISO date or datetime lower bound."),
+                dateTo: z
+                    .string()
+                    .optional()
+                    .describe("Optional inclusive ISO date or datetime upper bound."),
+                model: z
+                    .string()
+                    .max(200)
+                    .optional()
+                    .describe("Optional exact model id filter, e.g. gpt-4.1 or claude-3-7-sonnet."),
+                provider: z
+                    .string()
+                    .max(40)
+                    .optional()
+                    .describe("Optional exact provider filter, e.g. openai, anthropic, openrouter."),
+                role: z
+                    .enum(["user", "assistant", "system", "tool"])
+                    .optional()
+                    .describe("Optional message role filter."),
+                status: z
+                    .enum(["pending", "complete", "failed"])
+                    .optional()
+                    .describe("Optional message status filter."),
+                isFavorite: z
+                    .boolean()
+                    .optional()
+                    .describe("Optional favorite conversation filter."),
+                deepResearch: z
+                    .boolean()
+                    .optional()
+                    .describe("Optional filter for messages generated with deep research enabled."),
+                includeCurrentConversation: z
+                    .boolean()
+                    .optional()
+                    .describe("Defaults to false so the tool focuses on earlier conversations instead of the current thread."),
+                includeAttachmentText: z
+                    .boolean()
+                    .optional()
+                    .describe("Include extracted text from uploaded files when matching the query. Defaults to false."),
+                sort: z
+                    .enum(["relevance", "newest", "oldest"])
+                    .optional()
+                    .describe("Sort order for results. Defaults to relevance."),
+                limit: z
+                    .number()
+                    .int()
+                    .min(1)
+                    .max(12)
+                    .optional()
+                    .describe("Maximum results to return.")
+            }),
+            execute: async (input) => {
+                return conversationSearchService.searchForTool(
+                    userId,
+                    conversationId,
+                    input
+                );
             }
         }),
 

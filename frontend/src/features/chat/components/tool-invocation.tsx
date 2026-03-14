@@ -58,6 +58,7 @@ function ToolCallIcon({
           : SANDBOX_TOOLS.has(toolName)
             ? FileTextIcon
             : toolName === "webSearch"
+              || toolName === "conversationSearch"
               ? MagnifyingGlassIcon
               : toolName === "scrape"
                 ? GlobeHemisphereWestIcon

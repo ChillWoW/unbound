@@ -71,6 +71,20 @@ export const conversationsRepository = {
             .orderBy(messages.createdAt);
     },
 
+    async listMessagesByConversationIds(
+        conversationIds: string[]
+    ): Promise<MessageRecord[]> {
+        if (conversationIds.length === 0) {
+            return [];
+        }
+
+        return db
+            .select()
+            .from(messages)
+            .where(inArray(messages.conversationId, conversationIds))
+            .orderBy(messages.createdAt);
+    },
+
     async listMessageAttachmentsByConversationId(
         conversationId: string
     ): Promise<MessageAttachmentRecord[]> {
@@ -78,6 +92,20 @@ export const conversationsRepository = {
             .select()
             .from(messageAttachments)
             .where(eq(messageAttachments.conversationId, conversationId))
+            .orderBy(messageAttachments.createdAt);
+    },
+
+    async listMessageAttachmentsByConversationIds(
+        conversationIds: string[]
+    ): Promise<MessageAttachmentRecord[]> {
+        if (conversationIds.length === 0) {
+            return [];
+        }
+
+        return db
+            .select()
+            .from(messageAttachments)
+            .where(inArray(messageAttachments.conversationId, conversationIds))
             .orderBy(messageAttachments.createdAt);
     },
 

@@ -451,13 +451,13 @@ function ChatInputToolbar({
                                     type="button"
                                     variant="ghost"
                                     className={cn(
-                                        "size-8 p-0 transition-colors",
+                                        "h-7 w-8 p-0 transition-colors",
                                         onDeepResearchChange
                                             ? "rounded-l-xl rounded-r-none"
                                             : "rounded-xl",
                                         isThinkingEnabled
                                             ? "bg-dark-700 text-dark-50 hover:bg-dark-600"
-                                            : "text-dark-300 hover:bg-dark-800 hover:text-dark-50"
+                                            : "text-dark-300 hover:bg-dark-700 hover:text-dark-50"
                                     )}
                                     onClick={() =>
                                         onThinkingChange(!isThinkingEnabled)
@@ -479,13 +479,13 @@ function ChatInputToolbar({
                                     type="button"
                                     variant="ghost"
                                     className={cn(
-                                        "size-8 p-0 transition-colors border-l border-dark-500",
+                                        "h-7 w-8 p-0 transition-colors border-l border-dark-500",
                                         onThinkingChange
                                             ? "rounded-r-xl rounded-l-none"
                                             : "rounded-xl border-l-0",
                                         isDeepResearchEnabled
                                             ? "bg-dark-700 text-dark-50 hover:bg-dark-600"
-                                            : "text-dark-300 hover:bg-dark-800 hover:text-dark-50"
+                                            : "text-dark-300 hover:bg-dark-700 hover:text-dark-50"
                                     )}
                                     onClick={() =>
                                         onDeepResearchChange(

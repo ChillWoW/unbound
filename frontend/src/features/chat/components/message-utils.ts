@@ -27,7 +27,11 @@ export const MEMORY_TOOLS = new Set([
     "memoryDelete"
 ]);
 
-export const COMPACT_TOOLS = new Set(["webSearch", "scrape"]);
+export const COMPACT_TOOLS = new Set([
+    "webSearch",
+    "scrape",
+    "conversationSearch"
+]);
 
 export const TOOL_LABELS: Record<string, string> = {
     todoWrite: "Updating tasks…",
@@ -40,6 +44,7 @@ export const TOOL_LABELS: Record<string, string> = {
     memoryDelete: "Deleting memory...",
     webSearch: "Searching the web...",
     scrape: "Scraping page...",
+    conversationSearch: "Searching earlier conversations...",
     pythonSandbox: "Running Python...",
     pythonSandboxInstallPackage: "Installing package...",
     pythonSandboxReset: "Resetting Python session..."
@@ -56,6 +61,7 @@ export const TOOL_LABELS_DONE: Record<string, string> = {
     memoryDelete: "Deleted memory",
     webSearch: "Searched the web",
     scrape: "Scraped",
+    conversationSearch: "Searched earlier conversations",
     pythonSandbox: "Ran Python",
     pythonSandboxInstallPackage: "Installed package",
     pythonSandboxReset: "Reset Python session"
