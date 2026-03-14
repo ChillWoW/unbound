@@ -16,6 +16,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as ChatRouteImport } from './routes/_chat'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ChatUsageRouteImport } from './routes/_chat.usage'
 import { Route as ChatSettingsRouteImport } from './routes/_chat.settings'
 import { Route as ChatConversationsIndexRouteImport } from './routes/_chat.conversations.index'
 import { Route as ChatConversationsConversationIdRouteImport } from './routes/_chat.conversations.$conversationId'
@@ -54,6 +55,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ChatUsageRoute = ChatUsageRouteImport.update({
+  id: '/usage',
+  path: '/usage',
+  getParentRoute: () => ChatRoute,
+} as any)
 const ChatSettingsRoute = ChatSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -79,6 +85,7 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
   '/settings': typeof ChatSettingsRoute
+  '/usage': typeof ChatUsageRoute
   '/conversations/$conversationId': typeof ChatConversationsConversationIdRoute
   '/conversations/': typeof ChatConversationsIndexRoute
 }
@@ -90,6 +97,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
   '/settings': typeof ChatSettingsRoute
+  '/usage': typeof ChatUsageRoute
   '/conversations/$conversationId': typeof ChatConversationsConversationIdRoute
   '/conversations': typeof ChatConversationsIndexRoute
 }
@@ -103,6 +111,7 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
   '/_chat/settings': typeof ChatSettingsRoute
+  '/_chat/usage': typeof ChatUsageRoute
   '/_chat/conversations/$conversationId': typeof ChatConversationsConversationIdRoute
   '/_chat/conversations/': typeof ChatConversationsIndexRoute
 }
@@ -116,6 +125,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/verify-email'
     | '/settings'
+    | '/usage'
     | '/conversations/$conversationId'
     | '/conversations/'
   fileRoutesByTo: FileRoutesByTo
@@ -127,6 +137,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/verify-email'
     | '/settings'
+    | '/usage'
     | '/conversations/$conversationId'
     | '/conversations'
   id:
@@ -139,6 +150,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/verify-email'
     | '/_chat/settings'
+    | '/_chat/usage'
     | '/_chat/conversations/$conversationId'
     | '/_chat/conversations/'
   fileRoutesById: FileRoutesById
@@ -204,6 +216,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_chat/usage': {
+      id: '/_chat/usage'
+      path: '/usage'
+      fullPath: '/usage'
+      preLoaderRoute: typeof ChatUsageRouteImport
+      parentRoute: typeof ChatRoute
+    }
     '/_chat/settings': {
       id: '/_chat/settings'
       path: '/settings'
@@ -230,12 +249,14 @@ declare module '@tanstack/react-router' {
 
 interface ChatRouteChildren {
   ChatSettingsRoute: typeof ChatSettingsRoute
+  ChatUsageRoute: typeof ChatUsageRoute
   ChatConversationsConversationIdRoute: typeof ChatConversationsConversationIdRoute
   ChatConversationsIndexRoute: typeof ChatConversationsIndexRoute
 }
 
 const ChatRouteChildren: ChatRouteChildren = {
   ChatSettingsRoute: ChatSettingsRoute,
+  ChatUsageRoute: ChatUsageRoute,
   ChatConversationsConversationIdRoute: ChatConversationsConversationIdRoute,
   ChatConversationsIndexRoute: ChatConversationsIndexRoute,
 }

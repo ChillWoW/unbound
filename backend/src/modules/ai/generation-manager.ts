@@ -28,6 +28,12 @@ export type SSEEvent =
           reasoning: string;
           toolParts: ToolInvocationPart[];
       }
+    | {
+          type: "budget-warning";
+          percentUsed: number;
+          monthlySpendCents: number;
+          monthlyLimitCents: number;
+      }
     | { type: "done" };
 
 export interface GenerationEntry {

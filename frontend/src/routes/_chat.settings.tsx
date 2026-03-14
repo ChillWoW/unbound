@@ -14,6 +14,7 @@ import { useChat } from "@/features/chat/chat-context";
 import { settingsApi } from "@/features/settings/api";
 import { McpTab } from "@/features/settings/mcp-tab";
 import { MemoryTab } from "@/features/settings/memory-tab";
+import { UsageTab } from "@/features/settings/usage-tab";
 import type {
     ProviderType,
     ProviderKeyStatus,
@@ -91,7 +92,7 @@ const PROVIDERS: ProviderConfig[] = [
     }
 ];
 
-type SettingsTab = "api-keys" | "memory" | "mcp";
+type SettingsTab = "api-keys" | "memory" | "mcp" | "usage";
 
 function getErrorMessage(error: unknown): string {
     if (
@@ -316,6 +317,10 @@ function SettingsPage() {
                                 {
                                     id: "mcp",
                                     label: "MCP"
+                                },
+                                {
+                                    id: "usage",
+                                    label: "Usage"
                                 }
                             ] as const
                         ).map((tab) => {
@@ -372,6 +377,8 @@ function SettingsPage() {
                         onSavePolicy={handleSaveMemorySettings}
                         isActive={activeTab === "memory"}
                     />
+                ) : activeTab === "usage" ? (
+                    <UsageTab isActive={activeTab === "usage"} />
                 ) : (
                     <McpTab isActive={activeTab === "mcp"} />
                 )}

@@ -10,6 +10,7 @@ import { attachmentsRoutes } from "./modules/attachments/attachments.routes";
 import { todosRoutes } from "./modules/todos/todos.routes";
 import { memoryRoutes } from "./modules/memory/memory.routes";
 import { mcpRoutes } from "./modules/mcp/mcp.routes";
+import { usageRoutes } from "./modules/usage/usage.routes";
 
 const MAX_JSON_BODY_BYTES = 30 * 1024 * 1024;
 
@@ -59,4 +60,5 @@ export const app = new Elysia()
     .use(memoryRoutes)
     .use(todosRoutes)
     .use(attachmentsRoutes)
+    .use(usageRoutes)
     .use(aiRoutes);

@@ -3,6 +3,7 @@ import type { ConversationSummary } from "../types";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
     CaretDownIcon,
+    ChartBarIcon,
     DotsThreeVerticalIcon,
     GearSixIcon,
     MinusIcon,
@@ -784,6 +785,15 @@ export function ChatSidebar({
                                 >
                                     <GearSixIcon className="size-4" />
                                     Settings
+                                </MenuItem>
+                                <MenuItem
+                                    onClick={() => {
+                                        navigate({ to: "/usage" });
+                                        handleNavigate();
+                                    }}
+                                >
+                                    <ChartBarIcon className="size-4" />
+                                    Usage
                                 </MenuItem>
                                 <MenuSeparator />
                                 <MenuItem

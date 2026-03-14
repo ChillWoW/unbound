@@ -41,6 +41,11 @@ export interface StreamCallbacks {
     onFinish?: (finishReason: string) => void;
     onError?: (error: StreamErrorEvent) => void;
     onReconnectState?: (state: ReconnectState) => void;
+    onBudgetWarning?: (warning: {
+        percentUsed: number;
+        monthlySpendCents: number;
+        monthlyLimitCents: number;
+    }) => void;
 }
 
 export async function parseAIStream(
@@ -147,6 +152,14 @@ export async function parseAIStream(
                         callbacks.onReconnectState?.(
                             event as unknown as ReconnectState
                         );
+                        break;
+
+                    case "budget-warning":
+                        callbacks.onBudgetWarning?.({
+                            percentUsed: event.percentUsed as number,
+                            monthlySpendCents: event.monthlySpendCents as number,
+                            monthlyLimitCents: event.monthlyLimitCents as number
+                        });
                         break;
 
                     case "done":

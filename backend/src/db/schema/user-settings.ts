@@ -1,4 +1,11 @@
-import { boolean, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+    boolean,
+    integer,
+    pgTable,
+    text,
+    timestamp,
+    uuid
+} from "drizzle-orm/pg-core";
 import { users } from "./users";
 
 export const userSettings = pgTable("user_settings", {
@@ -30,6 +37,10 @@ export const userSettings = pgTable("user_settings", {
         .notNull()
         .default(true),
     memoryCustomInstructions: text("memory_custom_instructions"),
+    monthlyBudgetCents: integer("monthly_budget_cents"),
+    budgetAlertThreshold: integer("budget_alert_threshold")
+        .notNull()
+        .default(80),
     createdAt: timestamp("created_at", { withTimezone: true })
         .defaultNow()
         .notNull(),

@@ -106,6 +106,13 @@
       "when": 1774195800000,
       "tag": "0015_ensure_user_mcp_servers",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1773517882940,
+      "tag": "0015_gigantic_morlocks",
+      "breakpoints": true
     }
   ]
 }

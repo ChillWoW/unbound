@@ -9,6 +9,7 @@ import {
     type PropsWithChildren
 } from "react";
 import { ApiError } from "@/lib/api";
+import { notify } from "@/lib/toast";
 import { useAuth } from "@/features/auth/use-auth";
 import { chatApi } from "./api";
 import { resolveAttachmentMimeType } from "./attachment-utils";
@@ -1270,6 +1271,21 @@ export function ChatProvider({ children }: PropsWithChildren) {
                         streamDoneTimer = setTimeout(() => {
                             abortController.abort();
                         }, STREAM_DONE_TIMEOUT_MS);
+                    },
+                    onBudgetWarning(warning) {
+                        const spent = (warning.monthlySpendCents / 100).toFixed(2);
+                        const limit = (warning.monthlyLimitCents / 100).toFixed(2);
+                        if (warning.percentUsed >= 100) {
+                            notify.error({
+                                title: "Budget exceeded",
+                                description: `You've exceeded your monthly budget ($${spent} / $${limit})`
+                            });
+                        } else {
+                            notify.warning({
+                                title: "Budget alert",
+                                description: `You've used ${warning.percentUsed}% of your $${limit} monthly budget ($${spent} spent)`
+                            });
+                        }
                     }
                 }).catch((error: unknown) => {
                 if (!(error instanceof Error && error.name === "AbortError")) {
@@ -1485,7 +1501,22 @@ export function ChatProvider({ children }: PropsWithChildren) {
                         }
                         flushNow();
                     },
-                    ...callbacks
+                    ...callbacks,
+                    onBudgetWarning(warning) {
+                        const spent = (warning.monthlySpendCents / 100).toFixed(2);
+                        const limit = (warning.monthlyLimitCents / 100).toFixed(2);
+                        if (warning.percentUsed >= 100) {
+                            notify.error({
+                                title: "Budget exceeded",
+                                description: `You've exceeded your monthly budget ($${spent} / $${limit})`
+                            });
+                        } else {
+                            notify.warning({
+                                title: "Budget alert",
+                                description: `You've used ${warning.percentUsed}% of your $${limit} monthly budget ($${spent} spent)`
+                            });
+                        }
+                    }
                 }).catch((error: unknown) => {
                     if (
                         !(error instanceof Error && error.name === "AbortError")

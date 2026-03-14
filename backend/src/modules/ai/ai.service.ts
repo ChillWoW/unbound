@@ -24,6 +24,7 @@ import { buildOptimizedContext } from "./context-manager";
 import { modelsService } from "../models/models.service";
 import { logger } from "../../lib/logger";
 import { memoryService } from "../memory/memory.service";
+import { usageService } from "../usage/usage.service";
 
 import {
     toModelMessages,
@@ -203,24 +204,23 @@ async function reconcileLingeringInProgressTodos(conversationId: string) {
     });
 }
 
-function aggregateUsage(steps: Array<Record<string, unknown>>): {
+function extractUsage(totalUsage: Record<string, unknown>): {
     promptTokens: number;
     completionTokens: number;
     totalTokens: number;
 } {
-    let promptTokens = 0;
-    let completionTokens = 0;
-
-    for (const step of steps) {
-        const usage = step.usage as Record<string, unknown> | undefined;
-        if (!usage) continue;
-        promptTokens +=
-            typeof usage.promptTokens === "number" ? usage.promptTokens : 0;
-        completionTokens +=
-            typeof usage.completionTokens === "number"
-                ? usage.completionTokens
-                : 0;
-    }
+    const promptTokens =
+        typeof totalUsage.inputTokens === "number"
+            ? totalUsage.inputTokens
+            : typeof totalUsage.promptTokens === "number"
+              ? totalUsage.promptTokens
+              : 0;
+    const completionTokens =
+        typeof totalUsage.outputTokens === "number"
+            ? totalUsage.outputTokens
+            : typeof totalUsage.completionTokens === "number"
+              ? totalUsage.completionTokens
+              : 0;
 
     return {
         promptTokens,
@@ -378,6 +378,11 @@ async function generateConversationTitleInBackground(input: {
 const DEEP_RESEARCH_MAX_STEPS = 100;
 const DEEP_RESEARCH_MAX_OUTPUT_TOKENS = 16384;
 
+interface ModelPricingSnapshot {
+    promptPricePerToken: string | null;
+    completionPricePerToken: string | null;
+}
+
 function startBackgroundGeneration(
     generation: GenerationEntry,
     modelMessages: ModelMessage[],
@@ -389,7 +394,8 @@ function startBackgroundGeneration(
     tools: ToolSet,
     cleanupTools: () => Promise<void>,
     maxOutputTokens: number | null,
-    deepResearch: boolean
+    deepResearch: boolean,
+    pricingSnapshot: ModelPricingSnapshot
 ) {
     const model = createModelInstance(provider, modelId, apiKey);
     const assistantMessageId = generation.messageId;
@@ -419,7 +425,7 @@ function startBackgroundGeneration(
         maxRetries: 2,
         stopWhen: stepCountIs(deepResearch ? DEEP_RESEARCH_MAX_STEPS : 50),
         abortSignal: generation.abortController.signal,
-        onFinish: async ({ steps, finishReason }) => {
+        onFinish: async ({ steps, finishReason, totalUsage }) => {
             if (generation.abortController.signal.aborted) return;
             try {
                 const finalParts: MessagePart[] = [];
@@ -482,8 +488,8 @@ function startBackgroundGeneration(
                     new Date(generationCompletedAt).getTime() -
                     new Date(generationStartedAt).getTime();
                 const status = finishReason === "error" ? "failed" : "complete";
-                const usage = aggregateUsage(
-                    steps as unknown as Array<Record<string, unknown>>
+                const usage = extractUsage(
+                    totalUsage as unknown as Record<string, unknown>
                 );
                 const sources = extractSourcesFromParts(finalParts);
 
@@ -514,6 +520,46 @@ function startBackgroundGeneration(
                         }
                     }
                 );
+
+                if (status === "complete") {
+                    await usageService.recordUsage(
+                        generation.userId,
+                        generation.conversationId,
+                        assistantMessageId,
+                        modelId,
+                        provider,
+                        usage,
+                        pricingSnapshot
+                    );
+
+                    try {
+                        const budgetStatus = await usageService.checkBudget(
+                            generation.userId
+                        );
+                        if (
+                            budgetStatus.monthlyLimitCents &&
+                            budgetStatus.percentUsed >=
+                                budgetStatus.alertThreshold
+                        ) {
+                            generation.emitter.emit("event", {
+                                type: "budget-warning",
+                                percentUsed: budgetStatus.percentUsed,
+                                monthlySpendCents:
+                                    budgetStatus.monthlySpendCents,
+                                monthlyLimitCents:
+                                    budgetStatus.monthlyLimitCents
+                            } satisfies SSEEvent);
+                        }
+                    } catch (budgetError) {
+                        logger.warn("Budget check failed after generation", {
+                            conversationId: generation.conversationId,
+                            error:
+                                budgetError instanceof Error
+                                    ? budgetError.message
+                                    : String(budgetError)
+                        });
+                    }
+                }
 
                 if (
                     status === "complete" &&
@@ -1069,6 +1115,11 @@ export const aiService = {
             user.id,
             modelId
         );
+        const pricingSnapshot = usageService.getModelPricing(
+            user.id,
+            modelId,
+            resolvedProvider
+        );
 
         startBackgroundGeneration(
             generation,
@@ -1081,7 +1132,8 @@ export const aiService = {
             tools,
             cleanup,
             modelMaxOutputTokens,
-            deepResearch
+            deepResearch,
+            pricingSnapshot
         );
 
         logger.info("Generation prepared", {
