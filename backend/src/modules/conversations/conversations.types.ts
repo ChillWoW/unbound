@@ -88,8 +88,24 @@ const IMAGE_MIME_TYPES = new Set([
     "image/jpeg",
     "image/gif",
     "image/webp",
-    "image/svg+xml"
+    "image/svg+xml",
+    "image/bmp",
+    "image/x-icon",
+    "image/avif"
 ]);
+
+const EXTENSION_MIME_TYPES: Record<string, string> = {
+    avif: "image/avif",
+    bmp: "image/bmp",
+    gif: "image/gif",
+    ico: "image/x-icon",
+    jpeg: "image/jpeg",
+    jpg: "image/jpeg",
+    pdf: "application/pdf",
+    png: "image/png",
+    svg: "image/svg+xml",
+    webp: "image/webp"
+};
 
 export const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 export const MAX_ATTACHMENT_BASE64_LENGTH = Math.ceil(MAX_ATTACHMENT_BYTES / 3) * 4;
@@ -158,6 +174,32 @@ function clampFilename(value: string | undefined, index: number): string {
     return normalized.slice(0, MAX_FILENAME_LENGTH);
 }
 
+function getFileExtension(filename: string | undefined): string | null {
+    const normalized = filename?.trim().toLowerCase() ?? "";
+    const lastDot = normalized.lastIndexOf(".");
+
+    if (lastDot <= 0 || lastDot === normalized.length - 1) {
+        return null;
+    }
+
+    return normalized.slice(lastDot + 1);
+}
+
+function normalizeMimeType(value: string | undefined): string {
+    return value?.trim().toLowerCase() ?? "";
+}
+
+function resolveAttachmentMimeType(input: MessageAttachmentInput): string {
+    const mimeType = normalizeMimeType(input.mimeType);
+
+    if (mimeType) {
+        return mimeType;
+    }
+
+    const extension = getFileExtension(input.filename);
+    return extension ? EXTENSION_MIME_TYPES[extension] ?? "application/octet-stream" : "application/octet-stream";
+}
+
 function summarizeAttachment(part: MessagePart): string | null {
     if (part.type === "image") {
         return part.filename ? `Image: ${part.filename}` : "Image attachment";
@@ -200,11 +242,7 @@ async function prepareAttachment(
     part: ImageMessagePart | FileMessagePart;
     record: PreparedMessageAttachment;
 }> {
-    const mimeType = attachment.mimeType.trim();
-
-    if (!mimeType) {
-        throw new ConversationError(400, "Attachment mime type is required.");
-    }
+    const mimeType = resolveAttachmentMimeType(attachment);
 
     const attachmentId = createAttachmentId();
     const size = getAttachmentSize(attachment, attachment.data);

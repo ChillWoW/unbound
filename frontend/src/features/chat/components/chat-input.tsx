@@ -19,6 +19,7 @@ import {
 } from "@phosphor-icons/react";
 import { Button, Tooltip } from "@/components/ui";
 import { cn } from "@/lib/cn";
+import { IMAGE_ACCEPT_STRING, splitAttachmentFiles } from "../attachment-utils";
 import type {
     ChatErrorRecovery,
     ChatModel,
@@ -27,18 +28,6 @@ import type {
 } from "../types";
 import { ModelSelector } from "./model-selector";
 import { useChat } from "../chat-context";
-
-const IMAGE_MIME_TYPES: Record<string, true> = {
-    "image/png": true,
-    "image/jpeg": true,
-    "image/gif": true,
-    "image/webp": true,
-    "image/svg+xml": true
-};
-
-const FILE_MIME_TYPES: Record<string, true> = {
-    "application/pdf": true
-};
 
 const CHARS_PER_TOKEN = 3.5;
 const MESSAGE_OVERHEAD = 4;
@@ -79,20 +68,11 @@ export interface ChatAttachment {
     type: "image" | "file";
 }
 
-const IMAGE_ACCEPT_STRING = Object.keys(IMAGE_MIME_TYPES).join(",");
-const FILE_ACCEPT_STRING = Object.keys(FILE_MIME_TYPES).join(",");
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
 const MAX_ATTACHMENTS = 10;
 const EMPTY_CONFIGURED_PROVIDERS: ProviderType[] = [];
 const EMPTY_CONVERSATION_MESSAGES: ConversationMessage[] = [];
 const EMPTY_MODELS: ChatModel[] = [];
-
-function collectAcceptedFiles(files: File[]) {
-    const imageFiles = files.filter((file) => IMAGE_MIME_TYPES[file.type]);
-    const fileFiles = files.filter((file) => FILE_MIME_TYPES[file.type]);
-
-    return { imageFiles, fileFiles };
-}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -327,21 +307,19 @@ function AttachmentPreviewList({
 }
 
 function ChatComposerTextarea({
-    addFiles,
     disabled,
     draft,
+    handleIncomingFiles,
     onSubmit,
     placeholder,
-    supportsFiles,
     supportsImages,
     updateValue
 }: {
-    addFiles: (files: FileList | File[], kind: "image" | "file") => void;
     disabled: boolean;
     draft: string;
+    handleIncomingFiles: (files: FileList | File[]) => void;
     onSubmit: () => void;
     placeholder: string;
-    supportsFiles: boolean;
     supportsImages: boolean;
     updateValue: (value: string) => void;
 }) {
@@ -372,13 +350,18 @@ function ChatComposerTextarea({
                         if (file) files.push(file);
                     }
 
-                    const { imageFiles, fileFiles } = collectAcceptedFiles(files);
-                    if (supportsImages && imageFiles.length > 0) {
-                        addFiles(imageFiles, "image");
+                    if (files.length === 0) {
+                        return;
                     }
-                    if (supportsFiles && fileFiles.length > 0) {
-                        addFiles(fileFiles, "file");
+
+                    if (
+                        !supportsImages &&
+                        splitAttachmentFiles(files).imageFiles.length > 0
+                    ) {
+                        event.preventDefault();
                     }
+
+                    handleIncomingFiles(files);
                 }}
             />
         </div>
@@ -404,7 +387,7 @@ function ChatInputToolbar({
     selectedModel,
     selectedModelId,
     showContextBadge,
-    supportsFiles,
+    supportsNativeFiles,
     supportsImages,
     toolbarSlot,
     hasContent
@@ -415,19 +398,24 @@ function ChatInputToolbar({
     disabled: boolean;
     fileInputRef: RefObject<HTMLInputElement | null>;
     handleFileInputChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
-    handleImageInputChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+    handleImageInputChange: (
+        event: React.ChangeEvent<HTMLInputElement>
+    ) => void;
     imageInputRef: RefObject<HTMLInputElement | null>;
     isModelSelectDisabled: boolean;
     isSubmitting: boolean;
     isThinkingEnabled: boolean;
     models: ChatModel[];
-    onSelectedModelChange?: (modelId: string | null, source?: ProviderType) => void;
+    onSelectedModelChange?: (
+        modelId: string | null,
+        source?: ProviderType
+    ) => void;
     onStop?: () => void;
     onThinkingChange?: (enabled: boolean) => void;
     selectedModel: ChatModel | null;
     selectedModelId: string | null;
     showContextBadge: boolean;
-    supportsFiles: boolean;
+    supportsNativeFiles: boolean;
     supportsImages: boolean;
     toolbarSlot?: ReactNode;
     hasContent: boolean;
@@ -477,7 +465,9 @@ function ChatInputToolbar({
                 {showContextBadge ? (
                     <ContextWindowMeter
                         model={selectedModel}
-                        estimatedTokenCount={estimateTokens(conversationMessages)}
+                        estimatedTokenCount={estimateTokens(
+                            conversationMessages
+                        )}
                     />
                 ) : null}
 
@@ -494,7 +484,6 @@ function ChatInputToolbar({
                 <input
                     ref={fileInputRef}
                     type="file"
-                    accept={FILE_ACCEPT_STRING}
                     multiple
                     className="hidden"
                     onChange={handleFileInputChange}
@@ -515,19 +504,23 @@ function ChatInputToolbar({
                     </Tooltip>
                 )}
 
-                {supportsFiles && (
-                    <Tooltip content="Attach files">
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            className="size-8 p-0 text-dark-200 hover:bg-dark-700 hover:text-dark-50"
-                            disabled={attachmentsDisabled}
-                            onClick={() => fileInputRef.current?.click()}
-                        >
-                            <PaperclipIcon className="size-4" weight="bold" />
-                        </Button>
-                    </Tooltip>
-                )}
+                <Tooltip
+                    content={
+                        supportsNativeFiles
+                            ? "Attach files"
+                            : "Attach files as text context"
+                    }
+                >
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        className="size-8 p-0 text-dark-200 hover:bg-dark-700 hover:text-dark-50"
+                        disabled={attachmentsDisabled}
+                        onClick={() => fileInputRef.current?.click()}
+                    >
+                        <PaperclipIcon className="size-4" weight="bold" />
+                    </Button>
+                </Tooltip>
 
                 {isSubmitting && onStop ? (
                     <Tooltip content="Stop generation">
@@ -627,7 +620,7 @@ export function ChatInput({
     const supportsImages = selectedModel
         ? selectedModel.inputModalities.includes("image")
         : true;
-    const supportsFiles = selectedModel
+    const supportsNativeFiles = selectedModel
         ? selectedModel.inputModalities.includes("file")
         : false;
     const isModelSelectDisabled =
@@ -644,7 +637,6 @@ export function ChatInput({
 
     const addFiles = useCallback(
         (files: FileList | File[], kind: "image" | "file") => {
-            setFileError(null);
             const incoming = Array.from(files);
             const remaining = MAX_ATTACHMENTS - attachments.length;
 
@@ -655,14 +647,15 @@ export function ChatInput({
                 return;
             }
 
-            const allowedTypes =
-                kind === "image" ? IMAGE_MIME_TYPES : FILE_MIME_TYPES;
             const toAdd: ChatAttachment[] = [];
 
             for (const file of incoming.slice(0, remaining)) {
-                if (!allowedTypes[file.type]) {
+                if (
+                    kind === "image" &&
+                    splitAttachmentFiles([file]).imageFiles.length === 0
+                ) {
                     setFileError(
-                        `"${file.name}" is not a supported file type.`
+                        `"${file.name}" is not a supported image file.`
                     );
                     continue;
                 }
@@ -690,6 +683,64 @@ export function ChatInput({
         [attachments.length]
     );
 
+    const handleIncomingFiles = useCallback(
+        (files: FileList | File[]) => {
+            const incoming = Array.from(files);
+
+            if (incoming.length === 0) {
+                return;
+            }
+
+            setFileError(null);
+
+            const remaining = MAX_ATTACHMENTS - attachments.length;
+
+            if (remaining <= 0) {
+                setFileError(
+                    `Maximum of ${MAX_ATTACHMENTS} attachments reached.`
+                );
+                return;
+            }
+
+            const { imageFiles, fileFiles } = splitAttachmentFiles(incoming);
+            const nextImageFiles = supportsImages
+                ? imageFiles.slice(0, remaining)
+                : [];
+            const nextFileFiles = fileFiles.slice(
+                0,
+                Math.max(remaining - nextImageFiles.length, 0)
+            );
+
+            if (nextImageFiles.length > 0) {
+                addFiles(nextImageFiles, "image");
+            }
+
+            if (nextFileFiles.length > 0) {
+                addFiles(nextFileFiles, "file");
+            }
+
+            if (
+                (supportsImages ? imageFiles.length : 0) + fileFiles.length >
+                remaining
+            ) {
+                setFileError(
+                    (current) =>
+                        current ??
+                        `Maximum of ${MAX_ATTACHMENTS} attachments reached.`
+                );
+            }
+
+            if (!supportsImages && imageFiles.length > 0) {
+                setFileError(
+                    (current) =>
+                        current ??
+                        `${selectedModel?.name ?? "This model"} does not support image attachments.`
+                );
+            }
+        },
+        [addFiles, attachments.length, selectedModel?.name, supportsImages]
+    );
+
     const removeAttachment = useCallback((id: string) => {
         setAttachments((prev) => {
             const target = prev.find((a) => a.id === id);
@@ -712,6 +763,7 @@ export function ChatInput({
         event: React.ChangeEvent<HTMLInputElement>
     ) {
         if (event.target.files && event.target.files.length > 0) {
+            setFileError(null);
             addFiles(event.target.files, "image");
         }
         event.target.value = "";
@@ -719,7 +771,7 @@ export function ChatInput({
 
     function handleFileInputChange(event: React.ChangeEvent<HTMLInputElement>) {
         if (event.target.files && event.target.files.length > 0) {
-            addFiles(event.target.files, "file");
+            handleIncomingFiles(event.target.files);
         }
         event.target.value = "";
     }
@@ -742,13 +794,7 @@ export function ChatInput({
         event.preventDefault();
         setIsDragOver(false);
         if (!disabled && !isSubmitting && event.dataTransfer.files.length > 0) {
-            const { imageFiles, fileFiles } = collectAcceptedFiles(
-                Array.from(event.dataTransfer.files)
-            );
-            if (supportsImages && imageFiles.length > 0)
-                addFiles(imageFiles, "image");
-            if (supportsFiles && fileFiles.length > 0)
-                addFiles(fileFiles, "file");
+            handleIncomingFiles(event.dataTransfer.files);
         }
     }
 
@@ -818,12 +864,11 @@ export function ChatInput({
             )}
 
             <ChatComposerTextarea
-                addFiles={addFiles}
                 disabled={disabled}
                 draft={draft}
+                handleIncomingFiles={handleIncomingFiles}
                 onSubmit={handleKeySubmit}
                 placeholder={placeholder}
-                supportsFiles={supportsFiles}
                 supportsImages={supportsImages}
                 updateValue={updateValue}
             />
@@ -847,7 +892,7 @@ export function ChatInput({
                 selectedModel={selectedModel}
                 selectedModelId={selectedModelId}
                 showContextBadge={showContextBadge}
-                supportsFiles={supportsFiles}
+                supportsNativeFiles={supportsNativeFiles}
                 supportsImages={supportsImages}
                 toolbarSlot={toolbarSlot}
                 hasContent={hasContent}

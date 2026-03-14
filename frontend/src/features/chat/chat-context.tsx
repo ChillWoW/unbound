@@ -11,6 +11,7 @@ import {
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/features/auth/use-auth";
 import { chatApi } from "./api";
+import { resolveAttachmentMimeType } from "./attachment-utils";
 import {
     parseAIStream,
     type ReconnectState,
@@ -56,7 +57,7 @@ async function prepareAttachments(
     return Promise.all(
         attachments.map(async (a) => ({
             data: await fileToBase64(a.file),
-            mimeType: a.file.type,
+            mimeType: resolveAttachmentMimeType(a.file),
             filename: a.file.name,
             size: a.file.size
         }))

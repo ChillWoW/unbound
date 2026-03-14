@@ -8,7 +8,10 @@ import {
     type ModelSummary
 } from "./models.types";
 import { DEFAULT_CONTEXT_LENGTH } from "../ai/token-estimator";
-import { DIRECT_PROVIDERS } from "../../lib/provider-registry";
+import {
+    DIRECT_PROVIDERS,
+    type ProviderType
+} from "../../lib/provider-registry";
 import { logger } from "../../lib/logger";
 import {
     getCachedModel,
@@ -166,5 +169,26 @@ export const modelsService = {
 
     getModelMaxOutputTokens(userId: string, modelId: string): number | null {
         return getCachedModel(userId, modelId)?.maxOutputTokens ?? null;
+    },
+
+    getModelInputModalities(
+        userId: string,
+        modelId: string,
+        provider?: ProviderType
+    ): string[] | null {
+        const cached = getCachedModel(userId, modelId);
+
+        if (cached) {
+            return cached.inputModalities;
+        }
+
+        if (!provider || provider === "openrouter") {
+            return null;
+        }
+
+        return (
+            getDirectProviderModels(provider).find((model) => model.id === modelId)
+                ?.inputModalities ?? null
+        );
     }
 };

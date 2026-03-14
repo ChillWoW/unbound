@@ -5,6 +5,7 @@ import type {
     UserModelMessage
 } from "ai";
 import { blobStorage } from "../attachments/blob-storage";
+import type { ModelAttachmentCapabilities } from "./model-attachment-capabilities";
 import type {
     MessageAttachmentRecord,
     MessagePart,
@@ -29,18 +30,28 @@ function describeAttachment(
 
 function createFileContextText(
     part: Extract<MessagePart, { type: "file" }>,
-    attachment: MessageAttachmentRecord | undefined
+    attachment: MessageAttachmentRecord | undefined,
+    nativeFileDelivery: boolean
 ) {
     const description = describeAttachment(part);
     const extractedText = attachment?.extractedText?.trim();
 
     if (!extractedText) {
-        return `Attached file: ${description}.`;
+        return nativeFileDelivery
+            ? `Attached file: ${description}.`
+            : [
+                  `Attached file: ${description}.`,
+                  "No extractable text was available from this file, so only metadata is provided."
+              ].join("\n\n");
     }
+
+    const intro = nativeFileDelivery
+        ? "Use the extracted document text below if native file parsing is unavailable:"
+        : "The file has been converted into text context below:";
 
     return [
         `Attached file: ${description}.`,
-        "Use the extracted document text below if native file parsing is unavailable:",
+        intro,
         extractedText.slice(0, MAX_EXTRACTED_TEXT_LENGTH)
     ].join("\n\n");
 }
@@ -57,13 +68,15 @@ function toToolResultOutput(result: unknown): ToolResultPart["output"] {
 
 export async function toModelMessages(
     records: MessageRecord[],
-    attachments: MessageAttachmentRecord[]
+    attachments: MessageAttachmentRecord[],
+    capabilities?: Pick<ModelAttachmentCapabilities, "supportsNativeFileInput">
 ): Promise<ModelMessage[]> {
     const result: ModelMessage[] = [];
     const attachmentsById = new Map(
         attachments.map((attachment) => [attachment.id, attachment])
     );
     const base64Cache = new Map<string, string>();
+    const supportsNativeFileInput = capabilities?.supportsNativeFileInput ?? false;
 
     async function getAttachmentBase64(attachmentId: string): Promise<string | null> {
         const attachment = attachmentsById.get(attachmentId);
@@ -134,14 +147,20 @@ export async function toModelMessages(
 
                 if (part.type === "file") {
                     const attachment = attachmentsById.get(part.attachmentId);
-                    const fileData = await getAttachmentBase64(part.attachmentId);
+                    const fileData = supportsNativeFileInput
+                        ? await getAttachmentBase64(part.attachmentId)
+                        : null;
 
                     content.push({
                         type: "text",
-                        text: createFileContextText(part, attachment)
+                        text: createFileContextText(
+                            part,
+                            attachment,
+                            supportsNativeFileInput
+                        )
                     });
 
-                    if (fileData) {
+                    if (supportsNativeFileInput && fileData) {
                         content.push({
                             type: "file",
                             data: fileData,

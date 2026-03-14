@@ -7,6 +7,7 @@ export type AIRecoveryCode =
     | "rate_limited"
     | "insufficient_quota"
     | "model_unavailable"
+    | "unsupported_input"
     | "context_length_exceeded"
     | "request_timeout"
     | "network_error";
@@ -60,6 +61,19 @@ export function createMissingApiKeyRecovery(
         code: "missing_api_key",
         action: "open_settings",
         message: `Add your ${getProviderLabel(provider)} API key in settings to use this model.`,
+        provider,
+        retryable: false
+    };
+}
+
+export function createUnsupportedImageInputRecovery(
+    provider: ProviderType
+): AIRecoveryInfo {
+    return {
+        code: "unsupported_input",
+        action: "switch_model",
+        message:
+            "The selected model does not support image attachments. Switch to a model with image input.",
         provider,
         retryable: false
     };

@@ -61,6 +61,7 @@ export type ChatRecoveryCode =
     | "rate_limited"
     | "insufficient_quota"
     | "model_unavailable"
+    | "unsupported_input"
     | "context_length_exceeded"
     | "request_timeout"
     | "network_error";

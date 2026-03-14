@@ -36,11 +36,16 @@ import { encodeSSE, mapChunkToEvent, createSubscriberStream } from "./sse";
 import {
     AIGenerationError,
     createMissingApiKeyRecovery,
+    createUnsupportedImageInputRecovery,
     inferAIRecovery,
     type AIRecoveryInfo
 } from "./ai-recovery";
 import { extractSourcesFromParts } from "./citations";
 import type { ToolSet } from "./ai.tools";
+import {
+    inspectConversationAttachmentRequirements,
+    resolveModelAttachmentCapabilities
+} from "./model-attachment-capabilities";
 
 function createMessageId(): string {
     return `msg_${randomBytes(10).toString("hex")}`;
@@ -873,6 +878,45 @@ export const aiService = {
                 messageRecords.map((message) => message.id)
             );
         const attachmentLoadDurationMs = Date.now() - attachmentLoadStartedAt;
+        const attachmentCapabilities = resolveModelAttachmentCapabilities({
+            userId: user.id,
+            modelId,
+            provider: resolvedProvider
+        });
+        const attachmentRequirements = inspectConversationAttachmentRequirements(
+            messageRecords
+        );
+
+        if (
+            attachmentRequirements.hasImages &&
+            attachmentCapabilities.supportsImageInput === false
+        ) {
+            const recovery = createUnsupportedImageInputRecovery(resolvedProvider);
+
+            logger.warn("Generation rejected: unsupported image attachments", {
+                conversationId,
+                userId: user.id,
+                provider: resolvedProvider,
+                modelId,
+                attachmentCount: messageAttachmentRecords.length,
+                hasFiles: attachmentRequirements.hasFiles
+            });
+
+            const assistantMessageId = await appendFailedAssistantMessage({
+                conversationId,
+                modelId,
+                provider: resolvedProvider,
+                thinking,
+                replyToMessageId,
+                errorMessage: recovery.message,
+                recovery
+            });
+
+            throw new AIGenerationError(400, recovery.message, {
+                recovery,
+                assistantMessageId
+            });
+        }
 
         const initialPrompt = getInitialConversationPrompt(
             messageRecords
@@ -900,7 +944,10 @@ export const aiService = {
                     thinking
                 },
                 async (records) =>
-                    toModelMessages(records, messageAttachmentRecords)
+                    toModelMessages(records, messageAttachmentRecords, {
+                        supportsNativeFileInput:
+                            attachmentCapabilities.supportsNativeFileInput
+                    })
             );
 
             messagesWithSystemPrompt = contextResult.messages;
@@ -925,7 +972,10 @@ export const aiService = {
 
             messagesWithSystemPrompt = [
                 { role: "system", content: systemPrompt },
-                ...(await toModelMessages(messageRecords, messageAttachmentRecords))
+                ...(await toModelMessages(messageRecords, messageAttachmentRecords, {
+                    supportsNativeFileInput:
+                        attachmentCapabilities.supportsNativeFileInput
+                }))
             ];
         }
 
