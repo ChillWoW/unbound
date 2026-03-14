@@ -443,46 +443,70 @@ function ChatInputToolbar({
                         isThinkingEnabled={isThinkingEnabled}
                     />
                 </div>
-                {onThinkingChange && (
-                    <Tooltip content="Thinking" side="top">
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            className={cn(
-                                "size-8 p-0 hover:bg-dark-700",
-                                isThinkingEnabled
-                                    ? "text-dark-100 hover:text-dark-50"
-                                    : "text-dark-300 hover:text-dark-50"
-                            )}
-                            onClick={() => onThinkingChange(!isThinkingEnabled)}
-                        >
-                            <BrainIcon
-                                className="size-4"
-                                weight={isThinkingEnabled ? "fill" : "bold"}
-                            />
-                        </Button>
-                    </Tooltip>
+                {(onThinkingChange || onDeepResearchChange) && (
+                    <div className="flex items-center overflow-hidden rounded-xl bg-dark-900 border border-dark-500">
+                        {onThinkingChange && (
+                            <Tooltip content="Thinking" side="top">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className={cn(
+                                        "size-8 p-0 transition-colors",
+                                        onDeepResearchChange
+                                            ? "rounded-l-xl rounded-r-none"
+                                            : "rounded-xl",
+                                        isThinkingEnabled
+                                            ? "bg-dark-700 text-dark-50 hover:bg-dark-600"
+                                            : "text-dark-300 hover:bg-dark-800 hover:text-dark-50"
+                                    )}
+                                    onClick={() =>
+                                        onThinkingChange(!isThinkingEnabled)
+                                    }
+                                >
+                                    <BrainIcon
+                                        className="size-4"
+                                        weight={
+                                            isThinkingEnabled ? "fill" : "bold"
+                                        }
+                                    />
+                                </Button>
+                            </Tooltip>
+                        )}
+
+                        {onDeepResearchChange && (
+                            <Tooltip content="Deep Research" side="top">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className={cn(
+                                        "size-8 p-0 transition-colors border-l border-dark-500",
+                                        onThinkingChange
+                                            ? "rounded-r-xl rounded-l-none"
+                                            : "rounded-xl border-l-0",
+                                        isDeepResearchEnabled
+                                            ? "bg-dark-700 text-dark-50 hover:bg-dark-600"
+                                            : "text-dark-300 hover:bg-dark-800 hover:text-dark-50"
+                                    )}
+                                    onClick={() =>
+                                        onDeepResearchChange(
+                                            !isDeepResearchEnabled
+                                        )
+                                    }
+                                >
+                                    <CompassIcon
+                                        className="size-4"
+                                        weight={
+                                            isDeepResearchEnabled
+                                                ? "fill"
+                                                : "bold"
+                                        }
+                                    />
+                                </Button>
+                            </Tooltip>
+                        )}
+                    </div>
                 )}
-                {onDeepResearchChange && (
-                    <Tooltip content="Deep Research" side="top">
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            className={cn(
-                                "size-8 p-0 hover:bg-dark-700",
-                                isDeepResearchEnabled
-                                    ? "text-primary-400 hover:text-primary-300"
-                                    : "text-dark-300 hover:text-dark-50"
-                            )}
-                            onClick={() => onDeepResearchChange(!isDeepResearchEnabled)}
-                        >
-                            <CompassIcon
-                                className="size-4"
-                                weight={isDeepResearchEnabled ? "fill" : "bold"}
-                            />
-                        </Button>
-                    </Tooltip>
-                )}
+
                 {toolbarSlot}
             </div>
 

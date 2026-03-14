@@ -25,7 +25,11 @@ import { modelsService } from "../models/models.service";
 import { logger } from "../../lib/logger";
 import { memoryService } from "../memory/memory.service";
 
-import { toModelMessages, buildSystemPrompt, buildDeepResearchSystemPrompt } from "./message-converter";
+import {
+    toModelMessages,
+    buildSystemPrompt,
+    buildDeepResearchSystemPrompt
+} from "./message-converter";
 import { buildProviderOptions } from "./provider-options";
 import {
     upsertToolInvocationPart,
@@ -108,10 +112,12 @@ function buildErrorMetadata(input: {
     };
 }
 
-function getLatestUserText(messageRecords: {
-    role: string;
-    parts: MessagePart[];
-}[]): string {
+function getLatestUserText(
+    messageRecords: {
+        role: string;
+        parts: MessagePart[];
+    }[]
+): string {
     for (let index = messageRecords.length - 1; index >= 0; index -= 1) {
         const record = messageRecords[index];
 
@@ -369,7 +375,7 @@ async function generateConversationTitleInBackground(input: {
     }
 }
 
-const DEEP_RESEARCH_MAX_STEPS = 60;
+const DEEP_RESEARCH_MAX_STEPS = 100;
 const DEEP_RESEARCH_MAX_OUTPUT_TOKENS = 16384;
 
 function startBackgroundGeneration(
@@ -411,7 +417,7 @@ function startBackgroundGeneration(
         tools,
         maxOutputTokens: effectiveMaxOutputTokens,
         maxRetries: 2,
-        stopWhen: stepCountIs(deepResearch ? DEEP_RESEARCH_MAX_STEPS : 20),
+        stopWhen: stepCountIs(deepResearch ? DEEP_RESEARCH_MAX_STEPS : 50),
         abortSignal: generation.abortController.signal,
         onFinish: async ({ steps, finishReason }) => {
             if (generation.abortController.signal.aborted) return;
@@ -426,7 +432,10 @@ function startBackgroundGeneration(
                     const stepToolResults = step.toolResults ?? [];
 
                     if (thinking && stepReasoning) {
-                        finalParts.push({ type: "reasoning", text: stepReasoning });
+                        finalParts.push({
+                            type: "reasoning",
+                            text: stepReasoning
+                        });
                     }
 
                     for (const call of stepToolCalls) {
@@ -460,7 +469,10 @@ function startBackgroundGeneration(
                 }
 
                 for (const part of finalParts) {
-                    if (part.type === "tool-invocation" && part.state === "call") {
+                    if (
+                        part.type === "tool-invocation" &&
+                        part.state === "call"
+                    ) {
                         part.state = "error";
                     }
                 }
@@ -486,19 +498,22 @@ function startBackgroundGeneration(
                     usage
                 });
 
-                await conversationsRepository.updateMessage(assistantMessageId, {
-                    parts: finalParts,
-                    status,
-                    metadata: {
-                        model: modelId,
-                        provider,
-                        thinkingEnabled: thinking,
-                        generationStartedAt,
-                        generationCompletedAt,
-                        usage,
-                        ...(sources.length > 0 ? { sources } : {})
+                await conversationsRepository.updateMessage(
+                    assistantMessageId,
+                    {
+                        parts: finalParts,
+                        status,
+                        metadata: {
+                            model: modelId,
+                            provider,
+                            thinkingEnabled: thinking,
+                            generationStartedAt,
+                            generationCompletedAt,
+                            usage,
+                            ...(sources.length > 0 ? { sources } : {})
+                        }
                     }
-                });
+                );
 
                 if (
                     status === "complete" &&
@@ -522,7 +537,8 @@ function startBackgroundGeneration(
                 logger.error("onFinish processing failed", {
                     conversationId: generation.conversationId,
                     messageId: assistantMessageId,
-                    error: error instanceof Error ? error.message : String(error)
+                    error:
+                        error instanceof Error ? error.message : String(error)
                 });
             } finally {
                 await cleanupTools();
@@ -650,7 +666,10 @@ function startBackgroundGeneration(
                 }
             }
 
-            if (generation.abortController.signal.aborted && !generation.finished) {
+            if (
+                generation.abortController.signal.aborted &&
+                !generation.finished
+            ) {
                 logger.info("Generation stopped by user (post-stream)", {
                     conversationId: generation.conversationId,
                     messageId: assistantMessageId
@@ -681,7 +700,10 @@ function startBackgroundGeneration(
                     logger.error("Failed to persist stopped state", {
                         conversationId: generation.conversationId,
                         messageId: assistantMessageId,
-                        error: dbError instanceof Error ? dbError.message : String(dbError)
+                        error:
+                            dbError instanceof Error
+                                ? dbError.message
+                                : String(dbError)
                     });
                 }
                 generationManager.complete(generation.conversationId);
@@ -724,7 +746,10 @@ function startBackgroundGeneration(
                     logger.error("Failed to persist stopped state", {
                         conversationId: generation.conversationId,
                         messageId: assistantMessageId,
-                        error: dbError instanceof Error ? dbError.message : String(dbError)
+                        error:
+                            dbError instanceof Error
+                                ? dbError.message
+                                : String(dbError)
                     });
                 }
 
@@ -749,25 +774,31 @@ function startBackgroundGeneration(
                 );
                 const sources = extractSourcesFromParts(errorParts);
 
-                await conversationsRepository.updateMessage(assistantMessageId, {
-                    parts: errorParts,
-                    status: "failed",
-                    metadata: buildErrorMetadata({
-                        modelId,
-                        provider,
-                        thinking,
-                        generationStartedAt,
-                        generationCompletedAt: new Date().toISOString(),
-                        errorMessage: streamErrorMessage,
-                        sources,
-                        recovery
-                    })
-                });
+                await conversationsRepository.updateMessage(
+                    assistantMessageId,
+                    {
+                        parts: errorParts,
+                        status: "failed",
+                        metadata: buildErrorMetadata({
+                            modelId,
+                            provider,
+                            thinking,
+                            generationStartedAt,
+                            generationCompletedAt: new Date().toISOString(),
+                            errorMessage: streamErrorMessage,
+                            sources,
+                            recovery
+                        })
+                    }
+                );
             } catch (dbError) {
                 logger.error("Failed to persist error state", {
                     conversationId: generation.conversationId,
                     messageId: assistantMessageId,
-                    error: dbError instanceof Error ? dbError.message : String(dbError)
+                    error:
+                        dbError instanceof Error
+                            ? dbError.message
+                            : String(dbError)
                 });
             }
 
@@ -807,10 +838,11 @@ export const aiService = {
 
         const conversationLookupPromise = (async () => {
             const lookupStartedAt = Date.now();
-            const value = await conversationsRepository.findConversationByIdForUser(
-                user.id,
-                conversationId
-            );
+            const value =
+                await conversationsRepository.findConversationByIdForUser(
+                    user.id,
+                    conversationId
+                );
 
             return {
                 value,
@@ -861,14 +893,10 @@ export const aiService = {
                 errorMessage: recovery.message,
                 recovery
             });
-            throw new AIGenerationError(
-                400,
-                recovery.message,
-                {
-                    recovery,
-                    assistantMessageId
-                }
-            );
+            throw new AIGenerationError(400, recovery.message, {
+                recovery,
+                assistantMessageId
+            });
         }
 
         const messageLoadStartedAt = Date.now();
@@ -892,15 +920,15 @@ export const aiService = {
             modelId,
             provider: resolvedProvider
         });
-        const attachmentRequirements = inspectConversationAttachmentRequirements(
-            messageRecords
-        );
+        const attachmentRequirements =
+            inspectConversationAttachmentRequirements(messageRecords);
 
         if (
             attachmentRequirements.hasImages &&
             attachmentCapabilities.supportsImageInput === false
         ) {
-            const recovery = createUnsupportedImageInputRecovery(resolvedProvider);
+            const recovery =
+                createUnsupportedImageInputRecovery(resolvedProvider);
 
             logger.warn("Generation rejected: unsupported image attachments", {
                 conversationId,
@@ -984,10 +1012,14 @@ export const aiService = {
 
             messagesWithSystemPrompt = [
                 { role: "system", content: systemPrompt },
-                ...(await toModelMessages(messageRecords, messageAttachmentRecords, {
-                    supportsNativeFileInput:
-                        attachmentCapabilities.supportsNativeFileInput
-                }))
+                ...(await toModelMessages(
+                    messageRecords,
+                    messageAttachmentRecords,
+                    {
+                        supportsNativeFileInput:
+                            attachmentCapabilities.supportsNativeFileInput
+                    }
+                ))
             ];
         }
 

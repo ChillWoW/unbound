@@ -9,7 +9,8 @@ import {
     FileTextIcon,
     GlobeHemisphereWestIcon,
     MagnifyingGlassIcon,
-    SpinnerGapIcon
+    SpinnerGapIcon,
+    WarningCircleIcon
 } from "@phosphor-icons/react";
 import { Button, Tooltip } from "@/components/ui";
 import { cn } from "@/lib/cn";
@@ -232,11 +233,11 @@ function ActivityLog({ steps }: { steps: ActivityStep[] }) {
     if (steps.length === 0) return null;
 
     return (
-        <div className="border-t border-dark-700 px-4 py-3">
+        <div className="mt-2">
             <button
                 type="button"
                 onClick={() => setExpanded((v) => !v)}
-                className="flex w-full items-center gap-2 text-xs font-medium text-dark-200 transition-colors hover:text-dark-50"
+                className="flex items-center gap-1.5 text-xs text-dark-300 transition-colors hover:text-dark-50"
             >
                 <CaretRightIcon
                     className={cn(
@@ -245,9 +246,9 @@ function ActivityLog({ steps }: { steps: ActivityStep[] }) {
                     )}
                     weight="bold"
                 />
-                <span>
+                <span className="font-medium">
                     Activity{" "}
-                    <span className="text-dark-300">
+                    <span className="text-dark-400">
                         ({doneCount} done
                         {pendingCount > 0 ? `, ${pendingCount} running` : ""})
                     </span>
@@ -255,7 +256,7 @@ function ActivityLog({ steps }: { steps: ActivityStep[] }) {
             </button>
 
             {expanded && (
-                <div className="mt-2 ml-1 flex flex-col gap-1.5">
+                <div className="mt-1.5 ml-1 flex flex-col gap-1">
                     {steps.map((step) => (
                         <div
                             key={step.id}
@@ -267,9 +268,10 @@ function ActivityLog({ steps }: { steps: ActivityStep[] }) {
                                     weight="bold"
                                 />
                             ) : step.state === "error" ? (
-                                <span className="size-3 shrink-0 text-red-400">
-                                    &times;
-                                </span>
+                                <WarningCircleIcon
+                                    className="size-3 shrink-0 text-red-400"
+                                    weight="fill"
+                                />
                             ) : (
                                 <CheckCircleIcon
                                     className="size-3 shrink-0 text-emerald-400"
@@ -278,12 +280,12 @@ function ActivityLog({ steps }: { steps: ActivityStep[] }) {
                             )}
                             {step.type === "search" ? (
                                 <MagnifyingGlassIcon
-                                    className="size-3 shrink-0 text-dark-300"
+                                    className="size-3 shrink-0 text-dark-400"
                                     weight="bold"
                                 />
                             ) : step.type === "scrape" ? (
                                 <GlobeHemisphereWestIcon
-                                    className="size-3 shrink-0 text-dark-300"
+                                    className="size-3 shrink-0 text-dark-400"
                                     weight="bold"
                                 />
                             ) : null}
@@ -291,8 +293,8 @@ function ActivityLog({ steps }: { steps: ActivityStep[] }) {
                                 className={cn(
                                     "truncate",
                                     step.state === "pending"
-                                        ? "text-dark-100"
-                                        : "text-dark-300"
+                                        ? "text-dark-200"
+                                        : "text-dark-400"
                                 )}
                             >
                                 {step.label}
@@ -311,27 +313,26 @@ function SourcesGrid({ sources }: { sources: CitationSource[] }) {
     if (sources.length === 0) return null;
 
     return (
-        <div className="border-t border-dark-700 px-4 py-3">
+        <div className="mt-3">
             <button
                 type="button"
                 onClick={() => setExpanded((v) => !v)}
-                className="flex w-full items-center gap-2 text-xs font-medium text-dark-200 transition-colors hover:text-dark-50"
+                className="flex items-center gap-1.5 text-xs text-dark-300 transition-colors hover:text-dark-50"
             >
+                <GlobeHemisphereWestIcon
+                    className="size-3.5 shrink-0"
+                    weight="bold"
+                />
+                <span className="font-medium">
+                    {sources.length} source{sources.length !== 1 ? "s" : ""}
+                </span>
                 <CaretRightIcon
                     className={cn(
-                        "size-3 shrink-0 transition-transform",
+                        "size-3 transition-transform",
                         expanded && "rotate-90"
                     )}
                     weight="bold"
                 />
-                <GlobeHemisphereWestIcon
-                    className="size-3 shrink-0"
-                    weight="bold"
-                />
-                <span>
-                    {sources.length} source{sources.length !== 1 ? "s" : ""}{" "}
-                    found
-                </span>
             </button>
 
             {expanded && (
@@ -347,7 +348,7 @@ function SourcesGrid({ sources }: { sources: CitationSource[] }) {
                                 rel="noopener noreferrer"
                                 referrerPolicy="no-referrer"
                                 title={source.title}
-                                className="inline-flex items-center gap-1.5 rounded-md border border-dark-600 bg-dark-850 px-2.5 py-1 text-xs text-dark-100 transition-colors hover:border-dark-500 hover:bg-dark-800 hover:text-dark-50"
+                                className="inline-flex items-center gap-1.5 rounded-md border border-dark-600 bg-dark-850 px-3 py-0.5 text-xs text-dark-100 transition-colors hover:border-dark-500 hover:bg-dark-800 hover:text-dark-50"
                             >
                                 <img
                                     src={`https://www.google.com/s2/favicons?domain=${source.host}&sz=16`}
@@ -357,11 +358,11 @@ function SourcesGrid({ sources }: { sources: CitationSource[] }) {
                                         e.currentTarget.style.display = "none";
                                     }}
                                 />
-                                <span className="max-w-32 truncate">
+                                <span className="max-w-36 truncate">
                                     {source.host}
                                 </span>
                                 <ArrowSquareOutIcon
-                                    className="size-3 shrink-0 text-dark-300"
+                                    className="size-3 shrink-0 text-dark-200"
                                     weight="bold"
                                 />
                             </a>
@@ -434,7 +435,7 @@ blockquote { border-left: 3px solid #d1d5db; margin: 1em 0; padding: 0.5em 1em; 
     if (!reportText) return null;
 
     return (
-        <div className="flex items-center gap-2 border-t border-dark-700 px-4 py-3">
+        <div className="mt-3 flex items-center gap-2">
             <Tooltip content={copied ? "Copied!" : "Copy as Markdown"}>
                 <Button
                     type="button"
@@ -508,40 +509,38 @@ export function DeepResearchCard({
     const isComplete = message.status === "complete";
 
     return (
-        <div className="my-2 overflow-hidden rounded-lg border border-dark-600 bg-dark-900">
-            <div className="flex items-center justify-between px-4 py-3">
-                <div className="flex items-center gap-2">
-                    <CompassIcon
-                        className="size-4 text-primary-400"
-                        weight="fill"
-                    />
-                    <span className="text-sm font-semibold text-white">
-                        Deep Research
+        <div className="my-2 w-full">
+            <div className="flex items-center gap-2 text-xs text-dark-200">
+                <CompassIcon
+                    className="size-3.5 shrink-0 text-primary-400"
+                    weight="fill"
+                />
+                <span className={cn("font-medium", isPending && "wave-text")}>
+                    Deep Research
+                </span>
+                {model && <span className="text-dark-400">{model}</span>}
+                {duration && (
+                    <span className="flex items-center gap-1 text-dark-400">
+                        <ClockIcon className="size-3" weight="bold" />
+                        {duration}
                     </span>
-                    {isPending && (
-                        <span className="wave-text text-xs text-dark-300">
-                            Researching...
-                        </span>
-                    )}
-                </div>
-                <div className="flex items-center gap-2 text-[11px] text-dark-300">
-                    {model && <span>{model}</span>}
-                    {model && duration && <span>-</span>}
-                    {duration && (
-                        <span className="flex items-center gap-1">
-                            <ClockIcon className="size-3" weight="bold" />
-                            {duration}
-                        </span>
-                    )}
-                </div>
+                )}
             </div>
 
             <ActivityLog steps={activitySteps} />
 
-            <SourcesGrid sources={sources} />
+            {!hasReport && isPending && (
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-dark-300">
+                    <SpinnerGapIcon
+                        className="size-3 animate-spin"
+                        weight="bold"
+                    />
+                    <span>Gathering information...</span>
+                </div>
+            )}
 
             {hasReport && (
-                <div className="border-t border-dark-700 px-4 py-4">
+                <div className="mt-3">
                     <MarkdownRenderer
                         content={reportText}
                         isStreaming={isPending}
@@ -549,23 +548,17 @@ export function DeepResearchCard({
                 </div>
             )}
 
-            {!hasReport && isPending && (
-                <div className="border-t border-dark-700 px-4 py-4">
-                    <div className="flex items-center gap-2 text-xs text-dark-200">
-                        <SpinnerGapIcon
-                            className="size-3.5 animate-spin"
-                            weight="bold"
-                        />
-                        <span>Gathering information...</span>
-                    </div>
+            {message.status === "failed" && (
+                <div className="mt-2 flex items-start gap-1.5 text-xs text-red-400">
+                    <WarningCircleIcon
+                        className="mt-px size-3.5 shrink-0"
+                        weight="fill"
+                    />
+                    <span>{metadata?.errorMessage ?? "Research failed."}</span>
                 </div>
             )}
 
-            {message.status === "failed" && (
-                <div className="border-t border-dark-700 px-4 py-3 text-xs text-red-400">
-                    {metadata?.errorMessage ?? "Research failed."}
-                </div>
-            )}
+            <SourcesGrid sources={sources} />
 
             {isComplete && <ExportBar reportText={reportText} />}
         </div>
