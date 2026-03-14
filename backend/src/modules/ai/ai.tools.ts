@@ -13,8 +13,10 @@ import {
 // import { createSandboxTools } from "./sandbox-tools";
 
 const SEARCH_RESULT_LIMIT = 5;
+const SEARCH_RESULT_LIMIT_DEEP_RESEARCH = 10;
 const SEARCH_SNIPPET_MAX_LENGTH = 280;
 const SCRAPE_CONTENT_MAX_LENGTH = 6000;
+const SCRAPE_CONTENT_MAX_LENGTH_DEEP_RESEARCH = 20_000;
 const FETCH_TIMEOUT_MS = 10_000;
 
 function normalizeWhitespace(value: string): string {
@@ -225,9 +227,9 @@ function normalizeSearchResults(payload: unknown, limit: number) {
     });
 }
 
-function normalizeScrapeContent(payload: string) {
+function normalizeScrapeContent(payload: string, maxLength = SCRAPE_CONTENT_MAX_LENGTH) {
     const text = payload.trim();
-    const content = truncateText(text, SCRAPE_CONTENT_MAX_LENGTH);
+    const content = truncateText(text, maxLength);
 
     return {
         content,
@@ -255,8 +257,12 @@ export type ToolSet = Record<string, any>;
 function createBuiltInTools(
     conversationId: string,
     userId: string,
-    latestUserText: string | null
+    latestUserText: string | null,
+    deepResearch: boolean
 ): ToolSet {
+    const searchLimit = deepResearch ? SEARCH_RESULT_LIMIT_DEEP_RESEARCH : SEARCH_RESULT_LIMIT;
+    const scrapeMaxLength = deepResearch ? SCRAPE_CONTENT_MAX_LENGTH_DEEP_RESEARCH : SCRAPE_CONTENT_MAX_LENGTH;
+
     return {
         webSearch: tool({
             description:
@@ -267,9 +273,9 @@ function createBuiltInTools(
                     .number()
                     .int()
                     .min(1)
-                    .max(SEARCH_RESULT_LIMIT)
+                    .max(searchLimit)
                     .optional()
-                    .describe(`Maximum results to return, up to ${SEARCH_RESULT_LIMIT}`),
+                    .describe(`Maximum results to return, up to ${searchLimit}`),
                 category: z
                     .string()
                     .optional()
@@ -293,7 +299,7 @@ function createBuiltInTools(
                         query: normalizedQuery,
                         category: category?.trim() || null,
                         language: language?.trim() || null,
-                        limit: limit ?? SEARCH_RESULT_LIMIT,
+                        limit: limit ?? searchLimit,
                         baseUrl: env.searxngBaseUrl
                     });
 
@@ -317,7 +323,7 @@ function createBuiltInTools(
                     const payload = await fetchJson(searchUrl);
                     const results = normalizeSearchResults(
                         payload,
-                        limit ?? SEARCH_RESULT_LIMIT
+                        limit ?? searchLimit
                     );
 
                     logger.info("webSearch tool completed", {
@@ -363,7 +369,7 @@ function createBuiltInTools(
                     const normalizedUrl = normalizeTargetUrl(url);
                     const proxyUrl = `https://r.jina.ai/${normalizedUrl}`;
                     const payload = await fetchText(proxyUrl);
-                    const normalized = normalizeScrapeContent(payload);
+                    const normalized = normalizeScrapeContent(payload, scrapeMaxLength);
 
                     logger.info("scrape tool completed", {
                         conversationId,
@@ -630,12 +636,13 @@ function createBuiltInTools(
 export async function createTools(
     conversationId: string,
     userId: string,
-    latestUserText: string | null
+    latestUserText: string | null,
+    deepResearch = false
 ): Promise<{
     tools: ToolSet;
     cleanup: () => Promise<void>;
 }> {
-    const tools = createBuiltInTools(conversationId, userId, latestUserText);
+    const tools = createBuiltInTools(conversationId, userId, latestUserText, deepResearch);
     const servers = await mcpService.listEnabledServersForRuntime(userId);
     const mcp = await createMcpToolsForServers({
         servers,

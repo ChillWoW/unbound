@@ -20,7 +20,7 @@ export interface StreamErrorEvent {
 }
 
 export interface StreamCallbacks {
-    onMessageStart?: (messageId: string) => void;
+    onMessageStart?: (messageId: string, deepResearch?: boolean) => void;
     onConversationTitle?: (title: string, titleSource: string) => void;
     onTextDelta?: (text: string) => void;
     onReasoning?: (text: string) => void;
@@ -86,7 +86,10 @@ export async function parseAIStream(
 
                 switch (event.type) {
                     case "message-start":
-                        callbacks.onMessageStart?.(event.messageId as string);
+                        callbacks.onMessageStart?.(
+                            event.messageId as string,
+                            event.deepResearch === true ? true : undefined
+                        );
                         break;
 
                     case "text-delta":

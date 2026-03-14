@@ -70,7 +70,8 @@ export function createSubscriberStream(
             controller.enqueue(
                 encodeSSE({
                     type: "message-start",
-                    messageId: generation.messageId
+                    messageId: generation.messageId,
+                    ...(generation.isDeepResearch ? { deepResearch: true } : {})
                 })
             );
 

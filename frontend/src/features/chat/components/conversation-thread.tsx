@@ -29,9 +29,11 @@ interface ConversationThreadProps {
     error?: string | null;
     isSending?: boolean;
     isLoadingModels?: boolean;
+    isDeepResearchEnabled?: boolean;
     isThinkingEnabled?: boolean;
     modelsError?: string | null;
     modelsErrorRecovery?: ChatErrorRecovery | null;
+    onDeepResearchChange?: (enabled: boolean) => void;
     onModelChange: (modelId: string | null, source?: ProviderType) => void;
     onStop?: () => void;
     onSubmit: (
@@ -50,9 +52,11 @@ export function ConversationThread({
     error,
     isSending = false,
     isLoadingModels = false,
+    isDeepResearchEnabled = false,
     isThinkingEnabled = false,
     modelsError = null,
     modelsErrorRecovery = null,
+    onDeepResearchChange,
     onModelChange,
     onStop,
     onThinkingChange,
@@ -278,9 +282,11 @@ export function ConversationThread({
                         selectedModelId={selectedModelId}
                         onSelectedModelChange={onModelChange}
                         isModelsLoading={isLoadingModels}
+                        isDeepResearchEnabled={isDeepResearchEnabled}
                         isThinkingEnabled={isThinkingEnabled}
                         modelsError={modelsError}
                         modelsErrorRecovery={modelsErrorRecovery}
+                        onDeepResearchChange={onDeepResearchChange}
                         onThinkingChange={onThinkingChange}
                         showContextBadge
                         placeholder="Send a message..."

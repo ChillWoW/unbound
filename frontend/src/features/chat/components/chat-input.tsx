@@ -15,7 +15,8 @@ import {
     FileTextIcon,
     ImageIcon,
     StopIcon,
-    BrainIcon
+    BrainIcon,
+    CompassIcon
 } from "@phosphor-icons/react";
 import { Button, Tooltip } from "@/components/ui";
 import { cn } from "@/lib/cn";
@@ -379,8 +380,10 @@ function ChatInputToolbar({
     imageInputRef,
     isModelSelectDisabled,
     isSubmitting,
+    isDeepResearchEnabled,
     isThinkingEnabled,
     models,
+    onDeepResearchChange,
     onSelectedModelChange,
     onStop,
     onThinkingChange,
@@ -404,8 +407,10 @@ function ChatInputToolbar({
     imageInputRef: RefObject<HTMLInputElement | null>;
     isModelSelectDisabled: boolean;
     isSubmitting: boolean;
+    isDeepResearchEnabled: boolean;
     isThinkingEnabled: boolean;
     models: ChatModel[];
+    onDeepResearchChange?: (enabled: boolean) => void;
     onSelectedModelChange?: (
         modelId: string | null,
         source?: ProviderType
@@ -454,6 +459,26 @@ function ChatInputToolbar({
                             <BrainIcon
                                 className="size-4"
                                 weight={isThinkingEnabled ? "fill" : "bold"}
+                            />
+                        </Button>
+                    </Tooltip>
+                )}
+                {onDeepResearchChange && (
+                    <Tooltip content="Deep Research" side="top">
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            className={cn(
+                                "size-8 p-0 hover:bg-dark-700",
+                                isDeepResearchEnabled
+                                    ? "text-primary-400 hover:text-primary-300"
+                                    : "text-dark-300 hover:text-dark-50"
+                            )}
+                            onClick={() => onDeepResearchChange(!isDeepResearchEnabled)}
+                        >
+                            <CompassIcon
+                                className="size-4"
+                                weight={isDeepResearchEnabled ? "fill" : "bold"}
                             />
                         </Button>
                     </Tooltip>
@@ -557,10 +582,12 @@ export interface ChatInputProps {
     disabled?: boolean;
     isSubmitting?: boolean;
     isModelsLoading?: boolean;
+    isDeepResearchEnabled?: boolean;
     isThinkingEnabled?: boolean;
     models?: ChatModel[];
     modelsError?: string | null;
     modelsErrorRecovery?: ChatErrorRecovery | null;
+    onDeepResearchChange?: (enabled: boolean) => void;
     onSelectedModelChange?: (
         modelId: string | null,
         source?: ProviderType
@@ -586,10 +613,12 @@ export function ChatInput({
     disabled = false,
     isSubmitting = false,
     isModelsLoading = false,
+    isDeepResearchEnabled = false,
     isThinkingEnabled = false,
     models = EMPTY_MODELS,
     modelsError = null,
     modelsErrorRecovery = null,
+    onDeepResearchChange,
     onSelectedModelChange,
     onThinkingChange,
     showContextBadge = false,
@@ -884,8 +913,10 @@ export function ChatInput({
                 imageInputRef={imageInputRef}
                 isModelSelectDisabled={isModelSelectDisabled}
                 isSubmitting={isSubmitting}
+                isDeepResearchEnabled={isDeepResearchEnabled}
                 isThinkingEnabled={isThinkingEnabled}
                 models={models}
+                onDeepResearchChange={onDeepResearchChange}
                 onSelectedModelChange={onSelectedModelChange}
                 onStop={onStop}
                 onThinkingChange={onThinkingChange}

@@ -91,6 +91,7 @@ export interface MessageMetadata {
     model?: string;
     provider?: string;
     thinkingEnabled?: boolean;
+    deepResearch?: boolean;
     generationStartedAt?: string;
     generationCompletedAt?: string;
     errorMessage?: string;

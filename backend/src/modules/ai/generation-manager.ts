@@ -3,7 +3,7 @@ import type { ToolInvocationPart } from "../conversations/conversations.types";
 import type { AIRecoveryInfo } from "./ai-recovery";
 
 export type SSEEvent =
-    | { type: "message-start"; messageId: string }
+    | { type: "message-start"; messageId: string; deepResearch?: boolean }
     | { type: "conversation-title"; title: string; titleSource: string }
     | { type: "text-delta"; text: string }
     | { type: "reasoning"; text: string }
@@ -34,6 +34,7 @@ export interface GenerationEntry {
     conversationId: string;
     userId: string;
     messageId: string;
+    isDeepResearch: boolean;
     emitter: EventEmitter;
     abortController: AbortController;
     finished: boolean;
@@ -48,7 +49,8 @@ class GenerationManager {
     register(
         conversationId: string,
         userId: string,
-        messageId: string
+        messageId: string,
+        deepResearch = false
     ): GenerationEntry {
         this.remove(conversationId);
 
@@ -56,6 +58,7 @@ class GenerationManager {
             conversationId,
             userId,
             messageId,
+            isDeepResearch: deepResearch,
             emitter: new EventEmitter(),
             abortController: new AbortController(),
             finished: false,

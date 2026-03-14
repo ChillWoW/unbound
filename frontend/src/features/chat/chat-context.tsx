@@ -305,6 +305,7 @@ interface ChatContextValue {
         title: string
     ) => Promise<void>;
     reconnectToGeneration: (conversationId: string) => Promise<void>;
+    isDeepResearchEnabled: boolean;
     isThinkingEnabled: boolean;
     selectedModelId: string | null;
     regenerateMessage: (
@@ -327,6 +328,7 @@ interface ChatContextValue {
         modelId: string | null,
         source?: ProviderType
     ) => void;
+    setDeepResearchEnabled: (enabled: boolean) => void;
     setThinkingEnabled: (enabled: boolean) => void;
     stopGeneration: (conversationId: string) => void;
     toggleFavoriteConversation: (
@@ -763,8 +765,12 @@ export function ChatProvider({ children }: PropsWithChildren) {
     const [isThinkingEnabled, setIsThinkingEnabled] = useState(
         () => localStorage.getItem("thinking-enabled") === "true"
     );
+    const [isDeepResearchEnabled, setIsDeepResearchEnabled] = useState(
+        () => localStorage.getItem("deep-research-enabled") === "true"
+    );
     const availableModels = useMemo(() => allModels, [allModels]);
     const isThinkingEnabledRef = useRef(false);
+    const isDeepResearchEnabledRef = useRef(false);
     const activeGenerationsRef = useRef<Map<string, AbortController>>(
         new Map()
     );
@@ -782,6 +788,11 @@ export function ChatProvider({ children }: PropsWithChildren) {
         isThinkingEnabledRef.current = isThinkingEnabled;
         localStorage.setItem("thinking-enabled", String(isThinkingEnabled));
     }, [isThinkingEnabled]);
+
+    useEffect(() => {
+        isDeepResearchEnabledRef.current = isDeepResearchEnabled;
+        localStorage.setItem("deep-research-enabled", String(isDeepResearchEnabled));
+    }, [isDeepResearchEnabled]);
 
     const upsertConversation = useCallback(
         (conversation: ConversationDetail | ConversationSummary) => {
@@ -1075,6 +1086,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
             replyToMessageId?: string
         ) => {
             const thinking = isThinkingEnabledRef.current;
+            const deepResearch = isDeepResearchEnabledRef.current;
             const abortController = new AbortController();
             activeGenerationsRef.current.set(conversationId, abortController);
             const generationStartedAt = new Date().toISOString();
@@ -1091,7 +1103,8 @@ export function ChatProvider({ children }: PropsWithChildren) {
                     model: modelId,
                     provider,
                     thinkingEnabled: thinking,
-                    generationStartedAt
+                    generationStartedAt,
+                    ...(deepResearch ? { deepResearch: true } : {})
                 }
             };
 
@@ -1157,7 +1170,8 @@ export function ChatProvider({ children }: PropsWithChildren) {
                     provider,
                     thinking,
                     abortController.signal,
-                    replyToMessageId
+                    replyToMessageId,
+                    deepResearch
                 );
             } catch (error) {
                 activeGenerationsRef.current.delete(conversationId);
@@ -1214,7 +1228,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
             let streamDoneTimer: ReturnType<typeof setTimeout> | null = null;
 
             await parseAIStream(streamResponse, {
-                    onMessageStart(messageId) {
+                    onMessageStart(messageId, eventDeepResearch) {
                         streamState.messageId = messageId;
                     setConversationDetails((current) => {
                         const existing = current[conversationId];
@@ -1225,7 +1239,18 @@ export function ChatProvider({ children }: PropsWithChildren) {
                                 ...existing,
                                 messages: existing.messages.map((m) =>
                                     m.id === optimisticId
-                                        ? { ...m, id: messageId }
+                                        ? {
+                                              ...m,
+                                              id: messageId,
+                                              ...(eventDeepResearch
+                                                  ? {
+                                                        metadata: {
+                                                            ...(m.metadata ?? {}),
+                                                            deepResearch: true
+                                                        }
+                                                    }
+                                                  : {})
+                                          }
                                         : m
                                 )
                             }
@@ -1932,11 +1957,13 @@ export function ChatProvider({ children }: PropsWithChildren) {
             modelsErrorRecovery,
             regenerateMessage,
             renameConversation,
+            isDeepResearchEnabled,
             isThinkingEnabled,
             reconnectToGeneration,
             selectedModelId,
             sendMessage,
             setSelectedModelId,
+            setDeepResearchEnabled: setIsDeepResearchEnabled,
             setThinkingEnabled: setIsThinkingEnabled,
             stopGeneration,
             toggleFavoriteConversation
@@ -1956,6 +1983,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
             isConversationSending,
             isCreatingConversation,
             isLoadingConversations,
+            isDeepResearchEnabled,
             isLoadingModels,
             isThinkingEnabled,
             loadConversation,

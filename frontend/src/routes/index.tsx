@@ -36,8 +36,10 @@ function HomePage() {
         isLoadingModels,
         modelsError,
         modelsErrorRecovery,
+        isDeepResearchEnabled,
         isThinkingEnabled,
         selectedModelId,
+        setDeepResearchEnabled,
         setSelectedModelId,
         setThinkingEnabled
     } = useChat();
@@ -92,12 +94,14 @@ function HomePage() {
                         }
                         isSubmitting={isCreatingConversation}
                         isModelsLoading={isLoadingModels}
+                        isDeepResearchEnabled={isDeepResearchEnabled}
                         isThinkingEnabled={isThinkingEnabled}
                         models={availableModels}
                         configuredProviders={configuredProviders}
                         modelsError={modelsError}
                         modelsErrorRecovery={modelsErrorRecovery}
                         selectedModelId={selectedModelId}
+                        onDeepResearchChange={setDeepResearchEnabled}
                         onSelectedModelChange={setSelectedModelId}
                         onThinkingChange={setThinkingEnabled}
                         value={draft}

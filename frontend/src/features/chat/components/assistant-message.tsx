@@ -25,6 +25,7 @@ import { formatGenerationError, parseChatErrorRecovery } from "../recovery";
 import { ModelSelector } from "./model-selector";
 import { ToolInvocationDisplay } from "./tool-invocation";
 import { ReasoningDisplay } from "./reasoning-display";
+import { DeepResearchCard } from "./deep-research-card";
 import { CopyButton, BranchNavigator } from "./message-actions";
 import {
     createMessagePartKey,
@@ -287,6 +288,7 @@ export function AssistantMessage({
     isSending: boolean;
     selectedModelId: string | null;
 }) {
+    const isDeepResearch = message.metadata?.deepResearch === true;
     const text = getMessageText(message.parts);
     const isPending = message.status === "pending";
     const hasText = message.parts.some((p) => p.type === "text");
@@ -314,6 +316,41 @@ export function AssistantMessage({
         !isSending &&
         (message.status === "complete" || message.status === "failed") &&
         message.parentMessageId != null;
+
+    if (isDeepResearch) {
+        return (
+            <div className="group w-full">
+                <DeepResearchCard
+                    message={message}
+                    availableModels={availableModels}
+                />
+                <div className="mt-1.5 flex items-center gap-1.5">
+                    {message.status === "complete" && text && (
+                        <CopyButton text={text} />
+                    )}
+                    {canRegenerate && (
+                        <Tooltip content="Regenerate" side="top">
+                            <button
+                                type="button"
+                                onClick={onRegenerate}
+                                className="flex size-7 items-center justify-center rounded-md text-dark-300 transition-colors hover:bg-dark-700 hover:text-dark-50"
+                            >
+                                <ArrowsClockwiseIcon
+                                    className="size-3.5"
+                                    weight="bold"
+                                />
+                            </button>
+                        </Tooltip>
+                    )}
+                    <BranchNavigator
+                        tree={tree}
+                        message={message}
+                        onSelect={onBranchSelect}
+                    />
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="group w-full">

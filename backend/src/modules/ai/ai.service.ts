@@ -25,7 +25,7 @@ import { modelsService } from "../models/models.service";
 import { logger } from "../../lib/logger";
 import { memoryService } from "../memory/memory.service";
 
-import { toModelMessages, buildSystemPrompt } from "./message-converter";
+import { toModelMessages, buildSystemPrompt, buildDeepResearchSystemPrompt } from "./message-converter";
 import { buildProviderOptions } from "./provider-options";
 import {
     upsertToolInvocationPart,
@@ -369,6 +369,9 @@ async function generateConversationTitleInBackground(input: {
     }
 }
 
+const DEEP_RESEARCH_MAX_STEPS = 60;
+const DEEP_RESEARCH_MAX_OUTPUT_TOKENS = 16384;
+
 function startBackgroundGeneration(
     generation: GenerationEntry,
     modelMessages: ModelMessage[],
@@ -379,7 +382,8 @@ function startBackgroundGeneration(
     thinking: boolean,
     tools: ToolSet,
     cleanupTools: () => Promise<void>,
-    maxOutputTokens: number | null
+    maxOutputTokens: number | null,
+    deepResearch: boolean
 ) {
     const model = createModelInstance(provider, modelId, apiKey);
     const assistantMessageId = generation.messageId;
@@ -396,14 +400,18 @@ function startBackgroundGeneration(
         messageCount: modelMessages.length
     });
 
+    const effectiveMaxOutputTokens = deepResearch
+        ? DEEP_RESEARCH_MAX_OUTPUT_TOKENS
+        : (maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS);
+
     const result = streamText({
         model,
         messages: modelMessages,
         providerOptions,
         tools,
-        maxOutputTokens: maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+        maxOutputTokens: effectiveMaxOutputTokens,
         maxRetries: 2,
-        stopWhen: stepCountIs(20),
+        stopWhen: stepCountIs(deepResearch ? DEEP_RESEARCH_MAX_STEPS : 20),
         abortSignal: generation.abortController.signal,
         onFinish: async ({ steps, finishReason }) => {
             if (generation.abortController.signal.aborted) return;
@@ -779,7 +787,8 @@ export const aiService = {
         modelId: string,
         provider: string,
         thinking = false,
-        replyToMessageId?: string
+        replyToMessageId?: string,
+        deepResearch = false
     ): Promise<Response> {
         const startedAt = Date.now();
         const user = await requireVerifiedAuth(request);
@@ -924,7 +933,10 @@ export const aiService = {
                 .map((message) => message.parts)
         );
         const latestUserText = getLatestUserText(messageRecords);
-        const systemPrompt = `${buildSystemPrompt()}\n\n${await memoryService.getPromptBlockForUser(
+        const baseSystemPrompt = deepResearch
+            ? buildDeepResearchSystemPrompt()
+            : buildSystemPrompt();
+        const systemPrompt = `${baseSystemPrompt}\n\n${await memoryService.getPromptBlockForUser(
             user.id,
             latestUserText
         )}`;
@@ -993,7 +1005,8 @@ export const aiService = {
                 model: modelId,
                 provider: resolvedProvider,
                 thinkingEnabled: thinking,
-                generationStartedAt
+                generationStartedAt,
+                ...(deepResearch ? { deepResearch: true } : {})
             },
             parentMessageId: replyToMessageId ?? null
         });
@@ -1002,7 +1015,8 @@ export const aiService = {
         const generation = generationManager.register(
             conversationId,
             user.id,
-            assistantMessageId
+            assistantMessageId,
+            deepResearch
         );
 
         void generateConversationTitleInBackground({
@@ -1016,7 +1030,8 @@ export const aiService = {
         const { tools, cleanup } = await createTools(
             conversationId,
             user.id,
-            latestUserText
+            latestUserText,
+            deepResearch
         );
         const modelMaxOutputTokens = modelsService.getModelMaxOutputTokens(
             user.id,
@@ -1033,7 +1048,8 @@ export const aiService = {
             thinking,
             tools,
             cleanup,
-            modelMaxOutputTokens
+            modelMaxOutputTokens,
+            deepResearch
         );
 
         logger.info("Generation prepared", {

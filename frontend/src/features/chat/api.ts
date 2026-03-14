@@ -17,7 +17,8 @@ export const chatApi = {
         provider: string,
         thinking: boolean,
         signal?: AbortSignal,
-        replyToMessageId?: string
+        replyToMessageId?: string,
+        deepResearch?: boolean
     ) {
         return fetch(
             `${API_BASE_URL}/api/conversations/${conversationId}/generate`,
@@ -25,7 +26,7 @@ export const chatApi = {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",
-                body: JSON.stringify({ modelId, provider, thinking, replyToMessageId }),
+                body: JSON.stringify({ modelId, provider, thinking, replyToMessageId, deepResearch }),
                 signal
             }
         );

@@ -24,8 +24,10 @@ function ConversationPage() {
         modelsErrorRecovery,
         markConversationRead,
         reconnectToGeneration,
+        isDeepResearchEnabled,
         isThinkingEnabled,
         selectedModelId,
+        setDeepResearchEnabled,
         setSelectedModelId,
         setThinkingEnabled,
         sendMessage,
@@ -133,9 +135,11 @@ function ConversationPage() {
             error={submissionError}
             isSending={isSending}
             isLoadingModels={isLoadingModels}
+            isDeepResearchEnabled={isDeepResearchEnabled}
             isThinkingEnabled={isThinkingEnabled}
             modelsError={modelsError}
             modelsErrorRecovery={modelsErrorRecovery}
+            onDeepResearchChange={setDeepResearchEnabled}
             onModelChange={setSelectedModelId}
             onStop={() => stopGeneration(conversationId)}
             onSubmit={handleSubmit}
