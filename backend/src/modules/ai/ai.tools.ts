@@ -10,7 +10,7 @@ import {
     MEMORY_CONFIDENCE_LEVELS,
     MEMORY_KINDS
 } from "../memory/memory.types";
-import { createSandboxTools } from "./sandbox-tools";
+// import { createSandboxTools } from "./sandbox-tools";
 
 const SEARCH_RESULT_LIMIT = 5;
 const SEARCH_SNIPPET_MAX_LENGTH = 280;
@@ -391,7 +391,7 @@ function createBuiltInTools(
             }
         }),
 
-        ...createSandboxTools(conversationId, userId),
+        // ...createSandboxTools(conversationId, userId),
 
         todoWrite: tool({
             description:
