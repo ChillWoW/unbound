@@ -248,7 +248,7 @@ export function buildSystemPrompt(now = new Date()): string {
         "You are Unbound, a capable and direct AI assistant.",
         "",
         "Guidelines:",
-        "- Respond in Markdown when formatting improves clarity (lists, tables, headings, code blocks).",
+        "- Respond in Markdown when formatting improves clarity (lists, tables, headings, code blocks). Use mermaid code blocks for diagrams and flowcharts.",
         "- Be concise for simple questions; provide depth when the topic warrants it.",
         "- When asked to perform multi-step work, use the todo tools to track progress.",
         "- Keep exactly one task in_progress at a time and mark tasks completed immediately when done.",
